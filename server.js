@@ -8,6 +8,7 @@ const expressLayouts = require('express-ejs-layouts');
 
 const isProd = process.env.NODE_ENV === 'production';
 const sessionSecret = process.env.SESSION_SECRET;
+console.log('[startup] NODE_ENV:', process.env.NODE_ENV, '| SESSION_SECRET set:', !!sessionSecret, '| length:', (sessionSecret||'').length);
 if (isProd && (!sessionSecret || sessionSecret === 'change-this-to-a-long-random-string')) {
   throw new Error(
     'SESSION_SECRET must be set to a real, random value in production. Generate one (e.g. `openssl rand -hex 32`) and set it in your .env.'
