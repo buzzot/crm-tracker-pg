@@ -1,0 +1,57 @@
+<div class="pnew-page">
+  <a href="/projects/<%= project.id %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= project.name %></a>
+
+  <h1 class="pnew-hero">New <em>task</em></h1>
+  <p class="pnew-hero-sub">for <%= project.name %></p>
+
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
+  <div class="pnew-card">
+    <form action="/projects/<%= project.id %>/tasks" method="POST">
+      <label class="pnew-field-label" for="taskName">Task name <span class="pnew-required">*</span></label>
+      <input type="text" name="name" id="taskName" class="pnew-input mb-3" value="<%= values.name || '' %>" required autofocus>
+
+      <div class="pnew-classification-row mb-3">
+        <div>
+          <label class="pnew-field-label" for="taskType"><i class="bi bi-tag"></i> Type</label>
+          <select name="type" id="taskType" class="pnew-select">
+            <option value="">— Select —</option>
+            <% typeChoices.forEach(opt => { %>
+              <option value="<%= opt %>" <%= values.type === opt ? 'selected' : '' %>><%= opt %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
+          <label class="pnew-field-label" for="taskStatus"><i class="bi bi-activity"></i> Status</label>
+          <select name="status" id="taskStatus" class="pnew-select">
+            <option value="">— Select —</option>
+            <% statusChoices.forEach(opt => { %>
+              <option value="<%= opt %>" <%= values.status === opt ? 'selected' : '' %>><%= opt %></option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+
+      <div class="pnew-timeline-grid mb-3">
+        <div>
+          <label class="pnew-field-label" for="taskDate"><i class="bi bi-calendar3"></i> Date</label>
+          <input type="date" name="date" id="taskDate" class="pnew-input" value="<%= values.date || '' %>">
+        </div>
+        <div>
+          <label class="pnew-field-label" for="taskDeadline"><i class="bi bi-calendar3"></i> Deadline</label>
+          <input type="date" name="deadline" id="taskDeadline" class="pnew-input" value="<%= values.deadline || '' %>">
+        </div>
+      </div>
+
+      <label class="pnew-field-label" for="taskDetails"><i class="bi bi-card-text"></i> Details</label>
+      <textarea name="details" id="taskDetails" class="pnew-textarea" rows="3"><%= values.details || '' %></textarea>
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save Task</button>
+        <a href="/projects/<%= project.id %>" class="pnew-btn-cancel">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>

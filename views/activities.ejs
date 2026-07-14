@@ -1,0 +1,165 @@
+<div class="pnew-page">
+
+  <div class="projects-page-header" style="margin-bottom:0.75rem;">
+    <div>
+      <h1 class="projects-page-title">Activity</h1>
+      <div class="projects-page-subtitle">
+        <%= activities.length %> activit<%= activities.length === 1 ? 'y' : 'ies' %> logged
+      </div>
+    </div>
+    <div class="projects-page-actions">
+      <div class="projects-search-wrap">
+        <i class="bi bi-search"></i>
+        <input type="text" id="activitySearch" placeholder="Search...">
+      </div>
+    </div>
+  </div>
+
+  <div class="act-filter-row">
+    <button class="dash-filter-btn active" data-filter="all">All <span class="act-filter-badge" id="badgeAll"><%= activities.length %></span></button>
+    <button class="dash-filter-btn" data-filter="open">Open <span class="act-filter-badge" id="badgeOpen"></span></button>
+    <button class="dash-filter-btn" data-filter="completed">Completed <span class="act-filter-badge" id="badgeCompleted"></span></button>
+  </div>
+
+  <div class="pnew-card act-list-card">
+    <% if (activities.length === 0) { %>
+      <div class="act-list-empty">No activity logged yet.</div>
+    <% } %>
+    <% activities.forEach((a, idx) => { %>
+      <%
+        const _isCompleted = (a.result || '').toLowerCase() === 'completed' || (a.type || '').toLowerCase() === 'completed';
+        const t = (a.type || '').toLowerCase();
+        const icon = t.includes('call') ? 'bi-telephone' : t.includes('email') ? 'bi-envelope' : t.includes('linkedin') ? 'bi-linkedin' : (t.includes('meet') || t.includes('demo')) ? 'bi-people' : 'bi-clock-history';
+        const iconBg = t.includes('call') ? 'act-icon-blue' : t.includes('email') ? 'act-icon-purple' : t.includes('linkedin') ? 'act-icon-blue' : 'act-icon-gray';
+
+        // Progress bar
+        const _today = new Date(); _today.setHours(0,0,0,0);
+        let barState = 'planned', barWidth = 0, barText = '';
+
+        if (_isCompleted) {
+          barState = 'done'; barWidth = 100;
+          const _doneDate = a.statusDate ? new Date(a.statusDate + 'T00:00:00') : null;
+          barText = 'DONE ' + (_doneDate ? _doneDate.toLocaleDateString(undefined, {month:'short', day:'numeric'}) : '');
+        } else if (a.dueDate) {
+          const _due = new Date(a.dueDate + 'T00:00:00');
+          const _daysUntil = Math.floor((_due - _today) / 86400000);
+          if (_daysUntil < 0) {
+            barState = 'overdue'; barWidth = 50;
+            barText = 'OVERDUE ' + Math.abs(_daysUntil) + 'd';
+          } else {
+            const _hasAction = a.statusDate && a.statusDate !== a.date && new Date(a.statusDate) > new Date(a.date);
+            if (_hasAction) {
+              const _daysAgo = Math.max(1, Math.floor((_today - new Date(a.statusDate + 'T00:00:00')) / 86400000));
+              barState = 'inprogress';
+              barWidth = Math.min(85, Math.max(20, Math.round((_daysAgo / 45) * 85)));
+              barText = _daysAgo + ' DAYS AGO';
+            } else {
+              barText = _daysUntil === 0 ? 'DUE TODAY' : 'DUE IN ' + _daysUntil + 'd';
+            }
+          }
+        } else {
+          const _hasAction = a.statusDate && a.statusDate !== a.date && new Date(a.statusDate) > new Date(a.date);
+          if (_hasAction) {
+            const _daysAgo = Math.max(1, Math.floor((_today - new Date(a.statusDate + 'T00:00:00')) / 86400000));
+            barState = 'inprogress';
+            barWidth = Math.min(85, Math.max(20, Math.round((_daysAgo / 45) * 85)));
+            barText = _daysAgo + ' DAYS AGO';
+          } else {
+            barText = '—';
+          }
+        }
+
+        // Due chip
+        let dueChipLabel = '', dueChipCls = '';
+        if (!_isCompleted && a.dueDate) {
+          const _due2 = new Date(a.dueDate + 'T00:00:00');
+          const _days2 = Math.floor((_due2 - _today) / 86400000);
+          if (_days2 < 0) { dueChipLabel = 'Overdue'; dueChipCls = 'due-overdue'; }
+          else if (_days2 === 0) { dueChipLabel = 'Due today'; dueChipCls = 'due-soon'; }
+          else if (_days2 <= 3) {
+            dueChipLabel = 'Due ' + _due2.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+            dueChipCls = 'due-soon';
+          }
+        }
+      %>
+      <div class="act-list-row<%= idx === 0 ? ' act-list-row-first' : '' %>"
+           data-search="<%= [a.name, a.type, a.result, (a.companyNames||[]).join(' '), (a.projectNames||[]).join(' ')].join(' ').toLowerCase() %>"
+           data-state="<%= _isCompleted ? 'completed' : 'open' %>">
+
+        <div class="act-list-icon-wrap">
+          <div class="act-list-icon <%= iconBg %>"><i class="bi <%= icon %>"></i></div>
+        </div>
+
+        <div class="act-list-body">
+          <div class="act-list-top">
+            <a href="/activities/<%= a.id %>" class="act-list-name <%= _isCompleted ? 'act-list-name-done' : '' %>"><%= a.name || '(untitled)' %></a>
+            <div class="act-bar-wrap flex-shrink-0">
+              <div class="act-bar-track">
+                <% if (barWidth === 0) { %>
+                  <div style="width:100%;display:flex;align-items:center;padding:0 7px;">
+                    <span class="act-bar-label act-bar-label-muted"><%= barText %></span>
+                  </div>
+                <% } else { %>
+                  <div class="act-bar-fill act-bar-<%= barState %>" style="width:<%= barWidth %>%;<%= barState === 'done' ? 'border-radius:9px;' : '' %>">
+                    <span class="act-bar-label"><%= barText %></span>
+                  </div>
+                <% } %>
+              </div>
+            </div>
+          </div>
+
+          <div class="act-list-meta">
+            <% if (a.companyIds && a.companyIds[0]) { %>
+              <a href="/companies/<%= a.companyIds[0] %>" class="act-meta-company"><i class="bi bi-building"></i> <%= (a.companyNames||[]).join(', ') %></a>
+            <% } %>
+            <% if (a.type) { %><span class="act-meta-pill"><%= a.type %></span><% } %>
+            <% if (a.projectNames && a.projectNames.length) { %>
+              <span class="act-meta-pill"><i class="bi bi-diagram-3"></i> <%= a.projectNames.join(', ') %></span>
+            <% } %>
+            <% if (dueChipLabel) { %><span class="due-chip <%= dueChipCls %>"><%= dueChipLabel %></span><% } %>
+            <% if (_isCompleted) { %><span class="act-meta-pill act-meta-pill-done"><i class="bi bi-check-circle-fill"></i> Completed</span><% } else if (a.result) { %><span class="act-meta-pill"><%= a.result %></span><% } %>
+          </div>
+        </div>
+
+      </div>
+    <% }) %>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const list = document.querySelector('.act-list-card');
+  const rows = list ? Array.from(list.querySelectorAll('.act-list-row')) : [];
+  const searchInput = document.getElementById('activitySearch');
+  const filterBtns = document.querySelectorAll('.act-filter-btn, .dash-filter-btn[data-filter]');
+  let currentFilter = 'all';
+
+  // Count badges
+  const openCount = rows.filter(r => r.dataset.state === 'open').length;
+  const completedCount = rows.filter(r => r.dataset.state === 'completed').length;
+  const b = id => document.getElementById(id);
+  if (b('badgeOpen')) b('badgeOpen').textContent = openCount;
+  if (b('badgeCompleted')) b('badgeCompleted').textContent = completedCount;
+
+  function applyFilters() {
+    const q = (searchInput ? searchInput.value : '').toLowerCase();
+    rows.forEach(row => {
+      const matchSearch = (row.dataset.search || '').includes(q);
+      const matchFilter = currentFilter === 'all' || row.dataset.state === currentFilter;
+      row.style.display = (matchSearch && matchFilter) ? '' : 'none';
+    });
+  }
+
+  document.querySelectorAll('.dash-filter-btn[data-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.dash-filter-btn[data-filter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      applyFilters();
+    });
+  });
+
+  if (searchInput) searchInput.addEventListener('input', applyFilters);
+})();
+</script>

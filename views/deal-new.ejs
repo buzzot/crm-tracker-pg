@@ -1,0 +1,66 @@
+<div class="pnew-page" style="max-width: 680px;">
+  <a href="/companies/<%= company.id %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= company.name %></a>
+
+  <div class="mb-4">
+    <div class="pnew-badge"><i class="bi bi-diagram-3"></i> New Deal</div>
+    <h1 class="pnew-hero">Create Deal</h1>
+    <p class="pnew-hero-sub">for <%= company.name %></p>
+  </div>
+
+  <% if (error) { %>
+    <div class="alert alert-danger mb-3"><%= error %></div>
+  <% } %>
+
+  <div class="pnew-card">
+    <form action="/companies/<%= company.id %>/deals" method="POST">
+
+      <label class="pnew-field-label">Deal name <span class="text-danger">*</span></label>
+      <input type="text" name="name" class="pnew-input mb-4" value="<%= values.name || '' %>" required autofocus placeholder="e.g. Q3 Expansion">
+
+      <div class="pnew-classification-row mb-4">
+        <div>
+          <label class="pnew-field-label">Stage</label>
+          <select name="stage" class="pnew-select">
+            <option value="">— Select —</option>
+            <% stageChoices.forEach(opt => { %>
+              <option value="<%= opt %>" <%= values.stage === opt ? 'selected' : '' %>><%= opt %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
+          <label class="pnew-field-label">Primary contact</label>
+          <select name="primaryContactId" class="pnew-select">
+            <option value="">— None —</option>
+            <% persons.forEach(p => { %>
+              <option value="<%= p.id %>" <%= values.primaryContactId === p.id ? 'selected' : '' %>><%= p.fullName %></option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+
+      <div class="pnew-classification-row mb-4">
+        <div>
+          <label class="pnew-field-label"><i class="bi bi-currency-dollar"></i> Amount</label>
+          <input type="number" step="0.01" name="amount" class="pnew-input" value="<%= values.amount || '' %>" placeholder="0">
+        </div>
+        <div>
+          <label class="pnew-field-label"><i class="bi bi-percent"></i> Probability</label>
+          <input type="number" min="0" max="100" name="probability" class="pnew-input" value="<%= values.probability || '' %>" placeholder="0–100">
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="pnew-field-label"><i class="bi bi-calendar-event"></i> Close date</label>
+        <input type="date" name="closeDate" class="pnew-input" value="<%= values.closeDate || '' %>">
+      </div>
+
+      <div class="pnew-footer-bar">
+        <a href="/companies/<%= company.id %>" class="pnew-btn-cancel">Cancel</a>
+        <div class="pnew-footer-actions">
+          <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save Deal</button>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</div>

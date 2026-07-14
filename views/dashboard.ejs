@@ -1,0 +1,247 @@
+<div class="mb-4">
+  <div class="text-muted small"><%= new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) %> &middot; Welcome back</div>
+  <h1 class="display-headline mb-0">Your <em>pipeline</em> today</h1>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card h-100">
+      <div class="card-body">
+        <div class="stat-icon stat-icon-blue"><i class="bi bi-building"></i></div>
+        <div class="stat-value"><%= stats.companyCount %></div>
+        <div class="stat-label">Companies</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card h-100">
+      <div class="card-body">
+        <div class="stat-icon stat-icon-purple"><i class="bi bi-briefcase"></i></div>
+        <div class="stat-value"><%= stats.openDealCount %></div>
+        <div class="stat-label">Open Deals</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card h-100">
+      <div class="card-body">
+        <div class="stat-icon stat-icon-blue"><i class="bi bi-graph-up-arrow"></i></div>
+        <div class="stat-value">$<%= stats.openPipelineTotal.toLocaleString() %></div>
+        <div class="stat-label">Open Pipeline</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card h-100">
+      <div class="card-body">
+        <div class="stat-icon stat-icon-gold"><i class="bi bi-trophy"></i></div>
+        <div class="stat-value">$<%= stats.wonTotal.toLocaleString() %></div>
+        <div class="stat-label">Closed Won</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <span class="dashboard-card-title">Recent activity</span>
+          <span class="live-dot ms-2"><span class="dot"></span>Live</span>
+        </div>
+        <div class="dash-filter-tabs" id="activityFilterTabs">
+          <button class="dash-filter-btn active" data-filter="open">Open</button>
+          <button class="dash-filter-btn" data-filter="completed">Completed</button>
+          <button class="dash-filter-btn" data-filter="urgent">High urgency</button>
+        </div>
+      </div>
+      <div class="dash-act-header">
+        <span class="dash-act-header-title">Activity</span>
+        <div class="dash-act-dates flex-shrink-0">
+          <div class="dash-act-col"><span class="dash-act-col-label">Updated</span></div>
+          <div class="dash-act-col"><span class="dash-act-col-label">Due</span></div>
+        </div>
+      </div>
+      <div class="card-body activity-timeline" id="activityTimeline">
+        <div class="text-muted small">Loading...</div>
+      </div>
+      <div class="card-body pt-0">
+        <a href="/activities" class="btn-view-all">View all activity <i class="bi bi-arrow-up-right"></i></a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    var ALL = <%- JSON.stringify(allActivities) %>;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+
+    function fmtDate(str) {
+      if (!str) return '';
+      var d = new Date(str + 'T00:00:00');
+      d.setHours(0,0,0,0);
+      if (d.getTime() === today.getTime()) return 'Today';
+      if (d.getTime() === yesterday.getTime()) return 'Yesterday';
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    function isCompleted(a) {
+      return (a.result || '').toLowerCase() === 'completed' || (a.type || '').toLowerCase() === 'completed';
+    }
+
+    function daysUntilDue(a) {
+      if (!a.dueDate) return Infinity;
+      var d = new Date(a.dueDate + 'T00:00:00');
+      return Math.floor((d - today) / 86400000);
+    }
+
+    function getIcon(type) {
+      var t = (type || '').toLowerCase();
+      if (t.includes('call')) return {icon:'bi-telephone', color:'tl-blue'};
+      if (t.includes('email')) return {icon:'bi-envelope', color:'tl-purple'};
+      if (t.includes('linkedin')) return {icon:'bi-linkedin', color:'tl-blue'};
+      if (t.includes('meet') || t.includes('demo')) return {icon:'bi-people', color:'tl-gray'};
+      return {icon:'bi-clock-history', color:'tl-gray'};
+    }
+
+    function renderItem(a) {
+      var ic = getIcon(a.type);
+      var statusDateStr = a.statusDate ? fmtDate(a.statusDate) : (a.date ? fmtDate(a.date) : '—');
+      var days = daysUntilDue(a);
+      var dueLabel, dueCls;
+      if (a.dueDate) {
+        dueCls = days < 0 ? 'due-overdue' : days <= 2 ? 'due-soon' : 'due-ok';
+        dueLabel = days < 0 ? 'Overdue' : days === 0 ? 'Due today' : fmtDate(a.dueDate);
+      }
+      var meta = [];
+      if (a.companyNames && a.companyNames.length) meta.push('<span>' + a.companyNames.join(', ') + '</span>');
+      if (a.type) meta.push('<span>' + (meta.length ? '· ' : '') + a.type + '</span>');
+      if (a.result) meta.push('<span>' + (meta.length ? '· ' : '') + a.result + '</span>');
+      return '<div class="timeline-item">' +
+        '<div class="timeline-icon ' + ic.color + '"><i class="bi ' + ic.icon + '"></i></div>' +
+        '<div class="timeline-body">' +
+          '<div class="dash-act-row">' +
+            '<a href="/activities/' + a.id + '" class="timeline-name table-link">' + (a.name || '(untitled)') + '</a>' +
+            '<span class="dash-act-leader"></span>' +
+            '<div class="dash-act-dates flex-shrink-0">' +
+              '<div class="dash-act-col">' +
+                '<span class="dash-act-col-val">' + statusDateStr + '</span>' +
+              '</div>' +
+              '<div class="dash-act-col">' +
+                (a.dueDate
+                  ? '<span class="due-chip ' + dueCls + '">' + dueLabel + '</span>'
+                  : '<span class="dash-act-col-val dash-act-empty">—</span>') +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="timeline-meta">' + meta.join(' ') + '</div>' +
+        '</div></div>';
+    }
+
+    function sortDate(a) { return a.statusDate || a.date || ''; }
+    function render(filter) {
+      var list;
+      if (filter === 'open') {
+        list = ALL.filter(function(a){ return !isCompleted(a) && a.date; })
+          .sort(function(a,b){ return new Date(sortDate(b)) - new Date(sortDate(a)); })
+          .slice(0, 15);
+      } else if (filter === 'completed') {
+        list = ALL.filter(function(a){ return isCompleted(a) && a.date; })
+          .sort(function(a,b){ return new Date(sortDate(b)) - new Date(sortDate(a)); })
+          .slice(0, 15);
+      } else {
+        // High urgency: open, has dueDate, and dueDate is within 7 days (or overdue)
+        list = ALL.filter(function(a){
+          if (isCompleted(a) || !a.dueDate) return false;
+          return daysUntilDue(a) <= 7;
+        })
+          .sort(function(a,b){ return daysUntilDue(a) - daysUntilDue(b); })
+          .slice(0, 15);
+      }
+      var el = document.getElementById('activityTimeline');
+      if (!list.length) {
+        el.innerHTML = '<div class="text-muted small">No activities.</div>';
+      } else {
+        el.innerHTML = list.map(renderItem).join('');
+      }
+    }
+
+    document.getElementById('activityFilterTabs').addEventListener('click', function(e) {
+      var btn = e.target.closest('.dash-filter-btn');
+      if (!btn) return;
+      document.querySelectorAll('.dash-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      render(btn.dataset.filter);
+    });
+
+    render('open');
+  })();
+  </script>
+
+  <div class="col-lg-4 d-flex flex-column gap-3">
+
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <span class="dashboard-card-title">Pipeline by stage</span>
+          <div class="dashboard-card-subtitle">
+            <%= board.reduce((s, c) => s + c.deals.length, 0) %> deals &middot; $<%= board.reduce((s, c) => s + c.total, 0).toLocaleString() %> total value
+          </div>
+        </div>
+        <a href="/pipeline" class="btn btn-sm btn-light-pill">Open full pipeline <i class="bi bi-arrow-right"></i></a>
+      </div>
+      <div class="card-body">
+        <% const maxTotal = Math.max(1, ...board.map(c => c.total)); %>
+        <% board.forEach(col => { %>
+          <div class="stage-row">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <div class="d-flex align-items-center">
+                <span class="stage-dot stage-dot-<%= col.stage.replace(/\s+/g,'') %>"></span>
+                <span class="stage-name"><%= col.stage %></span>
+                <span class="stage-count-pill ms-2"><%= col.deals.length %> deal<%= col.deals.length === 1 ? '' : 's' %></span>
+              </div>
+              <div class="stage-total"><%= col.total > 0 ? '$' + col.total.toLocaleString() : '$0' %></div>
+            </div>
+            <div class="stage-track">
+              <div class="stage-fill stage-fill-<%= col.stage.replace(/\s+/g,'') %>" style="width: <%= Math.round((col.total / maxTotal) * 100) %>%"></div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="dashboard-card-title">Recent comments</span>
+        <span class="live-dot ms-2"><span class="dot"></span>Live</span>
+      </div>
+      <div class="card-body p-0">
+        <% if (!recentComments.length) { %>
+          <div class="dash-cmt-empty">No comments yet.</div>
+        <% } %>
+        <% recentComments.forEach(c => { %>
+          <div class="dash-cmt-row">
+            <div class="dash-cmt-avatar"><%= (c.author || '?').trim().charAt(0).toUpperCase() %></div>
+            <div class="dash-cmt-body">
+              <div class="dash-cmt-header">
+                <span class="dash-cmt-author"><%= c.author || 'Unknown' %></span>
+                <% if (c.type === 'email') { %><span class="dash-cmt-email-badge"><i class="bi bi-envelope-fill"></i></span><% } %>
+                <span class="dash-cmt-time"><%= c.timeAgo %></span>
+              </div>
+              <div class="dash-cmt-preview"><%= (c.comment || c.emailSubject || '').slice(0, 90) %><%= (c.comment || c.emailSubject || '').length > 90 ? '…' : '' %></div>
+              <% if (c.contextLink) { %>
+                <a href="<%= c.contextLink %>" class="dash-cmt-context">
+                  <i class="bi bi-<%= c.contextType === 'task' ? 'diagram-3' : c.contextType === 'project' ? 'folder2' : c.contextType === 'deal' ? 'currency-dollar' : 'clock-history' %>"></i>
+                  <%= c.contextLabel %>
+                </a>
+              <% } %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+
+  </div>
+</div>

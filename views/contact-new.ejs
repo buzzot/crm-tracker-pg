@@ -1,0 +1,55 @@
+<div class="pnew-page">
+  <a href="/companies/<%= company.id %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= company.name %></a>
+
+  <h1 class="pnew-hero">Add <em>contact</em></h1>
+  <p class="pnew-hero-sub">for <%= company.name %></p>
+
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
+  <div class="pnew-card">
+    <form action="/companies/<%= company.id %>/contacts" method="POST">
+      <div class="pnew-classification-row mb-3">
+        <div>
+          <label class="pnew-field-label" for="contactFirstName">First name <span class="pnew-required">*</span></label>
+          <input type="text" name="firstName" id="contactFirstName" class="pnew-input" value="<%= values.firstName || '' %>" required autofocus>
+        </div>
+        <div>
+          <label class="pnew-field-label" for="contactLastName">Last name</label>
+          <input type="text" name="lastName" id="contactLastName" class="pnew-input" value="<%= values.lastName || '' %>">
+        </div>
+      </div>
+
+      <label class="pnew-field-label" for="contactTitle"><i class="bi bi-briefcase"></i> Title</label>
+      <input type="text" name="title" id="contactTitle" class="pnew-input mb-3" value="<%= values.title || '' %>">
+
+      <div class="pnew-classification-row mb-3">
+        <div>
+          <label class="pnew-field-label" for="contactEmail"><i class="bi bi-envelope"></i> Email</label>
+          <input type="email" name="email" id="contactEmail" class="pnew-input" value="<%= values.email || '' %>">
+        </div>
+        <div>
+          <label class="pnew-field-label" for="contactPhone"><i class="bi bi-telephone"></i> Phone</label>
+          <input type="text" name="phone" id="contactPhone" class="pnew-input" value="<%= values.phone || '' %>">
+        </div>
+      </div>
+
+      <label class="pnew-field-label" for="contactStatus"><i class="bi bi-activity"></i> Status</label>
+      <select name="status" id="contactStatus" class="pnew-select mb-3">
+        <option value="">— Select —</option>
+        <% statusChoices.forEach(opt => { %>
+          <option value="<%= opt %>" <%= values.status === opt ? 'selected' : '' %>><%= opt %></option>
+        <% }) %>
+      </select>
+
+      <label class="pnew-field-label" for="contactNotes"><i class="bi bi-card-text"></i> Notes</label>
+      <textarea name="notes" id="contactNotes" class="pnew-textarea" rows="3"><%= values.notes || '' %></textarea>
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save contact</button>
+        <a href="/companies/<%= company.id %>" class="pnew-btn-cancel">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>

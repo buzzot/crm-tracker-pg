@@ -1,0 +1,96 @@
+<div class="pnew-page">
+  <a href="/companies/<%= company.id %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= company.name %></a>
+
+  <div class="pnew-badge"><i class="bi bi-pencil-square"></i> Edit company</div>
+  <h1 class="pnew-hero">Edit <em><%= company.name %></em></h1>
+  <p class="pnew-hero-sub">Update company information — changes save immediately.</p>
+
+  <% if (error) { %>
+    <div class="alert alert-danger mb-3"><%= error %></div>
+  <% } %>
+
+  <form action="/companies/<%= company.id %>" method="POST">
+    <div class="pnew-grid">
+
+      <div class="pnew-main">
+
+        <div class="pnew-card">
+          <h2 class="pnew-card-title">Identity</h2>
+          <p class="pnew-card-sub">Name and online presence.</p>
+
+          <div class="mb-3">
+            <label class="pnew-field-label">Company name <span class="pnew-required">*</span></label>
+            <input type="text" name="name" class="pnew-input" value="<%= company.name || '' %>" required autofocus>
+          </div>
+
+          <div class="mb-0">
+            <label class="pnew-field-label"><i class="bi bi-globe2"></i> Website</label>
+            <input type="url" name="web" class="pnew-input" placeholder="https://" value="<%= company.web || '' %>">
+          </div>
+        </div>
+
+        <div class="pnew-card">
+          <h2 class="pnew-card-title">Classification</h2>
+          <p class="pnew-card-sub">Industry and relationship status.</p>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-tag"></i> Industry</label>
+              <select name="industry" class="pnew-select">
+                <option value="">— Select —</option>
+                <% industryChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= company.industry === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-activity"></i> Status</label>
+              <select name="status" class="pnew-select">
+                <option value="">— Select —</option>
+                <% statusChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= company.status === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="pnew-card">
+          <h2 class="pnew-card-title">Additional info</h2>
+          <p class="pnew-card-sub">Billing details and internal notes.</p>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-geo-alt"></i> Billing address</label>
+            <textarea name="billingAddress" class="pnew-input pnew-textarea" rows="2"><%= company.billingAddress || '' %></textarea>
+          </div>
+
+          <div class="mb-0">
+            <label class="pnew-field-label"><i class="bi bi-sticky"></i> Notes</label>
+            <textarea name="notes" class="pnew-input pnew-textarea" rows="3"><%= company.notes || '' %></textarea>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save changes</button>
+          <a href="/companies/<%= company.id %>" class="pnew-btn-cancel">Cancel</a>
+        </div>
+
+      </div>
+
+      <div class="pnew-aside">
+        <div class="pnew-summary-card">
+          <div class="pnew-summary-title">Current values</div>
+          <div class="pnew-summary-row"><span>Industry</span><span><%= company.industry || '—' %></span></div>
+          <div class="pnew-summary-row"><span>Status</span><span><%= company.status || '—' %></span></div>
+          <div class="pnew-summary-row"><span>Website</span><span style="word-break:break-all; font-size:0.78rem;"><%= company.web || '—' %></span></div>
+        </div>
+        <div class="pnew-tip-card">
+          <i class="bi bi-info-circle"></i>
+          <div class="pnew-tip-title">Contacts & deals</div>
+          <div class="pnew-tip-text">To manage linked contacts, deals, and projects go back to the <a href="/companies/<%= company.id %>">company profile</a>.</div>
+        </div>
+      </div>
+
+    </div>
+  </form>
+</div>

@@ -1,0 +1,185 @@
+<%
+  const initial = (contact.fullName || '?').trim().charAt(0).toUpperCase();
+  function escapeHtml(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+%>
+
+<div class="pnew-page">
+  <% if (contact.company) { %>
+    <a href="/companies/<%= contact.company.id %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> Back to <%= contact.company.name %></a>
+  <% } %>
+
+  <div class="pnew-hero-row">
+    <div class="pnew-hero-avatar"><%= initial %></div>
+    <div>
+      <h1 class="pnew-hero"><%= contact.fullName || '(unnamed contact)' %></h1>
+      <% if (contact.title) { %><p class="pnew-hero-sub"><%= contact.title %></p><% } %>
+    </div>
+  </div>
+
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
+  <div class="pnew-main">
+
+    <div class="pnew-card">
+      <div class="pnew-card-header-row">
+        <div class="pnew-card-header-text">
+          <span class="pnew-card-icon"><i class="bi bi-person-vcard"></i></span>
+          <h2 class="pnew-card-title">Basic info</h2>
+        </div>
+        <button type="button" class="pnew-btn-save" id="basicInfoEditBtn" onclick="document.getElementById('basicInfoView').style.display='none'; document.getElementById('basicInfoEditForm').style.display='block'; this.style.display='none';">
+          <i class="bi bi-pencil-square"></i> Edit
+        </button>
+      </div>
+
+      <%
+        const leftFields = [];
+        const rightFields = [];
+        if (contact.company) leftFields.push({ icon: 'bi-building', label: 'Company', html: `<a href="/companies/${escapeHtml(contact.company.id)}" class="table-link">${escapeHtml(contact.company.name)}</a>` });
+        if (contact.title) leftFields.push({ icon: 'bi-briefcase', label: 'Title', html: escapeHtml(contact.title) });
+        if (contact.fullName) rightFields.push({ icon: 'bi-person', label: 'Name', html: escapeHtml(contact.fullName) });
+        if (contact.email) rightFields.push({ icon: 'bi-envelope', label: 'Email', html: `<a href="mailto:${escapeHtml(contact.email)}" class="table-link">${escapeHtml(contact.email)}</a>` });
+        if (contact.phone) rightFields.push({ icon: 'bi-telephone', label: 'Phone', html: `<a href="tel:${escapeHtml(contact.phone)}" class="table-link">${escapeHtml(contact.phone)}</a>` });
+      %>
+      <div id="basicInfoView">
+        <% if (!leftFields.length && !rightFields.length) { %>
+          <p class="text-muted mb-0">No info on file yet — click Edit to add some.</p>
+        <% } %>
+        <div class="pnew-classification-row mb-3">
+          <div class="d-flex flex-column gap-3">
+            <% leftFields.forEach((f) => { %>
+              <div>
+                <label class="pnew-field-label"><i class="bi <%= f.icon %>"></i> <%= f.label %></label>
+                <div class="pnew-plain-field"><%- f.html %></div>
+              </div>
+            <% }) %>
+          </div>
+          <div class="d-flex flex-column gap-3">
+            <% rightFields.forEach((f) => { %>
+              <div>
+                <label class="pnew-field-label"><i class="bi <%= f.icon %>"></i> <%= f.label %></label>
+                <div class="pnew-plain-field"><%- f.html %></div>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+
+        <% if (contact.notes) { %>
+          <label class="pnew-field-label mt-3"><i class="bi bi-card-text"></i> Notes</label>
+          <p class="pnew-card-sub mb-0" style="white-space: pre-wrap; color: #1f2a44;"><%= contact.notes %></p>
+        <% } %>
+      </div>
+
+      <form id="basicInfoEditForm" action="/contacts/<%= contact.id %>/details" method="POST" style="display: none;">
+        <% if (contact.company || contact.fullName) { %>
+          <div class="pnew-classification-row mb-3">
+            <% if (contact.company) { %>
+              <div>
+                <label class="pnew-field-label"><i class="bi bi-building"></i> Company</label>
+                <div class="pnew-plain-field"><%= contact.company.name %></div>
+              </div>
+            <% } %>
+            <% if (contact.fullName) { %>
+              <div>
+                <label class="pnew-field-label"><i class="bi bi-person"></i> Name</label>
+                <div class="pnew-plain-field"><%= contact.fullName %></div>
+              </div>
+            <% } %>
+          </div>
+        <% } %>
+
+        <div class="pnew-classification-row mb-3">
+          <div>
+            <label class="pnew-field-label"><i class="bi bi-briefcase"></i> Title</label>
+            <input type="text" name="title" class="pnew-input" placeholder="Add a title" value="<%= contact.title || '' %>">
+          </div>
+          <div>
+            <label class="pnew-field-label"><i class="bi bi-envelope"></i> Email</label>
+            <input type="email" name="email" class="pnew-input" placeholder="Add an email" value="<%= contact.email || '' %>">
+          </div>
+        </div>
+
+        <div class="pnew-classification-row mb-3">
+          <div>
+            <label class="pnew-field-label"><i class="bi bi-telephone"></i> Phone</label>
+            <input type="text" name="phone" class="pnew-input" placeholder="Add a phone number" value="<%= contact.phone || '' %>">
+          </div>
+          <div></div>
+        </div>
+
+        <label class="pnew-field-label"><i class="bi bi-card-text"></i> Notes</label>
+        <textarea name="notes" class="pnew-textarea" rows="3" placeholder="Add notes about this contact..."><%= contact.notes || '' %></textarea>
+
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save</button>
+          <button type="button" class="pnew-btn-cancel" onclick="document.getElementById('basicInfoEditForm').style.display='none'; document.getElementById('basicInfoView').style.display='block'; document.getElementById('basicInfoEditBtn').style.display='inline-flex';">Cancel</button>
+        </div>
+      </form>
+    </div>
+
+    <%
+      function noteTimeAgo(dateStr) {
+        if (!dateStr) return '';
+        const then = new Date(dateStr);
+        if (isNaN(then.getTime())) return dateStr;
+        const sec = Math.floor((Date.now() - then.getTime()) / 1000);
+        if (sec < 60) return 'just now';
+        const min = Math.floor(sec / 60);
+        if (min < 60) return min + 'm ago';
+        const hr = Math.floor(min / 60);
+        if (hr < 24) return hr + 'h ago';
+        const day = Math.floor(hr / 24);
+        if (day < 30) return day + 'd ago';
+        return then.toLocaleDateString();
+      }
+      const noteAvatarClasses = ['note-avatar-blue', 'note-avatar-purple', 'note-avatar-gray'];
+      const youInitial = ((typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || '?').trim().charAt(0).toUpperCase();
+      const orderedComments = contact.comments.slice().reverse();
+    %>
+    <div class="pnew-card">
+      <h2 class="pnew-card-title">Comments (<%= contact.comments.length %>)</h2>
+      <p class="pnew-card-sub">Notes and updates shared about this contact.</p>
+
+      <form action="/contacts/<%= contact.id %>/comments" method="POST">
+        <div class="note-compose-box">
+          <div class="d-flex gap-2">
+            <span class="note-avatar note-avatar-you"><%= youInitial %></span>
+            <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a comment..." required></textarea>
+          </div>
+          <div class="note-compose-footer">
+            <div class="note-link-field">
+              <i class="bi bi-link-45deg"></i>
+              <input type="url" name="link" class="note-link-input-inline" placeholder="Optional link (e.g. to a file)">
+            </div>
+            <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
+          </div>
+        </div>
+      </form>
+
+      <div class="note-thread">
+        <% orderedComments.forEach((c, i) => { %>
+          <% const cInitial = (c.author || '?').trim().charAt(0).toUpperCase(); %>
+          <div class="note-item">
+            <div class="note-item-head">
+              <span class="note-avatar <%= noteAvatarClasses[i % noteAvatarClasses.length] %>"><%= cInitial %></span>
+              <span class="fw-semibold note-author"><%= c.author || 'Someone' %></span>
+              <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+            </div>
+            <div class="note-bubble">
+              <div class="note-text"><%= c.comment %></div>
+              <% if (c.link) { %>
+                <a href="<%= c.link %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-link-45deg"></i><%= c.link %></a>
+              <% } %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+
+  </div>
+</div>

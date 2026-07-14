@@ -1,0 +1,204 @@
+<%
+  const CATEGORY_ALIASES = { 'DC Inverter Driver': 'Inverter Drive' };
+  function normalizeCategory(cat) { return CATEGORY_ALIASES[cat] || cat; }
+
+  const CATEGORY_COLORS = {
+    'Inverter Drive': 'cat-gold',
+    'Controller': 'cat-blue'
+  };
+  function categoryColor(cat) { return CATEGORY_COLORS[normalizeCategory(cat)] || 'cat-gray'; }
+
+  const photoUrl = (product.image && product.image.length) ? product.image[0].url : null;
+
+  // Spec grid fills left-to-right, two per row. Phase/Input Voltage lead,
+  // then Max Input Power/Horse Power and Max Input Current/Max Output
+  // Current, with Board Size pinned to the bottom-right cell (a filler is
+  // inserted first if needed so it always lands in the right column).
+  const specs = [
+    { label: 'Phase', value: product.phase },
+    { label: 'Input Voltage', value: product.inputVoltage ? `${product.inputVoltage} V` : null },
+    { label: 'Max Input Power', value: product.maxInputPower ? `${product.maxInputPower} KW` : null },
+    { label: 'Horse Power', value: product.horsePower ? `${product.horsePower} HP` : null },
+    { label: 'Max Input Current', value: product.maxInputCurrent ? `${product.maxInputCurrent} A` : null },
+    { label: 'Max Output Current', value: product.maxOutputCurrent ? `${product.maxOutputCurrent} A` : null }
+  ].filter(s => s.value);
+
+  if (product.boardSize) {
+    if (specs.length % 2 === 0) specs.push({ label: '', value: null, filler: true });
+    specs.push({ label: 'Board Size', value: product.boardSize });
+  }
+%>
+
+<div class="pnew-page">
+  <a href="/products" class="pnew-back-link"><i class="bi bi-arrow-left"></i> All products</a>
+
+  <% if (normalizeCategory(product.category)) { %>
+    <div class="pnew-badge"><i class="bi bi-box-seam"></i> <%= normalizeCategory(product.category) %></div>
+  <% } %>
+  <h1 class="pnew-hero"><%= product.name %></h1>
+  <% if (product.phase) { %><p class="pnew-hero-sub"><%= product.phase %></p><% } %>
+
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
+  <div class="pnew-grid">
+    <div class="pnew-main">
+
+      <div class="pnew-card">
+        <div class="pnew-card-header-row">
+          <h2 class="pnew-card-title">Specifications</h2>
+          <button type="button" class="pnew-btn-save" id="productEditBtn" onclick="document.getElementById('specsView').style.display='none'; document.getElementById('notesView').style.display='none'; document.getElementById('productDetailsForm').style.display='block'; document.getElementById('notesEditWrap').style.display='block'; this.style.display='none';">
+            <i class="bi bi-pencil-square"></i> Edit
+          </button>
+        </div>
+
+        <div id="specsView">
+          <% if (!specs.length) { %>
+            <p class="pnew-card-sub mb-0">No specifications on file.</p>
+          <% } else { %>
+            <div class="spec-grid">
+              <% specs.forEach(s => { %>
+                <% if (s.filler) { %>
+                  <div class="spec-item spec-item-empty"></div>
+                <% } else { %>
+                  <div class="spec-item">
+                    <div class="spec-label"><%= s.label %></div>
+                    <div class="spec-value"><%= s.value %></div>
+                  </div>
+                <% } %>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <form id="productDetailsForm" action="/products/<%= product.id %>/details" method="POST" style="display: none;">
+          <div class="pnew-classification-row mb-3">
+            <div>
+              <label class="pnew-field-label"><i class="bi bi-box-seam"></i> Category</label>
+              <select name="category" class="pnew-select">
+                <option value="">— Select —</option>
+                <% categoryChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= product.category === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div>
+              <label class="pnew-field-label"><i class="bi bi-lightning"></i> Phase</label>
+              <select name="phase" class="pnew-select">
+                <option value="">— Select —</option>
+                <% phaseChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= product.phase === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+
+          <div class="pnew-classification-row mb-3">
+            <div>
+              <label class="pnew-field-label">Input Voltage (V)</label>
+              <input type="text" name="inputVoltage" class="pnew-input" placeholder="Add a value" value="<%= product.inputVoltage != null ? product.inputVoltage : '' %>">
+            </div>
+            <div>
+              <label class="pnew-field-label">Board Size</label>
+              <input type="text" name="boardSize" class="pnew-input" placeholder="Add a value" value="<%= product.boardSize != null ? product.boardSize : '' %>">
+            </div>
+          </div>
+
+          <div class="pnew-classification-row mb-3">
+            <div>
+              <label class="pnew-field-label">Horse Power (HP)</label>
+              <input type="text" name="horsePower" class="pnew-input" placeholder="Add a value" value="<%= product.horsePower != null ? product.horsePower : '' %>">
+            </div>
+            <div>
+              <label class="pnew-field-label">Max Input Power (KW)</label>
+              <input type="text" name="maxInputPower" class="pnew-input" placeholder="Add a value" value="<%= product.maxInputPower != null ? product.maxInputPower : '' %>">
+            </div>
+          </div>
+
+          <div class="pnew-classification-row mb-3">
+            <div>
+              <label class="pnew-field-label">Max Input Current (A)</label>
+              <input type="text" name="maxInputCurrent" class="pnew-input" placeholder="Add a value" value="<%= product.maxInputCurrent != null ? product.maxInputCurrent : '' %>">
+            </div>
+            <div>
+              <label class="pnew-field-label">Max Output Current (A)</label>
+              <input type="text" name="maxOutputCurrent" class="pnew-input" placeholder="Add a value" value="<%= product.maxOutputCurrent != null ? product.maxOutputCurrent : '' %>">
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Notes</h2>
+        <div id="notesView">
+          <% if (product.notes) { %>
+            <p class="pnew-card-sub mb-0" style="white-space: pre-wrap; color: #1f2a44;"><%= product.notes %></p>
+          <% } else { %>
+            <p class="pnew-card-sub mb-0">No notes yet.</p>
+          <% } %>
+        </div>
+
+        <div id="notesEditWrap" style="display: none;">
+          <textarea name="notes" form="productDetailsForm" class="pnew-textarea" rows="3" placeholder="Add notes about this product..."><%= product.notes || '' %></textarea>
+
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" form="productDetailsForm" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save</button>
+            <button type="button" class="pnew-btn-cancel" onclick="document.getElementById('productDetailsForm').style.display='none'; document.getElementById('notesEditWrap').style.display='none'; document.getElementById('specsView').style.display='block'; document.getElementById('notesView').style.display='block'; document.getElementById('productEditBtn').style.display='inline-flex';">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="pnew-aside">
+      <div class="pnew-card">
+        <div class="product-photo-frame">
+          <% if (photoUrl) { %>
+            <img src="<%= photoUrl %>" alt="<%= product.name %>" class="product-photo-img">
+          <% } else { %>
+            <div class="product-photo-placeholder">
+              <i class="bi bi-box-seam"></i>
+            </div>
+          <% } %>
+        </div>
+        <form action="/products/<%= product.id %>/image" method="POST" enctype="multipart/form-data" class="mt-3">
+          <label class="pnew-btn-cancel" style="cursor: pointer; justify-content: center; width: 100%;">
+            <i class="bi bi-camera"></i>&nbsp;<%= photoUrl ? 'Change photo' : 'Add photo' %>
+            <input type="file" name="image" accept="image/*" required style="display: none;" onchange="this.form.submit();">
+          </label>
+        </form>
+      </div>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Datasheet</h2>
+        <% if (!product.datasheet || !product.datasheet.length) { %>
+          <p class="pnew-card-sub mb-0">No datasheet on file.</p>
+        <% } else { %>
+          <div class="pnew-file-list">
+            <% product.datasheet.forEach(file => { %>
+              <div class="pnew-file-row">
+                <i class="bi bi-file-earmark-text"></i>
+                <a href="<%= file.url %>" target="_blank" rel="noopener" class="pnew-file-name" style="text-decoration: none;"><%= file.filename || 'Specs' %></a>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Related projects</h2>
+        <div class="pnew-product-list">
+          <% if (!product.projects.length) { %>
+            <div class="pnew-product-empty">No related projects.</div>
+          <% } %>
+          <% product.projects.forEach(p => { %>
+            <a href="/projects/<%= p.id %>" class="pnew-product-row" style="text-decoration: none;">
+              <span class="pnew-product-name"><%= p.name %></span>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

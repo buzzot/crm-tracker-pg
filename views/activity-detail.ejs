@@ -1,0 +1,455 @@
+<%
+  function noteTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    const then = new Date(dateStr);
+    if (isNaN(then.getTime())) return dateStr;
+    const sec = Math.floor((Date.now() - then.getTime()) / 1000);
+    if (sec < 60) return 'just now';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return min + 'm ago';
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return hr + 'h ago';
+    const day = Math.floor(hr / 24);
+    if (day < 30) return day + 'd ago';
+    return then.toLocaleDateString();
+  }
+  const noteAvatarClasses = ['note-avatar-blue', 'note-avatar-purple', 'note-avatar-gray'];
+  const youInitial = ((typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || '?').trim().charAt(0).toUpperCase();
+  const orderedComments = activity.comments.slice().reverse();
+  const typeIconMap = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-camera-video', Demo: 'bi-camera-video' };
+  const typeIcon = typeIconMap[activity.type] || 'bi-clock-history';
+%>
+
+<div class="pnew-page activity-detail-page">
+
+  <% if (activity.companyIds && activity.companyIds.length) { %>
+    <a href="/companies/<%= activity.companyIds[0] %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= (activity.companyNames && activity.companyNames[0]) || 'Company' %></a>
+  <% } else { %>
+    <a href="/activities" class="pnew-back-link"><i class="bi bi-arrow-left"></i> All activities</a>
+  <% } %>
+
+  <!-- Hero + Save/Cancel at top right -->
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+        <% if (activity.type) { %>
+          <div class="pnew-badge"><i class="bi <%= typeIcon %>"></i> <%= activity.type %></div>
+        <% } %>
+        <% if (activity.result && activity.result.toLowerCase() !== (activity.type || '').toLowerCase()) { %>
+          <div class="pnew-badge" style="background: oklch(0.93 0.04 155 / 0.5); color: var(--crm-success);"><i class="bi bi-flag-fill"></i> <%= activity.result %></div>
+        <% } %>
+      </div>
+      <h1 class="pnew-hero mb-1"><%= activity.name || '(untitled)' %></h1>
+      <p class="pnew-hero-sub mb-0">
+        <% if (activity.companyIds && activity.companyIds.length) { %>
+          <i class="bi bi-building"></i>
+          <a href="/companies/<%= activity.companyIds[0] %>" style="color: var(--crm-accent); text-decoration: none;"><%= (activity.companyNames && activity.companyNames.join(', ')) || 'Unknown company' %></a>
+        <% } %>
+      </p>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      <a href="/activities/<%= activity.id %>" class="pnew-btn-cancel">Cancel</a>
+      <button type="button" class="pnew-btn-save" onclick="document.getElementById('activityForm').submit()"><i class="bi bi-check-lg"></i> Save changes</button>
+    </div>
+  </div>
+
+  <% if (error) { %>
+    <div class="alert alert-danger mb-3"><%= error %></div>
+  <% } %>
+
+  <div class="pnew-grid">
+
+    <div class="pnew-main">
+
+      <!-- Edit form -->
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Details</h2>
+        <p class="pnew-card-sub">Edit and save changes to this activity.</p>
+
+        <form id="activityForm" action="/activities/<%= activity.id %>" method="POST">
+
+          <div class="mb-3">
+            <label class="pnew-field-label">Activity name <span class="pnew-required">*</span></label>
+            <input type="text" name="name" class="pnew-input" value="<%= activity.name || '' %>" required>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-tag"></i> Type</label>
+              <select name="type" class="pnew-select">
+                <option value="">— Select —</option>
+                <% typeChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= activity.type === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-flag"></i> Result / Status</label>
+              <select name="result" class="pnew-select">
+                <option value="">— Select —</option>
+                <% resultChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= activity.result === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-calendar-check"></i> Complete before <span class="text-muted fw-normal">(optional)</span></label>
+              <input type="date" name="dueDate" class="pnew-input" value="<%= activity.dueDate || '' %>">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-people"></i> Attendees</label>
+            <div class="chip-field" id="attendeesChipField">
+              <% [].concat(activity.attendeeIds||[]).forEach(id => {
+                   const p = persons.find(pp => pp.id === id); %>
+                <span class="chip" data-id="<%= id %>">
+                  <span class="chip-avatar"><%= ((p && p.fullName) || '?').trim().charAt(0).toUpperCase() %></span>
+                  <%= p ? p.fullName : id %>
+                  <input type="hidden" name="attendeeIds" value="<%= id %>">
+                  <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
+                </span>
+              <% }) %>
+              <div class="chip-add-wrap">
+                <button type="button" class="chip-add-btn" data-target="attendeesChipField" data-field="attendeeIds" data-avatar="1">Add attendee</button>
+                <select class="chip-add-select d-none">
+                  <option value="">— Select —</option>
+                  <% persons.forEach(p => { %><option value="<%= p.id %>" data-name="<%= p.fullName %>"><%= p.fullName %></option><% }) %>
+                </select>
+              </div>
+              <%
+                const activityCompanyIdForContact = (activity.companyIds || [])[0];
+                const createContactHref = activityCompanyIdForContact ? `/companies/${activityCompanyIdForContact}/contacts/new` : null;
+              %>
+              <% if (createContactHref) { %>
+                <a href="<%= createContactHref %>" class="chip-add-btn">Create contact</a>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-kanban"></i> Related project(s)</label>
+            <div class="chip-field" id="projectsChipField">
+              <% [].concat(activity.projectIds||[]).forEach(id => {
+                   const pr = projects.find(pp => pp.id === id); %>
+                <span class="chip chip-link" data-id="<%= id %>">
+                  <%= pr ? pr.name : id %>
+                  <input type="hidden" name="projectIds" value="<%= id %>">
+                  <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
+                </span>
+              <% }) %>
+              <div class="chip-add-wrap">
+                <button type="button" class="chip-add-btn" data-target="projectsChipField" data-field="projectIds">Link a project</button>
+                <select class="chip-add-select d-none">
+                  <option value="">— Select —</option>
+                  <% projects.forEach(p => { %><option value="<%= p.id %>" data-name="<%= p.name %>"><%= p.name %></option><% }) %>
+                </select>
+              </div>
+              <%
+                const activityCompanyId = (activity.companyIds || [])[0];
+                const createProjectHref = activityCompanyId ? `/companies/${activityCompanyId}/projects/new` : '/projects/new';
+              %>
+              <a href="<%= createProjectHref %>" class="chip-add-btn">Create project</a>
+            </div>
+          </div>
+
+          <div class="mb-0">
+            <label class="pnew-field-label"><i class="bi bi-card-text"></i> Details / notes</label>
+            <textarea name="details" class="pnew-input pnew-textarea" rows="6" id="activityDetailsTextarea"><%= activity.details || '' %></textarea>
+          </div>
+
+        </form>
+
+        <% if (activity.files && activity.files.length) { %>
+          <div class="act-attachments mt-3">
+            <div class="pnew-field-label mb-2"><i class="bi bi-paperclip"></i> Attachments (<%= activity.files.length %>)</div>
+            <div class="act-file-list">
+              <% activity.files.forEach(file => {
+                const ext = (file.filename || '').split('.').pop().toLowerCase();
+                const iconMap = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel', png: 'bi-file-earmark-image', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image', gif: 'bi-file-earmark-image', zip: 'bi-file-earmark-zip' };
+                const colorMap = { pdf: 'act-file-pdf', doc: 'act-file-doc', docx: 'act-file-doc', xls: 'act-file-xls', xlsx: 'act-file-xls', png: 'act-file-img', jpg: 'act-file-img', jpeg: 'act-file-img', gif: 'act-file-img' };
+                const icon = iconMap[ext] || 'bi-file-earmark';
+                const cls = colorMap[ext] || '';
+              %>
+                <a href="<%= file.url %>" target="_blank" rel="noopener" class="act-file-row">
+                  <i class="bi <%= icon %> act-file-icon <%= cls %>"></i>
+                  <span class="act-file-name"><%= file.filename %></span>
+                  <i class="bi bi-box-arrow-up-right act-file-open"></i>
+                </a>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
+
+        <form action="/activities/<%= activity.id %>/files" method="POST" enctype="multipart/form-data" class="mt-3" id="activityFileForm">
+          <input type="file" name="file" multiple id="activityFileInput" style="display:none;">
+          <div class="act-dropzone" id="activityDropZone">
+            <i class="bi bi-upload act-dropzone-icon"></i>
+            <p class="act-dropzone-text">Drop files here or <span class="act-dropzone-browse">browse</span></p>
+            <p class="act-dropzone-hint">PDF, images, documents — up to 25 MB</p>
+          </div>
+          <div class="act-drop-filelist d-none" id="activityDropFileList"></div>
+          <button type="submit" class="act-drop-submit d-none" id="activityDropSubmit"><i class="bi bi-upload me-1"></i><span id="activityDropSubmitLabel">Upload</span></button>
+        </form>
+
+      </div>
+
+      <!-- Comments — below the form -->
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Comments (<%= activity.comments.length %>)</h2>
+        <p class="pnew-card-sub">Notes and updates about this activity.</p>
+
+        <form action="/activities/<%= activity.id %>/comments" method="POST" enctype="multipart/form-data">
+          <div class="note-compose-box">
+            <div class="d-flex gap-2">
+              <span class="note-avatar note-avatar-you"><%= youInitial %></span>
+              <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a comment..." required></textarea>
+            </div>
+            <div class="note-compose-footer">
+              <label class="note-link-field" style="cursor: pointer;">
+                <i class="bi bi-paperclip"></i>
+                <span id="activityCommentFileLabel">Attach</span>
+                <input type="file" name="attachment" multiple style="display: none;" id="activityCommentFileInput">
+              </label>
+              <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="note-thread">
+          <% if (!orderedComments.length) { %>
+            <p class="text-muted mb-0">No comments yet.</p>
+          <% } %>
+          <% orderedComments.forEach((c, i) => { %>
+            <% const initial = (c.author || '?').trim().charAt(0).toUpperCase(); %>
+            <% if (c.type === 'email') { %>
+              <div class="note-item note-item-email">
+                <div class="note-item-head">
+                  <span class="note-avatar note-avatar-email"><i class="bi bi-envelope-fill"></i></span>
+                  <div class="note-email-meta">
+                    <span class="note-email-from"><%= c.author %></span>
+                    <span class="note-email-subj"><%= c.emailSubject || '(no subject)' %></span>
+                  </div>
+                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+                </div>
+                <div class="note-bubble note-email-bubble">
+                  <div class="note-text" style="white-space: pre-wrap;"><%= c.comment %></div>
+                  <% if (c.attachments && c.attachments.length) { %>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                      <% c.attachments.forEach(file => { %>
+                        <a href="<%= file.url %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-paperclip"></i><%= file.filename %></a>
+                      <% }) %>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            <% } else { %>
+              <div class="note-item">
+                <div class="note-item-head">
+                  <span class="note-avatar <%= noteAvatarClasses[i % noteAvatarClasses.length] %>"><%= initial %></span>
+                  <span class="fw-semibold note-author"><%= c.author || 'Someone' %></span>
+                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+                </div>
+                <div class="note-bubble">
+                  <div class="note-text"><%= c.comment %></div>
+                  <% if (c.link) { %>
+                    <a href="<%= c.link %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-link-45deg"></i><%= c.link %></a>
+                  <% } %>
+                  <% if (c.attachments && c.attachments.length) { %>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                      <% c.attachments.forEach(file => { %>
+                        <a href="<%= file.url %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-paperclip"></i><%= file.filename %></a>
+                      <% }) %>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            <% } %>
+          <% }) %>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="pnew-aside">
+
+      <div class="pnew-summary-card">
+        <div class="pnew-summary-title">Overview</div>
+        <% if (activity.companyIds && activity.companyIds.length) { %>
+          <div class="pnew-summary-row"><span>Company</span><span><%= (activity.companyNames || []).join(', ') %></span></div>
+        <% } %>
+        <div class="pnew-summary-row"><span>Type</span><span><%= activity.type || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Created</span><span><%= activity.date || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Status</span><span><%= activity.result || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Status date</span><span><%= activity.statusDate || '—' %></span></div>
+        <% if (activity.dueDate) { %>
+          <div class="pnew-summary-row"><span>Complete before</span><span><%= activity.dueDate %></span></div>
+        <% } %>
+        <div class="pnew-summary-row"><span>Attendees</span><span><%= (activity.attendeeIds || []).length %></span></div>
+        <div class="pnew-summary-row"><span>Projects</span><span><%= (activity.projectIds || []).length %></span></div>
+        <div class="pnew-summary-row pnew-summary-row--email">
+          <span>Activity email</span>
+          <span class="project-email-chip">
+            <% const _actEmail = 'activity-' + activity.id + '@' + emailDomain; %>
+            <span class="project-email-addr"><%= _actEmail %></span>
+            <button type="button" class="project-email-copy" title="Copy address" onclick="(function(btn){navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(function(){btn.innerHTML='<i class=\'bi bi-check-lg\'></i>';setTimeout(function(){btn.innerHTML='<i class=\'bi bi-copy\'></i>';},1500)});})(this)"><i class="bi bi-copy"></i></button>
+          </span>
+        </div>
+        <p class="project-email-hint">CC this address when emailing clients — replies appear here automatically.</p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    // Comment file label
+    const input = document.getElementById('activityCommentFileInput');
+    const label = document.getElementById('activityCommentFileLabel');
+    if (input && label) {
+      input.addEventListener('change', function () {
+        const n = input.files ? input.files.length : 0;
+        label.textContent = n ? (n + ' file' + (n === 1 ? '' : 's')) : 'Attach';
+      });
+    }
+
+    // Drag and drop upload
+    (function () {
+      var dropZone   = document.getElementById('activityDropZone');
+      var fileInput  = document.getElementById('activityFileInput');
+      var fileList   = document.getElementById('activityDropFileList');
+      var submitBtn  = document.getElementById('activityDropSubmit');
+      var submitLbl  = document.getElementById('activityDropSubmitLabel');
+      if (!dropZone || !fileInput) return;
+
+      function iconForName(name) {
+        var ext = (name || '').split('.').pop().toLowerCase();
+        var map = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel', png: 'bi-file-earmark-image', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image', gif: 'bi-file-earmark-image', zip: 'bi-file-earmark-zip' };
+        return map[ext] || 'bi-file-earmark';
+      }
+
+      function fmtSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      }
+
+      function renderFiles(files) {
+        if (!files || !files.length) {
+          fileList.classList.add('d-none');
+          submitBtn.classList.add('d-none');
+          dropZone.querySelector('.act-dropzone-text').innerHTML = 'Drop files here or <span class="act-dropzone-browse">browse</span>';
+          dropZone.querySelector('.act-dropzone-hint').style.display = '';
+          return;
+        }
+        fileList.classList.remove('d-none');
+        submitBtn.classList.remove('d-none');
+        submitLbl.textContent = 'Upload ' + files.length + ' file' + (files.length === 1 ? '' : 's');
+        dropZone.querySelector('.act-dropzone-text').innerHTML = 'Drop more files or <span class="act-dropzone-browse">browse</span>';
+        dropZone.querySelector('.act-dropzone-hint').style.display = 'none';
+        fileList.innerHTML = Array.from(files).map(function(f) {
+          return '<div class="act-drop-filerow">' +
+            '<i class="bi ' + iconForName(f.name) + ' act-file-icon"></i>' +
+            '<span class="act-file-name">' + f.name + '</span>' +
+            '<span class="act-drop-filesize">' + fmtSize(f.size) + '</span>' +
+          '</div>';
+        }).join('');
+      }
+
+      // Click to browse
+      dropZone.addEventListener('click', function() { fileInput.click(); });
+      fileInput.addEventListener('change', function() { renderFiles(fileInput.files); });
+
+      // Drag events
+      dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.classList.add('act-dropzone--over');
+        dropZone.querySelector('.act-dropzone-text').innerHTML = 'Drop to upload';
+        dropZone.querySelector('.act-dropzone-hint').textContent = 'Release to attach files';
+      });
+      dropZone.addEventListener('dragleave', function(e) {
+        if (!dropZone.contains(e.relatedTarget)) {
+          dropZone.classList.remove('act-dropzone--over');
+          renderFiles(fileInput.files);
+        }
+      });
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.classList.remove('act-dropzone--over');
+        var dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length) {
+          // Merge dropped files with already-selected files
+          var existing = fileInput.files ? Array.from(fileInput.files) : [];
+          var dropped  = Array.from(dt.files);
+          var merged   = existing.concat(dropped);
+          var transfer = new DataTransfer();
+          merged.forEach(function(f) { transfer.items.add(f); });
+          fileInput.files = transfer.files;
+          renderFiles(fileInput.files);
+        }
+      });
+    })();
+
+    // Chip fields
+    function refreshChipOptions(field, select) {
+      var usedIds = Array.from(field.querySelectorAll('.chip')).map(function (chip) {
+        return chip.dataset.id;
+      });
+      Array.from(select.options).forEach(function (opt) {
+        if (!opt.value) return;
+        opt.hidden = usedIds.indexOf(opt.value) !== -1;
+      });
+    }
+
+    document.querySelectorAll('.chip-add-btn').forEach(function (btn) {
+      var wrap = btn.parentElement;
+      var field = document.getElementById(btn.dataset.target);
+      var select = wrap.querySelector('.chip-add-select');
+      if (!field || !select) return;
+      btn.addEventListener('click', function () {
+        refreshChipOptions(field, select);
+        btn.classList.add('d-none');
+        select.classList.remove('d-none');
+        select.focus();
+      });
+      select.addEventListener('change', function () {
+        var opt = select.options[select.selectedIndex];
+        if (!opt.value) return;
+        var field = document.getElementById(btn.dataset.target);
+        if (!field.querySelector('[data-id="' + opt.value + '"]')) {
+          var chip = document.createElement('span');
+          chip.className = 'chip' + (btn.dataset.avatar ? '' : ' chip-link');
+          chip.dataset.id = opt.value;
+          var avatarHtml = btn.dataset.avatar
+            ? '<span class="chip-avatar">' + opt.dataset.name.trim().charAt(0).toUpperCase() + '</span>'
+            : '';
+          chip.innerHTML = avatarHtml +
+            opt.dataset.name +
+            '<input type="hidden" name="' + btn.dataset.field + '" value="' + opt.value + '">' +
+            '<button type="button" class="chip-remove" aria-label="Remove">&times;</button>';
+          field.insertBefore(chip, wrap);
+          refreshChipOptions(field, select);
+        }
+        select.value = '';
+        select.classList.add('d-none');
+        btn.classList.remove('d-none');
+      });
+      select.addEventListener('blur', function () {
+        select.classList.add('d-none');
+        btn.classList.remove('d-none');
+      });
+    });
+
+    document.querySelectorAll('.chip-field').forEach(function (field) {
+      field.addEventListener('click', function (e) {
+        if (e.target.classList.contains('chip-remove')) {
+          e.target.closest('.chip').remove();
+        }
+      });
+    });
+  })();
+</script>

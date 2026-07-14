@@ -1,0 +1,95 @@
+<div class="pnew-page">
+  <a href="/companies" class="pnew-back-link"><i class="bi bi-arrow-left"></i> All companies</a>
+
+  <div class="pnew-badge"><i class="bi bi-building-add"></i> New company</div>
+  <h1 class="pnew-hero">Add a <em>company</em></h1>
+  <p class="pnew-hero-sub">Fill in the basics — you can link contacts, deals, and projects after saving.</p>
+
+  <% if (error) { %>
+    <div class="alert alert-danger mb-3"><%= error %></div>
+  <% } %>
+
+  <form action="/companies" method="POST">
+    <div class="pnew-grid">
+
+      <div class="pnew-main">
+
+        <div class="pnew-card">
+          <h2 class="pnew-card-title">Identity</h2>
+          <p class="pnew-card-sub">The company's name and online presence.</p>
+
+          <div class="mb-3">
+            <label class="pnew-field-label">Company name <span class="pnew-required">*</span></label>
+            <input type="text" name="name" class="pnew-input" value="<%= values.name || '' %>" required autofocus placeholder="Acme Corp">
+          </div>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-globe2"></i> Website</label>
+            <input type="url" name="web" class="pnew-input" placeholder="https://" value="<%= values.web || '' %>">
+          </div>
+        </div>
+
+        <div class="pnew-card">
+          <h2 class="pnew-card-title">Classification</h2>
+          <p class="pnew-card-sub">Industry and current relationship status.</p>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-tag"></i> Industry</label>
+              <select name="industry" class="pnew-select">
+                <option value="">— Select —</option>
+                <% industryChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= values.industry === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-activity"></i> Status</label>
+              <select name="status" class="pnew-select">
+                <option value="">— Select —</option>
+                <% statusChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= values.status === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="pnew-card">
+          <h2 class="pnew-card-title">Additional info</h2>
+          <p class="pnew-card-sub">Billing details and internal notes.</p>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-geo-alt"></i> Billing address</label>
+            <textarea name="billingAddress" class="pnew-input pnew-textarea" rows="2" placeholder="123 Main St, City, Country"><%= values.billingAddress || '' %></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-sticky"></i> Notes</label>
+            <textarea name="notes" class="pnew-input pnew-textarea" rows="3" placeholder="Internal context about this company…"><%= values.notes || '' %></textarea>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save Company</button>
+          <a href="/companies" class="pnew-btn-cancel">Cancel</a>
+        </div>
+
+      </div>
+
+      <div class="pnew-aside">
+        <div class="pnew-tip-card">
+          <i class="bi bi-lightbulb"></i>
+          <div class="pnew-tip-title">After saving</div>
+          <div class="pnew-tip-text">Link contacts, open deals, and attach projects directly from the company profile page.</div>
+        </div>
+        <div class="pnew-tip-card">
+          <i class="bi bi-globe2"></i>
+          <div class="pnew-tip-title">Website format</div>
+          <div class="pnew-tip-text">Include the full URL with <code>https://</code> so the link is clickable on the company profile.</div>
+        </div>
+      </div>
+
+    </div>
+  </form>
+</div>

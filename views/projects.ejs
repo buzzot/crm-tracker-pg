@@ -1,0 +1,356 @@
+<%
+  function initials(name) {
+    if (!name) return '?';
+    return name.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  }
+  const AVATAR_COLORS = ['avatar-blue', 'avatar-purple', 'avatar-gold', 'avatar-teal', 'avatar-pink'];
+  let avatarIdx = 0;
+  function nextAvatarColor() {
+    const c = AVATAR_COLORS[avatarIdx % AVATAR_COLORS.length];
+    avatarIdx++;
+    return c;
+  }
+  const totalSubtasks = projects.reduce((s, p) => s + ((p.subtasks && p.subtasks.length) || 0), 0);
+  function fmtCreatedDate(iso) {
+    if (!iso) return null;
+    return String(iso).slice(0, 10);
+  }
+%>
+
+<div class="projects-page-header">
+  <div>
+    <h1 class="projects-page-title">Projects</h1>
+    <div class="projects-page-subtitle">
+      <%= projects.length %> project<%= projects.length === 1 ? '' : 's' %> &middot; <%= totalSubtasks %> subtask<%= totalSubtasks === 1 ? '' : 's' %>
+    </div>
+  </div>
+  <div class="projects-page-actions">
+    <div class="group-toggle" id="groupToggle">
+      <span class="group-toggle-label">Group by</span>
+      <button type="button" class="group-toggle-btn active" data-mode="project"><i class="bi bi-kanban"></i> Project</button>
+      <button type="button" class="group-toggle-btn" data-mode="company"><i class="bi bi-building"></i> Company</button>
+      <button type="button" class="group-toggle-btn" data-mode="date"><i class="bi bi-calendar3"></i> Created date</button>
+    </div>
+    <div class="projects-search-wrap">
+      <i class="bi bi-search"></i>
+      <input type="text" id="projectSearch" placeholder="Search projects...">
+    </div>
+    <a href="/projects/new" class="btn-new-project" title="Create a new project">New project</a>
+  </div>
+</div>
+
+<div class="projects-col-header row-grid">
+  <div>Name</div>
+  <div>Type</div>
+  <div>Status</div>
+  <div>Date</div>
+  <div>Owner</div>
+  <div></div>
+</div>
+
+<div class="projects-list" id="projectsList">
+  <% projects.forEach(proj => { %>
+    <div class="project-card" data-search="<%= [proj.name, proj.category, proj.status, (proj.companies||[]).map(c=>c.name).join(' '), (proj.products||[]).map(p=>p.name).join(' '), (proj.subtasks||[]).map(t=>t.name).join(' ')].join(' ').toLowerCase() %>">
+      <div class="project-row row-grid">
+        <div class="cell-name">
+          <span class="project-icon"><i class="bi bi-kanban"></i></span>
+          <div class="project-name-block">
+            <div class="project-title">
+              <a href="/projects/<%= proj.id %>"
+                class="project-title-link"
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="<%= (proj.companies && proj.companies.length) ? 'Company: ' + proj.companies.map(c => c.name).join(', ') : 'No related company' %>">
+                <%= proj.name %>
+              </a>
+            </div>
+            <% if (proj.products && proj.products.length) { %>
+              <div class="project-subtitle"><%= proj.products.map(p => p.name).join(', ') %></div>
+            <% } %>
+          </div>
+        </div>
+        <div class="cell-type"><% if (proj.category) { %><%= proj.category %><% } else { %><span class="muted-cell">—</span><% } %></div>
+        <div class="cell-status">
+          <% if (proj.status) { %>
+            <span class="badge project-status-<%= proj.status.replace(/\s+/g,'') %>"><span class="status-dot"></span><%= proj.status %></span>
+          <% } else { %><span class="muted-cell">—</span><% } %>
+        </div>
+        <div class="cell-date">
+          <% if (fmtCreatedDate(proj.createdAt)) { %>
+            <i class="bi bi-calendar3 me-1 muted-cell"></i><%= fmtCreatedDate(proj.createdAt) %>
+          <% } else { %><span class="muted-cell">—</span><% } %>
+        </div>
+        <div class="cell-owner"><span class="muted-cell">—</span></div>
+        <div class="cell-actions">
+          <a href="/projects/<%= proj.id %>/tasks/new" class="btn-new-task">New Task</a>
+          <button type="button" class="project-toggle-btn" aria-label="Toggle subtasks"><i class="bi bi-chevron-down"></i></button>
+        </div>
+      </div>
+
+      <div class="project-subtasks">
+        <% if (proj.subtasks && proj.subtasks.length) { %>
+          <% proj.subtasks.forEach(t => { %>
+            <div class="subtask-row row-grid">
+              <div class="cell-name">
+                <span class="subtask-arrow"><i class="bi bi-arrow-return-right"></i></span>
+                <a href="/tasks/<%= t.id %>" class="subtask-title-link"><%= t.name || '(untitled)' %></a>
+              </div>
+              <div class="cell-type"><% if (t.type) { %><%= t.type %><% } else { %><span class="muted-cell">—</span><% } %></div>
+              <div class="cell-status">
+                <% if (t.status) { %>
+                  <span class="badge project-status-<%= t.status.replace(/\s+/g,'') %>"><span class="status-dot"></span><%= t.status %></span>
+                <% } else { %><span class="muted-cell">—</span><% } %>
+              </div>
+              <div class="cell-date"><% if (t.deadline) { %><i class="bi bi-calendar3 me-1 muted-cell"></i><%= t.deadline %><% } else { %><span class="muted-cell">—</span><% } %></div>
+              <div class="cell-owner">
+                <% if (t.owners && t.owners.length) { %>
+                  <span class="owner-avatar <%= nextAvatarColor() %>"><%= initials(t.owners[0].name) %></span>
+                  <span class="owner-name"><%= t.owners.map(o => o.name).join(', ') %></span>
+                <% } else { %><span class="muted-cell">—</span><% } %>
+              </div>
+              <div class="cell-actions"></div>
+            </div>
+          <% }) %>
+        <% } else { %>
+          <div class="subtask-empty-row">
+            <a href="/projects/<%= proj.id %>/tasks/new" class="add-first-task-link">+ Add the first task</a>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  <% }) %>
+</div>
+
+<script type="application/json" id="projectsData">
+  <%- JSON.stringify(projects.map(proj => ({
+    id: proj.id,
+    name: proj.name,
+    category: proj.category || null,
+    status: proj.status || null,
+    startDate: proj.startDate || null,
+    endDate: proj.endDate || null,
+    createdAt: proj.createdAt || null,
+    companies: (proj.companies || []).map(c => ({ id: c.id, name: c.name })),
+    products: (proj.products || []).map(p => ({ id: p.id, name: p.name })),
+    subtasks: (proj.subtasks || []).map(t => ({
+      id: t.id,
+      name: t.name,
+      type: t.type || null,
+      status: t.status || null,
+      deadline: t.deadline || null,
+      createdAt: t.createdAt || null,
+      owners: (t.owners || []).map(o => o.name).filter(Boolean)
+    }))
+  }))) %>
+</script>
+
+<script>
+  (function () {
+    const list = document.getElementById('projectsList');
+    const searchInput = document.getElementById('projectSearch');
+    const toggleWrap = document.getElementById('groupToggle');
+    const projectsData = JSON.parse(document.getElementById('projectsData').textContent || '[]');
+
+    // Save the server-rendered "Project" grouping so we can restore it exactly.
+    const originalCards = Array.from(list.children).map((c) => c.cloneNode(true));
+
+    const AVATAR_COLORS = ['avatar-blue', 'avatar-purple', 'avatar-gold', 'avatar-teal', 'avatar-pink'];
+    let avatarIdx = 0;
+    function nextAvatarColor() {
+      const c = AVATAR_COLORS[avatarIdx % AVATAR_COLORS.length];
+      avatarIdx++;
+      return c;
+    }
+    function initials(name) {
+      if (!name) return '?';
+      return name.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+    }
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[ch]));
+    }
+
+    function statusPillHtml(status) {
+      if (!status) return '<span class="muted-cell">—</span>';
+      const cls = status.replace(/\s+/g, '');
+      return `<span class="badge project-status-${cls}"><span class="status-dot"></span>${escapeHtml(status)}</span>`;
+    }
+
+    function taskRowHtml(task) {
+      const ownerHtml = task.owners && task.owners.length
+        ? `<span class="owner-avatar ${nextAvatarColor()}">${initials(task.owners[0])}</span><span class="owner-name">${escapeHtml(task.owners.join(', '))}</span>`
+        : '<span class="muted-cell">—</span>';
+      return `
+        <div class="subtask-row row-grid">
+          <div class="cell-name">
+            <span class="subtask-arrow"><i class="bi bi-arrow-return-right"></i></span>
+            <a href="/tasks/${task.id}" class="subtask-title-link">${escapeHtml(task.name || '(untitled)')}</a>
+          </div>
+          <div class="cell-type">${task.type ? escapeHtml(task.type) : '<span class="muted-cell">—</span>'}</div>
+          <div class="cell-status">${statusPillHtml(task.status)}</div>
+          <div class="cell-date">${task.deadline ? `<i class="bi bi-calendar3 me-1 muted-cell"></i>${escapeHtml(task.deadline)}` : '<span class="muted-cell">—</span>'}</div>
+          <div class="cell-owner">${ownerHtml}</div>
+          <div class="cell-actions"></div>
+        </div>`;
+    }
+
+    // Renders a project exactly like the server-rendered tile, optionally
+    // restricted to a subset of its subtasks (used by the date grouping).
+    function projectCardHtml(proj, subtasksOverride) {
+      const subtasks = subtasksOverride || proj.subtasks;
+      const rows = subtasks.length
+        ? subtasks.map((t) => taskRowHtml(t)).join('')
+        : `<div class="subtask-empty-row"><a href="/projects/${proj.id}/tasks/new" class="add-first-task-link">+ Add the first task</a></div>`;
+      const companyTitle = proj.companies.length
+        ? 'Company: ' + escapeHtml(proj.companies.map((c) => c.name).join(', '))
+        : 'No related company';
+      const productsHtml = proj.products.length
+        ? `<div class="project-subtitle">${escapeHtml(proj.products.map((p) => p.name).join(', '))}</div>`
+        : '';
+      const typeHtml = proj.category ? escapeHtml(proj.category) : '<span class="muted-cell">—</span>';
+      const createdDate = proj.createdAt ? String(proj.createdAt).slice(0, 10) : null;
+      const dateHtml = createdDate
+        ? `<i class="bi bi-calendar3 me-1 muted-cell"></i>${escapeHtml(createdDate)}`
+        : '<span class="muted-cell">—</span>';
+      const searchBlob = [proj.name, proj.category, proj.status, proj.companies.map((c) => c.name).join(' '), proj.products.map((p) => p.name).join(' '), proj.subtasks.map((t) => t.name).join(' ')]
+        .join(' ')
+        .toLowerCase();
+      return `
+        <div class="project-card" data-search="${escapeHtml(searchBlob)}">
+          <div class="project-row row-grid">
+            <div class="cell-name">
+              <span class="project-icon"><i class="bi bi-kanban"></i></span>
+              <div class="project-name-block">
+                <div class="project-title">
+                  <a href="/projects/${proj.id}" class="project-title-link" data-bs-toggle="tooltip" data-bs-placement="top" title="${companyTitle}">${escapeHtml(proj.name)}</a>
+                </div>
+                ${productsHtml}
+              </div>
+            </div>
+            <div class="cell-type">${typeHtml}</div>
+            <div class="cell-status">${statusPillHtml(proj.status)}</div>
+            <div class="cell-date">${dateHtml}</div>
+            <div class="cell-owner"><span class="muted-cell">—</span></div>
+            <div class="cell-actions">
+              <a href="/projects/${proj.id}/tasks/new" class="btn-new-task">New Task</a>
+              <button type="button" class="project-toggle-btn" aria-label="Toggle subtasks"><i class="bi bi-chevron-down"></i></button>
+            </div>
+          </div>
+          <div class="project-subtasks">${rows}</div>
+        </div>`;
+    }
+
+    function sectionHtml(icon, title, count, cardsHtml) {
+      return `
+        <div class="group-section">
+          <div class="group-section-title"><i class="bi ${icon}"></i> ${escapeHtml(title)} <span class="group-header-count">${count} project${count === 1 ? '' : 's'}</span></div>
+          <div class="group-section-cards">${cardsHtml}</div>
+        </div>`;
+    }
+
+    function renderSections(groups, icon) {
+      list.innerHTML = groups.map((g) => sectionHtml(icon, g.title, g.cards.length, g.cards.map((c) => c.html).join(''))).join('');
+      attachCardBehavior();
+      applySearch();
+      if (window.initTooltips) window.initTooltips();
+    }
+
+    function renderByCompany() {
+      const groupMap = new Map();
+      projectsData.forEach((proj) => {
+        const companies = proj.companies.length ? proj.companies : [{ id: '__none', name: 'No company' }];
+        companies.forEach((c) => {
+          if (!groupMap.has(c.id)) groupMap.set(c.id, { title: c.name, cards: [] });
+          groupMap.get(c.id).cards.push({ html: projectCardHtml(proj) });
+        });
+      });
+      const groups = Array.from(groupMap.values()).sort((a, b) => {
+        if (a.title === 'No company') return 1;
+        if (b.title === 'No company') return -1;
+        return a.title.localeCompare(b.title);
+      });
+      renderSections(groups, 'bi-building');
+    }
+
+    function localDateKey(d) {
+      // Use local date parts (not toISOString, which is UTC) so the grouping
+      // key always matches the locale-rendered title below — otherwise two
+      // projects created on the same local day but on opposite sides of UTC
+      // midnight end up in separate groups with an identical-looking title.
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function renderByDate() {
+      const groupMap = new Map();
+      projectsData.forEach((proj) => {
+        const d = proj.createdAt ? new Date(proj.createdAt) : null;
+        const key = d && !isNaN(d.getTime()) ? localDateKey(d) : 'unknown';
+        const title = d && !isNaN(d.getTime())
+          ? d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+          : 'Unknown date';
+        if (!groupMap.has(key)) groupMap.set(key, { title, cards: [], sortKey: key });
+        groupMap.get(key).cards.push({ html: projectCardHtml(proj) });
+      });
+      const groups = Array.from(groupMap.values()).sort((a, b) => {
+        if (a.sortKey === 'unknown') return 1;
+        if (b.sortKey === 'unknown') return -1;
+        return b.sortKey.localeCompare(a.sortKey);
+      });
+      renderSections(groups, 'bi-calendar3');
+    }
+
+    function restoreProjectMode() {
+      list.innerHTML = '';
+      originalCards.forEach((c) => list.appendChild(c.cloneNode(true)));
+      attachCardBehavior();
+      applySearch();
+      if (window.initTooltips) window.initTooltips();
+    }
+
+    function attachCardBehavior() {
+      list.querySelectorAll('.project-toggle-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const card = btn.closest('.project-card');
+          card.classList.toggle('collapsed');
+        });
+      });
+    }
+
+    function applySearch() {
+      const q = (searchInput.value || '').toLowerCase();
+      list.querySelectorAll('.project-card').forEach((card) => {
+        card.style.display = (card.dataset.search || '').includes(q) ? '' : 'none';
+      });
+      list.querySelectorAll('.group-section').forEach((section) => {
+        const hasVisible = !!section.querySelector('.project-card:not([style*="display: none"])');
+        section.style.display = hasVisible ? '' : 'none';
+      });
+    }
+
+    function setMode(mode) {
+      toggleWrap.querySelectorAll('.group-toggle-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+      });
+      if (mode === 'project') {
+        restoreProjectMode();
+      } else if (mode === 'company') {
+        renderByCompany();
+      } else {
+        renderByDate();
+      }
+    }
+
+    toggleWrap.querySelectorAll('.group-toggle-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setMode(btn.dataset.mode));
+    });
+
+    searchInput.addEventListener('input', applySearch);
+
+    attachCardBehavior();
+  })();
+</script>

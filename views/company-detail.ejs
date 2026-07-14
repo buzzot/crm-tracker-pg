@@ -1,0 +1,189 @@
+<%
+  const typeIconMap = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-camera-video', Demo: 'bi-camera-video' };
+%>
+
+<div class="pnew-page company-detail-page">
+  <a href="/companies" class="pnew-back-link"><i class="bi bi-arrow-left"></i> All companies</a>
+
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+      <% if (company.status) { %>
+        <div class="pnew-badge"><i class="bi bi-building"></i> <%= company.status %></div>
+      <% } %>
+      <% if (company.logo) { %>
+        <img src="<%= company.logo %>" alt="<%= company.name %> logo" style="height: 2rem; width: auto; object-fit: contain; display: block; margin-bottom: 0.4rem; border-radius: 4px;">
+      <% } %>
+      <h1 class="pnew-hero"><%= company.name %></h1>
+      <p class="pnew-hero-sub"><%= company.industry || 'No industry set' %></p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="/companies/<%= company.id %>/edit" class="pnew-btn-save"><i class="bi bi-pencil-square"></i> Edit</a>
+    </div>
+  </div>
+
+  <div class="pnew-grid">
+
+    <div class="pnew-main">
+
+      <!-- Company Info -->
+      <div class="pnew-summary-card">
+        <div class="pnew-summary-title">Company info</div>
+        <div class="pnew-summary-row"><span>Industry</span><span><%= company.industry || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Status</span><span><%= company.status || '—' %></span></div>
+        <% if (company.web) { %>
+          <div class="pnew-summary-row"><span>Website</span><span><a href="<%= company.web %>" target="_blank" rel="noopener" style="color: var(--crm-accent); text-decoration: none; font-size: 0.8rem; word-break: break-all;"><%= company.web %></a></span></div>
+        <% } %>
+        <% if (company.billingAddress) { %>
+          <div class="pnew-summary-row"><span>Billing</span><span style="font-size:0.8rem;"><%= company.billingAddress %></span></div>
+        <% } %>
+        <% if (company.notes) { %>
+          <div class="pnew-summary-row"><span>Notes</span><span style="font-size:0.8rem;"><%= company.notes %></span></div>
+        <% } %>
+      </div>
+
+      <!-- Contacts -->
+      <div class="pnew-card">
+        <div class="pnew-products-header">
+          <div>
+            <h2 class="pnew-card-title">Contacts</h2>
+            <p class="pnew-card-sub"><%= persons.length %> linked</p>
+          </div>
+          <a href="/companies/<%= company.id %>/contacts/new" class="pnew-btn-save">Add</a>
+        </div>
+        <div class="pnew-product-list">
+          <% if (!persons.length) { %>
+            <div class="pnew-product-empty">No contacts linked.</div>
+          <% } %>
+          <% persons.forEach(p => { %>
+            <a href="/contacts/<%= p.id %>" class="company-contact-row" style="text-decoration: none;">
+              <span class="company-contact-avatar"><%= (p.fullName||'?').trim().charAt(0).toUpperCase() %></span>
+              <span class="company-contact-info">
+                <span class="company-contact-name"><%= p.fullName %></span>
+                <% if (p.title) { %><span class="company-contact-title"><%= p.title %></span><% } %>
+              </span>
+              <span class="company-contact-reach">
+                <% if (p.email) { %><span class="company-contact-email"><%= p.email %></span><% } %>
+                <% if (p.phone) { %><span class="company-contact-phone"><%= p.phone %></span><% } %>
+              </span>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="pnew-aside">
+
+      <!-- Projects -->
+      <div class="pnew-card">
+        <div class="pnew-products-header">
+          <div>
+            <h2 class="pnew-card-title">Projects</h2>
+            <p class="pnew-card-sub"><%= projects.length %> linked</p>
+          </div>
+          <a href="/companies/<%= company.id %>/projects/new" class="pnew-btn-save">New</a>
+        </div>
+        <div class="pnew-product-list">
+          <% if (!projects.length) { %>
+            <div class="pnew-product-empty">No projects yet.</div>
+          <% } %>
+          <% projects.forEach(p => { %>
+            <a href="/projects/<%= p.id %>" class="pnew-product-row" style="text-decoration: none;">
+              <span class="pnew-product-name"><%= p.name %></span>
+              <span class="pnew-product-sub"><%= p.createdAt ? new Date(p.createdAt).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : '—' %></span>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+
+      <!-- Deals -->
+      <div class="pnew-card">
+        <div class="pnew-products-header">
+          <div>
+            <h2 class="pnew-card-title">Deals</h2>
+            <p class="pnew-card-sub"><%= deals.length %> total</p>
+          </div>
+          <a href="/companies/<%= company.id %>/deals/new" class="pnew-btn-save">New</a>
+        </div>
+        <div class="pnew-product-list">
+          <% if (!deals.length) { %>
+            <div class="pnew-product-empty">No deals yet.</div>
+          <% } %>
+          <% deals.forEach(d => { %>
+            <a href="/deals/<%= d.id %>" class="pnew-product-row" style="text-decoration: none;">
+              <span class="pnew-product-name">
+                <i class="bi bi-currency-dollar me-1" style="color: var(--crm-success); opacity: 0.8;"></i><%= d.name %>
+                <% if (d.stage) { %><span class="d-block"><span class="badge stage-badge stage-<%= (d.stage||'').replace(/\s+/g,'') %>"><%= d.stage %></span></span><% } %>
+              </span>
+              <span class="fw-semibold" style="color: var(--crm-success); font-size: 0.88rem;">$<%= (d.amount||0).toLocaleString() %></span>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+
+      <!-- Activities -->
+      <div class="pnew-card">
+        <div class="pnew-products-header">
+          <div>
+            <h2 class="pnew-card-title">Activities</h2>
+            <p class="pnew-card-sub"><%= activities.length %> logged</p>
+          </div>
+          <a href="/companies/<%= company.id %>/activities/new" class="pnew-btn-save">New</a>
+        </div>
+        <div class="pnew-product-list">
+          <% if (!activities.length) { %>
+            <div class="pnew-product-empty">No activity logged yet.</div>
+          <% } %>
+          <% activities.forEach(a => { %>
+            <a href="/activities/<%= a.id %>" class="pnew-product-row" style="text-decoration: none;">
+              <span class="pnew-product-name"><%= a.name || '(untitled)' %></span>
+              <span class="pnew-product-sub"><%= a.statusDate || a.date || '—' %></span>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+.company-project-block { display: flex; flex-direction: column; }
+.company-project-activities { padding: 0 0 0.25rem 1rem; display: flex; flex-direction: column; gap: 0; border-left: 2px solid var(--crm-border); margin: 0 0 0.25rem 1.2rem; }
+.company-activity-sub { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem; color: var(--crm-muted-fg); border-radius: 6px; transition: background 0.15s; }
+.company-activity-sub:hover { background: var(--crm-muted); color: var(--crm-fg); }
+.company-sub-indent { font-size: 0.7rem; opacity: 0.4; flex-shrink: 0; }
+.company-sub-name { flex: 1; }
+.company-sub-date { font-size: 0.75rem; opacity: 0.6; white-space: nowrap; }
+
+/* Wide contact rows */
+.company-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  transition: background 0.15s;
+  color: var(--crm-fg);
+}
+.company-contact-row:hover { background: var(--crm-muted); }
+.company-contact-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--crm-muted);
+  color: var(--crm-muted-fg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.82rem; font-weight: 600;
+  flex-shrink: 0;
+  border: 1px solid var(--crm-border);
+}
+.company-contact-info {
+  display: flex; flex-direction: column; flex: 1; min-width: 0;
+}
+.company-contact-name { font-size: 0.88rem; font-weight: 600; color: var(--crm-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.company-contact-title { font-size: 0.75rem; color: var(--crm-muted-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.company-contact-reach {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; flex-shrink: 0;
+}
+.company-contact-email { font-size: 0.78rem; color: var(--crm-accent); }
+.company-contact-phone { font-size: 0.75rem; color: var(--crm-muted-fg); }
+</style>

@@ -1,0 +1,133 @@
+<%
+  // "DC Inverter Driver" was a duplicate of "Inverter Drive" — merge them for display/filtering.
+  const CATEGORY_ALIASES = { 'DC Inverter Driver': 'Inverter Drive' };
+  function normalizeCategory(cat) { return CATEGORY_ALIASES[cat] || cat; }
+
+  const CATEGORY_COLORS = {
+    'Inverter Drive': 'cat-gold',
+    'Controller': 'cat-blue'
+  };
+  function categoryColor(cat) { return CATEGORY_COLORS[normalizeCategory(cat)] || 'cat-gray'; }
+
+  const categoryChoices = ['Inverter Drive', 'Controller'];
+  const categoryCounts = {};
+  categoryChoices.forEach(c => { categoryCounts[c] = 0; });
+  products.forEach(p => {
+    const cat = normalizeCategory(p.category);
+    if (cat && categoryCounts.hasOwnProperty(cat)) categoryCounts[cat]++;
+  });
+  const uncategorizedCount = products.filter(p => !normalizeCategory(p.category)).length;
+
+  const withDatasheet = products.filter(p => p.datasheet && p.datasheet.length).length;
+  const linkedToProjects = products.filter(p => p.projects && p.projects.length).length;
+%>
+
+<div class="products-page-header">
+  <div>
+    <h1 class="products-page-title">Products <span class="products-page-count"><%= products.length %></span></h1>
+    <div class="products-page-subtitle">
+      <%= withDatasheet %> with datasheet &middot; <%= linkedToProjects %> linked to projects
+    </div>
+  </div>
+</div>
+
+<div class="products-toolbar">
+  <div class="status-filter-tabs" id="categoryFilterTabs">
+    <button type="button" class="filter-tab active" data-category="all">All <span class="filter-tab-count"><%= products.length %></span></button>
+    <% categoryChoices.forEach(c => { %>
+      <button type="button" class="filter-tab" data-category="<%= c %>"><%= c %> <span class="filter-tab-count"><%= categoryCounts[c] %></span></button>
+    <% }) %>
+    <button type="button" class="filter-tab" data-category="Uncategorized">Uncategorized <span class="filter-tab-count"><%= uncategorizedCount %></span></button>
+  </div>
+  <div class="companies-search-wrap">
+    <i class="bi bi-search"></i>
+    <input type="text" id="productSearch" placeholder="Search products...">
+  </div>
+</div>
+
+<div class="companies-table-card">
+  <table class="companies-table" id="productsTable">
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Category</th>
+        <th>Notes</th>
+        <th>Datasheet</th>
+        <th>Related Project</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% products.forEach(p => { %>
+        <tr class="product-row"
+          data-category="<%= normalizeCategory(p.category) || 'Uncategorized' %>"
+          data-search="<%= [p.name, normalizeCategory(p.category), p.notes, (p.projects||[]).map(proj=>proj.name).join(' ')].filter(Boolean).join(' ').toLowerCase() %>">
+          <td data-label="Product">
+            <div class="product-name-cell">
+              <span class="product-icon <%= categoryColor(p.category) %>"><i class="bi bi-box-seam"></i></span>
+              <div class="product-name-block">
+                <div class="product-name"><a href="/products/<%= p.id %>" class="product-name-link"><%= p.name %></a></div>
+                <% if (p.projects && p.projects.length) { %>
+                  <div class="product-meta-sub"><%= p.projects.length %> project<%= p.projects.length === 1 ? '' : 's' %></div>
+                <% } %>
+              </div>
+            </div>
+          </td>
+          <td data-label="Category">
+            <% if (normalizeCategory(p.category)) { %><span class="industry-tag <%= categoryColor(p.category) %>"><%= normalizeCategory(p.category) %></span><% } else { %><span class="muted-cell">—</span><% } %>
+          </td>
+          <td class="text-truncate" style="max-width: 320px;" data-label="Notes">
+            <% if (p.notes) { %><%= p.notes %><% } else { %><span class="muted-cell">—</span><% } %>
+          </td>
+          <td data-label="Datasheet">
+            <% if (p.datasheet && p.datasheet.length) { %>
+              <% p.datasheet.forEach(file => { %>
+                <a href="<%= file.url %>" target="_blank" rel="noopener" class="specs-link"><i class="bi bi-file-earmark-text"></i> Specs</a>
+              <% }) %>
+            <% } else { %><span class="muted-cell">—</span><% } %>
+          </td>
+          <td data-label="Related Project">
+            <% if (p.projects && p.projects.length) { %>
+              <div class="related-project-stack">
+                <% p.projects.forEach(proj => { %>
+                  <a href="/projects/<%= proj.id %>" class="related-project-pill"><i class="bi bi-link-45deg"></i> <%= proj.name %></a>
+                <% }) %>
+              </div>
+            <% } else { %><span class="muted-cell">—</span><% } %>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% if (!products.length) { %>
+    <div class="companies-empty-state">No products yet.</div>
+  <% } %>
+</div>
+
+<script>
+  (function () {
+    const searchInput = document.getElementById('productSearch');
+    const tabs = document.querySelectorAll('#categoryFilterTabs .filter-tab');
+    const rows = document.querySelectorAll('#productsTable tbody tr');
+    let activeCategory = 'all';
+
+    function applyFilters() {
+      const q = searchInput.value.toLowerCase();
+      rows.forEach((row) => {
+        const matchesCategory = activeCategory === 'all' || row.dataset.category === activeCategory;
+        const matchesSearch = !q || row.dataset.search.includes(q);
+        row.style.display = (matchesCategory && matchesSearch) ? '' : 'none';
+      });
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        tabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeCategory = tab.dataset.category;
+        applyFilters();
+      });
+    });
+
+    searchInput.addEventListener('input', applyFilters);
+  })();
+</script>

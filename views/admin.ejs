@@ -1,0 +1,47 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Users</h1>
+</div>
+
+<p class="text-muted small">
+  This list is built from the "Owner" collaborator fields already on Company,
+  Deals, Activities, and Project Activities — anyone assigned as an owner
+  anywhere in the base shows up here. Role/access for everyone but the admin
+  is determined live at login time from their own permission level on the
+  Airtable base.
+</p>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+    <table class="table mb-0">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Owned records</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!users.length) { %>
+          <tr><td colspan="4" class="text-muted text-center py-3">No collaborators found yet.</td></tr>
+        <% } %>
+        <% users.forEach(u => { %>
+          <tr>
+            <td><%= u.name %></td>
+            <td><%= u.email %></td>
+            <td>
+              <% if (u.role === 'Admin') { %>
+                <span class="badge text-bg-dark">Admin</span>
+              <% } else { %>
+                <span class="badge text-bg-secondary">Collaborator</span>
+              <% } %>
+            </td>
+            <td><%= u.recordCount %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,274 @@
+<%
+  function fmtDate(value) {
+    if (!value) return null;
+    const d = new Date(value + 'T00:00:00');
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function fmtCreated(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  const startLabel = fmtDate(project.startDate);
+  const endLabel = fmtDate(project.endDate);
+  let windowLabel = '—';
+  if (startLabel && endLabel) windowLabel = `${startLabel} – ${endLabel}`;
+  else if (startLabel) windowLabel = `From ${startLabel}`;
+  else if (endLabel) windowLabel = `Until ${endLabel}`;
+
+  function noteTimeAgo(iso) {
+    if (!iso) return '';
+    const then = new Date(iso);
+    if (isNaN(then.getTime())) return '';
+    const sec = Math.floor((Date.now() - then.getTime()) / 1000);
+    if (sec < 60) return 'just now';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return min + 'm ago';
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return hr + 'h ago';
+    const day = Math.floor(hr / 24);
+    if (day < 30) return day + 'd ago';
+    return then.toLocaleDateString();
+  }
+  const noteAvatarClasses = ['note-avatar-blue', 'note-avatar-purple', 'note-avatar-gray'];
+  const youInitial = ((typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || '?').trim().charAt(0).toUpperCase();
+  const orderedComments = (project.comments || []).slice().reverse();
+
+  const subtaskIds = new Set(project.subtasks.map(t => t.id));
+  const linkableTasks = (typeof allTasks !== 'undefined' ? allTasks : []).filter(t => !subtaskIds.has(t.id));
+%>
+
+<div class="pnew-page project-detail-page">
+  <a href="/projects" class="pnew-back-link"><i class="bi bi-arrow-left"></i> All projects</a>
+
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+      <% if (project.status) { %>
+        <div class="pnew-badge"><i class="bi bi-folder2-open"></i> <%= project.status %></div>
+      <% } %>
+      <h1 class="pnew-hero"><%= project.name %></h1>
+      <p class="pnew-hero-sub">
+        <%= project.category || 'No category set' %><% if (project.companies.length) { %> &middot; <%= project.companies.map(c => c.name).join(', ') %><% } %>
+      </p>
+    </div>
+    <a href="/projects/<%= project.id %>/edit" class="pnew-btn-save"><i class="bi bi-pencil-square"></i> Edit project</a>
+  </div>
+
+  <div class="pnew-grid">
+    <div class="pnew-main">
+
+      <% if (project.description) { %>
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Description</h2>
+        <p class="pnew-card-sub" style="white-space: pre-wrap;"><%= project.description %></p>
+      </div>
+      <% } %>
+
+      <div class="pnew-card">
+        <div class="pnew-products-header">
+          <div>
+            <h2 class="pnew-card-title">Related products</h2>
+            <p class="pnew-card-sub">Products tagged to this project.</p>
+          </div>
+          <span class="pnew-product-count"><%= project.products.length %> linked</span>
+        </div>
+        <div class="pnew-product-list">
+          <% if (!project.products.length) { %>
+            <div class="pnew-product-empty">No products yet.</div>
+          <% } %>
+          <% project.products.forEach(p => { %>
+            <a href="/products/<%= p.id %>" class="pnew-product-row" style="text-decoration: none;">
+              <span class="pnew-product-name"><%= p.name %></span>
+              <% if (p.category) { %><span class="pnew-product-sub"><%= p.category %></span><% } %>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Attachments</h2>
+        <p class="pnew-card-sub"><%= project.attachments.length %> file<%= project.attachments.length === 1 ? '' : 's' %></p>
+
+        <div class="pnew-file-list">
+          <% project.attachments.forEach(file => { %>
+            <div class="pnew-file-row">
+              <i class="bi bi-file-earmark"></i>
+              <a href="<%= file.url %>" target="_blank" rel="noopener" class="pnew-file-name" style="text-decoration: none;"><%= file.filename %></a>
+            </div>
+          <% }) %>
+        </div>
+
+        <form action="/projects/<%= project.id %>/attachments" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mt-3">
+          <input type="file" name="attachments" id="projectAttachInput" multiple required style="display:none;">
+          <label for="projectAttachInput" class="pnew-btn-cancel" style="cursor:pointer; margin:0;">
+            <i class="bi bi-paperclip"></i>
+            <span id="projectAttachLabel">Choose files</span>
+          </label>
+          <button type="submit" class="pnew-btn-save"><i class="bi bi-upload"></i> Upload</button>
+        </form>
+        <script>
+          (function(){
+            var inp = document.getElementById('projectAttachInput');
+            var lbl = document.getElementById('projectAttachLabel');
+            if (inp && lbl) inp.addEventListener('change', function(){
+              var n = inp.files ? inp.files.length : 0;
+              lbl.textContent = n ? (n + ' file' + (n===1?'':'s') + ' selected') : 'Choose files';
+            });
+          })();
+        </script>
+      </div>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Comments (<%= (project.comments || []).length %>)</h2>
+        <p class="pnew-card-sub">Notes and updates shared about this project.</p>
+
+        <form action="/projects/<%= project.id %>/comments" method="POST" enctype="multipart/form-data">
+          <div class="note-compose-box">
+            <div class="d-flex gap-2">
+              <span class="note-avatar note-avatar-you"><%= youInitial %></span>
+              <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a comment..." required></textarea>
+            </div>
+            <div class="note-compose-footer">
+              <label class="note-link-field" style="cursor: pointer;">
+                <i class="bi bi-paperclip"></i>
+                <span id="projectCommentFileLabel">Attach</span>
+                <input type="file" name="attachment" multiple style="display: none;" id="projectCommentFileInput">
+              </label>
+              <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="note-thread">
+          <% if (!orderedComments.length) { %>
+            <p class="text-muted mb-0">No comments yet.</p>
+          <% } %>
+          <% orderedComments.forEach((c, i) => { %>
+            <% const cInitial = (c.author || '?').trim().charAt(0).toUpperCase(); %>
+            <% if (c.type === 'email') { %>
+              <div class="note-item note-item-email">
+                <div class="note-item-head">
+                  <span class="note-avatar note-avatar-email"><i class="bi bi-envelope-fill"></i></span>
+                  <div class="note-email-meta">
+                    <span class="note-email-from"><%= c.author %></span>
+                    <span class="note-email-subj"><%= c.emailSubject || '(no subject)' %></span>
+                  </div>
+                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+                </div>
+                <div class="note-bubble note-email-bubble">
+                  <div class="note-text" style="white-space: pre-wrap;"><%= c.comment %></div>
+                </div>
+              </div>
+            <% } else { %>
+              <div class="note-item">
+                <div class="note-item-head">
+                  <span class="note-avatar <%= noteAvatarClasses[i % noteAvatarClasses.length] %>"><%= cInitial %></span>
+                  <span class="fw-semibold note-author"><%= c.author || 'Someone' %></span>
+                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+                </div>
+                <div class="note-bubble">
+                  <div class="note-text"><%= c.comment %></div>
+                  <% if (c.link) { %>
+                    <a href="<%= c.link %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-link-45deg"></i><%= c.link %></a>
+                  <% } %>
+                  <% if (c.attachments && c.attachments.length) { %>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                      <% c.attachments.forEach(file => { %>
+                        <a href="<%= file.url %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-paperclip"></i><%= file.filename %></a>
+                      <% }) %>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            <% } %>
+          <% }) %>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const input = document.getElementById('projectCommentFileInput');
+          const label = document.getElementById('projectCommentFileLabel');
+          if (input && label) {
+            input.addEventListener('change', function () {
+              const n = input.files ? input.files.length : 0;
+              label.textContent = n ? (n + ' file' + (n === 1 ? '' : 's')) : 'Attach';
+            });
+          }
+        })();
+      </script>
+
+    </div>
+
+    <div class="pnew-aside">
+      <div class="pnew-summary-card">
+        <div class="pnew-summary-title">Overview</div>
+        <div class="pnew-summary-row"><span>Company</span><span><%= project.companies.length ? project.companies.map(c => c.name).join(', ') : '—' %></span></div>
+        <% if (project.deals && project.deals.length) { %>
+          <div class="pnew-summary-row"><span>Deal</span><span><%= project.deals.map(d => d.name).join(', ') %></span></div>
+        <% } %>
+        <div class="pnew-summary-row"><span>Status</span><span><%= project.status || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Category</span><span><%= project.category || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Products</span><span><%= project.products.length %></span></div>
+        <div class="pnew-summary-row"><span>Subtasks</span><span><%= project.subtasks.length %></span></div>
+        <div class="pnew-summary-row"><span>Window</span><span><%= windowLabel %></span></div>
+        <div class="pnew-summary-row"><span>Files</span><span><%= project.attachments.length %></span></div>
+        <div class="pnew-summary-row"><span>Created</span><span><%= fmtCreated(project.createdAt) %></span></div>
+        <div class="pnew-summary-row pnew-summary-row--email">
+          <span>Project email</span>
+          <span class="project-email-chip">
+            <% const _projEmail = 'project-' + project.id + '@' + emailDomain; %>
+            <span class="project-email-addr" id="projEmailAddr"><%= _projEmail %></span>
+            <button type="button" class="project-email-copy" title="Copy address" onclick="(function(btn){navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(function(){btn.innerHTML='<i class=\'bi bi-check-lg\'></i>';setTimeout(function(){btn.innerHTML='<i class=\'bi bi-copy\'></i>';},1500)});})(this)"><i class="bi bi-copy"></i></button>
+          </span>
+        </div>
+        <p class="project-email-hint">Set Reply-To this address when emailing clients — their replies appear here automatically.</p>
+      </div>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Related tasks</h2>
+        <p class="pnew-card-sub"><%= project.subtasks.length %> total</p>
+
+        <div class="pnew-product-list">
+          <% if (!project.subtasks.length) { %>
+            <div class="pnew-product-empty">No related tasks yet.</div>
+          <% } %>
+          <% project.subtasks.forEach(t => { %>
+            <a href="/tasks/<%= t.id %>" class="pnew-product-row" style="text-decoration: none;">
+              <span class="pnew-product-name"><%= t.name || '(untitled)' %></span>
+              <% if (t.status) { %><span class="pnew-product-sub"><%= t.status %></span><% } %>
+            </a>
+          <% }) %>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button type="button" class="pnew-btn-cancel" style="flex: 1; justify-content: center;" onclick="document.getElementById('linkTaskForm').style.display = document.getElementById('linkTaskForm').style.display === 'none' ? 'block' : 'none';"><i class="bi bi-link-45deg"></i> Link existing task</button>
+          <a href="/projects/<%= project.id %>/tasks/new" class="pnew-btn-save" style="flex: 1; justify-content: center; text-decoration: none;">New Task</a>
+        </div>
+
+        <div id="linkTaskForm" style="display: none;" class="mt-3">
+          <form action="/projects/<%= project.id %>/tasks/link" method="POST" class="d-flex gap-2">
+            <select name="taskId" class="pnew-select" required>
+              <option value="">— Select a task —</option>
+              <% linkableTasks.forEach(t => { %>
+                <option value="<%= t.id %>"><%= t.name || '(untitled)' %></option>
+              <% }) %>
+            </select>
+            <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i></button>
+          </form>
+          <% if (!linkableTasks.length) { %>
+            <p class="text-muted small mb-0 mt-2">No other unlinked tasks available.</p>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="pnew-tip-card">
+        <i class="bi bi-pencil-square"></i>
+        <div class="pnew-tip-title">Need changes?</div>
+        <div class="pnew-tip-text">Update identity, classification, products, and timeline from the <a href="/projects/<%= project.id %>/edit">edit page</a>.</div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,39 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Sales Pipeline by Company</h1>
+  <span class="text-muted small">Drag a card to a new stage, or use its dropdown.</span>
+</div>
+
+<div class="pipeline-board">
+  <% board.forEach(col => { %>
+    <div class="pipeline-col" data-stage="<%= col.stage %>">
+      <div class="pipeline-col-header stage-<%= col.stage.replace(/\s+/g,'') %>">
+        <span><%= col.stage %></span>
+        <span class="badge bg-light text-dark"><%= col.deals.length %></span>
+      </div>
+      <div class="pipeline-col-total">$<%= col.total.toLocaleString() %></div>
+      <div class="pipeline-col-body" data-stage="<%= col.stage %>">
+        <% col.deals.forEach(deal => { %>
+          <div class="deal-card" draggable="true" data-deal-id="<%= deal.id %>">
+            <div class="deal-card-title">
+              <a href="/deals/<%= deal.id %>"><%= deal.name %></a>
+            </div>
+            <div class="deal-card-subtext mb-1">
+              <%= deal.company ? deal.company.name : 'No company' %>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">$<%= (deal.amount || 0).toLocaleString() %></span>
+              <% if (deal.probability) { %>
+                <span class="small text-muted"><%= Math.round(deal.probability * 100) %>%</span>
+              <% } %>
+            </div>
+            <select class="form-select form-select-sm mt-2 stage-select" data-deal-id="<%= deal.id %>">
+              <% stageChoices.forEach(s => { %>
+                <option value="<%= s %>" <%= s === deal.stage ? 'selected' : '' %>><%= s %></option>
+              <% }) %>
+            </select>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  <% }) %>
+</div>

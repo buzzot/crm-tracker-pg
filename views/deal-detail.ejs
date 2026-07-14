@@ -1,0 +1,353 @@
+<%
+  function noteTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    const then = new Date(dateStr);
+    if (isNaN(then.getTime())) return dateStr;
+    const sec = Math.floor((Date.now() - then.getTime()) / 1000);
+    if (sec < 60) return 'just now';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return min + 'm ago';
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return hr + 'h ago';
+    const day = Math.floor(hr / 24);
+    if (day < 30) return day + 'd ago';
+    return then.toLocaleDateString();
+  }
+  const noteAvatarClasses = ['note-avatar-blue', 'note-avatar-purple', 'note-avatar-gray'];
+  const youInitial = ((typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || '?').trim().charAt(0).toUpperCase();
+  const orderedComments = deal.comments.slice().reverse();
+%>
+
+<div class="pnew-page">
+  <% if (deal.company) { %>
+    <a href="/companies/<%= deal.company.id %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= deal.company.name %></a>
+  <% } %>
+
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+      <% if (deal.stage) { %>
+        <div class="pnew-badge stage-<%= (deal.stage || '').replace(/\s+/g, '') %>">
+          <i class="bi bi-diagram-3"></i> <%= deal.stage %>
+        </div>
+      <% } %>
+      <h1 class="pnew-hero"><%= deal.name %></h1>
+      <p class="pnew-hero-sub">
+        <% if (deal.company) { %><%= deal.company.name %><% } %><% if (deal.amount) { %><% if (deal.company) { %> &middot; <% } %>$<%= (deal.amount || 0).toLocaleString() %><% } %>
+      </p>
+    </div>
+  </div>
+
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
+  <div class="pnew-grid">
+    <div class="pnew-main">
+
+      <!-- Projects -->
+      <div class="pnew-card">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+          <div>
+            <h2 class="pnew-card-title">Projects <span class="pnew-count-pill"><%= deal.projects.length %></span></h2>
+            <p class="pnew-card-sub">Projects linked to this deal.</p>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="pnew-btn-cancel" data-bs-toggle="collapse" data-bs-target="#linkProjectsForm"><i class="bi bi-link-45deg"></i> Link</button>
+            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#newProjectForm">New</button>
+          </div>
+        </div>
+
+        <div class="collapse mb-3" id="linkProjectsForm">
+          <div class="pnew-inline-form">
+            <form action="/deals/<%= deal.id %>/links" method="POST">
+              <% (deal.productIds||[]).forEach(pid => { %><input type="hidden" name="productIds" value="<%= pid %>"><% }) %>
+              <label class="pnew-field-label">Select project(s) to link</label>
+              <select name="projectIds" class="pnew-select" multiple size="5">
+                <% allProjects.forEach(p => { %>
+                  <option value="<%= p.id %>" <%= (deal.projectIds||[]).includes(p.id) ? 'selected' : '' %>><%= p.name %></option>
+                <% }) %>
+              </select>
+              <p class="text-muted small mb-2">Hold Ctrl/Cmd to select more than one. This replaces the current link list.</p>
+              <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save Links</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="collapse mb-3" id="newProjectForm">
+          <div class="pnew-inline-form">
+            <form action="/deals/<%= deal.id %>/projects" method="POST">
+              <label class="pnew-field-label">Project name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="pnew-input mb-3" required placeholder="Enter project name">
+              <div class="pnew-classification-row mb-3">
+                <div>
+                  <label class="pnew-field-label">Status</label>
+                  <select name="status" class="pnew-select">
+                    <option value="">— Select —</option>
+                    <% statusChoices.forEach(opt => { %><option value="<%= opt %>"><%= opt %></option><% }) %>
+                  </select>
+                </div>
+                <div>
+                  <label class="pnew-field-label">Category</label>
+                  <select name="category" class="pnew-select">
+                    <option value="">— Select —</option>
+                    <% categoryChoices.forEach(opt => { %><option value="<%= opt %>"><%= opt %></option><% }) %>
+                  </select>
+                </div>
+              </div>
+              <button type="submit" class="pnew-btn-save">Create & Link</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="pnew-product-list">
+          <% if (!deal.projects.length) { %>
+            <div class="pnew-product-empty">No projects linked yet.</div>
+          <% } %>
+          <% deal.projects.forEach(p => { %>
+            <a href="/projects/<%= p.id %>" class="pnew-product-row" style="text-decoration: none;">
+              <span class="pnew-product-name"><%= p.name %></span>
+              <% if (p.status) { %><span class="badge project-status-<%= p.status.replace(/\s+/g,'') %> pnew-product-sub"><%= p.status %></span><% } %>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+
+      <!-- Products -->
+      <div class="pnew-card">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+          <div>
+            <h2 class="pnew-card-title">Products <span class="pnew-count-pill"><%= deal.products.length %></span></h2>
+            <p class="pnew-card-sub">Products associated with this deal.</p>
+          </div>
+          <button type="button" class="pnew-btn-cancel" data-bs-toggle="collapse" data-bs-target="#linkProductsForm"><i class="bi bi-pencil-square"></i> Edit</button>
+        </div>
+
+        <div class="collapse mb-3" id="linkProductsForm">
+          <div class="pnew-inline-form">
+            <form action="/deals/<%= deal.id %>/links" method="POST">
+              <% (deal.projectIds||[]).forEach(pid => { %><input type="hidden" name="projectIds" value="<%= pid %>"><% }) %>
+              <label class="pnew-field-label">Select product(s)</label>
+              <select name="productIds" class="pnew-select" multiple size="5">
+                <% allProducts.forEach(p => { %>
+                  <option value="<%= p.id %>" <%= (deal.productIds||[]).includes(p.id) ? 'selected' : '' %>><%= p.name %></option>
+                <% }) %>
+              </select>
+              <div class="mt-2">
+                <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save Products</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="pnew-product-list">
+          <% if (!deal.products.length) { %>
+            <div class="pnew-product-empty">No products linked.</div>
+          <% } %>
+          <% deal.products.forEach(p => { %>
+            <a href="/products/<%= p.id %>" class="pnew-product-row" style="text-decoration: none;">
+              <span class="pnew-product-name"><%= p.name %></span>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+
+      <!-- Activity history -->
+      <div class="pnew-card">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+          <div>
+            <h2 class="pnew-card-title">Activity history <span class="pnew-count-pill"><%= deal.activities.length %></span></h2>
+            <p class="pnew-card-sub">Calls, emails, meetings, and documents for this deal.</p>
+          </div>
+          <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#newActivityForm">New</button>
+        </div>
+
+        <div class="collapse mb-3" id="newActivityForm">
+          <div class="pnew-inline-form">
+            <form action="/deals/<%= deal.id %>/activities" method="POST">
+              <label class="pnew-field-label">Activity name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="pnew-input mb-3" required>
+              <div class="pnew-classification-row mb-3">
+                <div>
+                  <label class="pnew-field-label">Type</label>
+                  <select name="type" class="pnew-select">
+                    <option value="">— Select —</option>
+                    <% activityTypeChoices.forEach(opt => { %><option value="<%= opt %>"><%= opt %></option><% }) %>
+                  </select>
+                </div>
+                <div>
+                  <label class="pnew-field-label">Date</label>
+                  <input type="date" name="date" class="pnew-input">
+                </div>
+              </div>
+              <label class="pnew-field-label">Details</label>
+              <textarea name="details" class="pnew-textarea mb-3" rows="3"></textarea>
+              <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Log Activity</button>
+            </form>
+          </div>
+        </div>
+
+        <% if (!deal.activities.length) { %>
+          <p class="text-muted mb-0">No activity logged yet.</p>
+        <% } else { %>
+          <div class="activity-timeline">
+            <% deal.activities.forEach(a => { %>
+              <div class="timeline-item">
+                <span class="timeline-icon tl-blue">
+                  <% if (a.type === 'Call') { %><i class="bi bi-telephone"></i>
+                  <% } else if (a.type === 'Email') { %><i class="bi bi-envelope"></i>
+                  <% } else if (a.type === 'LinkedIn') { %><i class="bi bi-linkedin"></i>
+                  <% } else if (a.type === 'Meeting' || a.type === 'Demo') { %><i class="bi bi-camera-video"></i>
+                  <% } else { %><i class="bi bi-clock-history"></i>
+                  <% } %>
+                </span>
+                <div class="timeline-body">
+                  <a href="/activities/<%= a.id %>" class="fw-semibold table-link"><%= a.name || '(untitled)' %></a>
+                  <div class="small text-muted">
+                    <%= a.type || '' %><% if (a.date) { %> &middot; <%= a.date %><% } %>
+                  </div>
+                  <% if (a.emailSubject) { %><div class="small text-muted"><i class="bi bi-envelope"></i> <%= a.emailSubject %></div><% } %>
+                  <% if (a.files && a.files.length) { %><div class="small text-muted"><i class="bi bi-paperclip"></i> <%= a.files.length %> file(s)</div><% } %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Notes / Comments -->
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Notes (<%= deal.comments.length %>)</h2>
+        <p class="pnew-card-sub">Notes and updates shared about this deal.</p>
+
+        <form action="/deals/<%= deal.id %>/comments" method="POST">
+          <div class="note-compose-box">
+            <div class="d-flex gap-2">
+              <span class="note-avatar note-avatar-you"><%= youInitial %></span>
+              <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a note..." required></textarea>
+            </div>
+            <div class="note-compose-footer">
+              <div class="note-link-field">
+                <i class="bi bi-link-45deg"></i>
+                <input type="url" name="link" class="note-link-input-inline" placeholder="Optional link (e.g. to a file)">
+              </div>
+              <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="note-thread">
+          <% if (!deal.comments.length) { %>
+            <p class="text-muted mb-0">No notes yet.</p>
+          <% } %>
+          <% orderedComments.forEach((c, i) => { %>
+            <% const initial = (c.author || '?').trim().charAt(0).toUpperCase(); %>
+            <div class="note-item">
+              <div class="note-item-head">
+                <span class="note-avatar <%= noteAvatarClasses[i % noteAvatarClasses.length] %>"><%= initial %></span>
+                <span class="fw-semibold note-author"><%= c.author || 'Someone' %></span>
+                <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+              </div>
+              <div class="note-bubble">
+                <div class="note-text"><%= c.comment %></div>
+                <% if (c.link) { %>
+                  <a href="<%= c.link %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-link-45deg"></i><%= c.link %></a>
+                <% } %>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="pnew-aside">
+
+      <!-- Overview (view) -->
+      <div class="pnew-summary-card" id="dealOverviewView">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="pnew-summary-title mb-0">Overview</div>
+          <button type="button" class="pnew-btn-save" style="padding: 0.25rem 0.7rem; font-size: 0.8rem;"
+            onclick="document.getElementById('dealOverviewView').style.display='none'; document.getElementById('dealEditForm').style.display='block';">
+            <i class="bi bi-pencil-square"></i> Edit
+          </button>
+        </div>
+        <div class="pnew-summary-row"><span>Stage</span><span><% if (deal.stage) { %><span class="badge stage-<%= (deal.stage||'').replace(/\s+/g,'') %>"><%= deal.stage %></span><% } else { %>—<% } %></span></div>
+        <div class="pnew-summary-row"><span>Amount</span><span class="fw-semibold">$<%= (deal.amount || 0).toLocaleString() %></span></div>
+        <div class="pnew-summary-row"><span>Probability</span><span><%= deal.probability ? Math.round(deal.probability * 100) + '%' : '—' %></span></div>
+        <div class="pnew-summary-row"><span>Close date</span><span><%= deal.closeDate || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Contact</span><span><%= deal.primaryContact ? deal.primaryContact.fullName : '—' %></span></div>
+        <div class="pnew-summary-row"><span>Created</span><span><%= deal.createdDate || '—' %></span></div>
+      </div>
+
+      <!-- Overview (edit) -->
+      <div class="pnew-card" id="dealEditForm" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="pnew-card-title mb-0">Edit deal</h2>
+          <button type="button" class="pnew-btn-cancel" style="padding: 0.25rem 0.7rem; font-size: 0.8rem;"
+            onclick="document.getElementById('dealEditForm').style.display='none'; document.getElementById('dealOverviewView').style.display='block';">
+            Cancel
+          </button>
+        </div>
+        <form action="/deals/<%= deal.id %>/details" method="POST">
+          <label class="pnew-field-label">Deal name <span class="text-danger">*</span></label>
+          <input type="text" name="name" class="pnew-input mb-3" value="<%= deal.name %>" required>
+
+          <label class="pnew-field-label">Stage</label>
+          <select name="stage" class="pnew-select mb-3">
+            <option value="">— Select —</option>
+            <% stageChoices.forEach(opt => { %>
+              <option value="<%= opt %>" <%= deal.stage === opt ? 'selected' : '' %>><%= opt %></option>
+            <% }) %>
+          </select>
+
+          <label class="pnew-field-label">Primary contact</label>
+          <select name="primaryContactId" class="pnew-select mb-3">
+            <option value="">— None —</option>
+            <% persons.forEach(p => { %>
+              <option value="<%= p.id %>" <%= (deal.primaryContactIds||[]).includes(p.id) ? 'selected' : '' %>><%= p.fullName %></option>
+            <% }) %>
+          </select>
+
+          <div class="pnew-classification-row mb-3">
+            <div>
+              <label class="pnew-field-label">Amount ($)</label>
+              <input type="number" step="0.01" name="amount" class="pnew-input" value="<%= deal.amount || '' %>">
+            </div>
+            <div>
+              <label class="pnew-field-label">Probability (%)</label>
+              <input type="number" min="0" max="100" name="probability" class="pnew-input" value="<%= deal.probability ? Math.round(deal.probability * 100) : '' %>">
+            </div>
+          </div>
+
+          <label class="pnew-field-label">Close date</label>
+          <input type="date" name="closeDate" class="pnew-input mb-4" value="<%= deal.closeDate || '' %>">
+
+          <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save changes</button>
+        </form>
+      </div>
+
+      <!-- Company -->
+      <div class="pnew-card">
+        <h2 class="pnew-card-title"><i class="bi bi-building me-1"></i>Company</h2>
+        <% if (deal.company) { %>
+          <a href="/companies/<%= deal.company.id %>" class="table-link fw-semibold"><%= deal.company.name %></a>
+        <% } else { %>
+          <p class="pnew-card-sub mb-0">No related company.</p>
+        <% } %>
+      </div>
+
+      <!-- Primary contact -->
+      <div class="pnew-card">
+        <h2 class="pnew-card-title"><i class="bi bi-person me-1"></i>Primary contact</h2>
+        <% if (deal.primaryContact) { %>
+          <div class="fw-semibold mb-1"><%= deal.primaryContact.fullName %></div>
+          <% if (deal.primaryContact.email) { %><div class="small"><a href="mailto:<%= deal.primaryContact.email %>" class="table-link"><%= deal.primaryContact.email %></a></div><% } %>
+          <% if (deal.primaryContact.phone) { %><div class="small text-muted"><%= deal.primaryContact.phone %></div><% } %>
+        <% } else { %>
+          <p class="pnew-card-sub mb-0">No primary contact.</p>
+        <% } %>
+      </div>
+
+    </div>
+  </div>
+</div>

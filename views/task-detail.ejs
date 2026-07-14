@@ -1,0 +1,383 @@
+<%
+  const statusKey = (task.status || '').replace(/\s+/g, '');
+  const statusColors = {
+    NotStarted: { bg: '#eef0f3', fg: '#5b6172' },
+    InProgress: { bg: '#e7eefc', fg: '#2b5fb8' },
+    Completed: { bg: '#dff5e3', fg: '#1c7a3c' },
+    Overdue: { bg: '#fbe5e7', fg: '#c23b4a' }
+  };
+  const statusColor = statusColors[statusKey] || { bg: '#eef0f3', fg: '#5b6172' };
+  const isCompleted = task.status === 'Completed';
+
+  const noteAvatarClasses = ['note-avatar-blue', 'note-avatar-purple', 'note-avatar-gray'];
+  const youInitial = ((typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || '?').trim().charAt(0).toUpperCase();
+  function fmtCreated(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function noteTimeAgo(iso) {
+    if (!iso) return '';
+    const then = new Date(iso);
+    if (isNaN(then.getTime())) return '';
+    const sec = Math.floor((Date.now() - then.getTime()) / 1000);
+    if (sec < 60) return 'just now';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return min + 'm ago';
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return hr + 'h ago';
+    const day = Math.floor(hr / 24);
+    if (day < 30) return day + 'd ago';
+    return then.toLocaleDateString();
+  }
+%>
+
+<div class="pnew-page">
+  <% if (task.project) { %>
+    <a href="/projects/<%= task.project.id %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= task.project.name %></a>
+  <% } %>
+
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+      <% if (task.status) { %>
+        <div class="pnew-badge" style="background: <%= statusColor.bg %>; color: <%= statusColor.fg %>;">
+          <i class="bi bi-<%= isCompleted ? 'check-circle' : 'list-check' %>"></i> <%= task.status %>
+        </div>
+      <% } %>
+      <h1 class="pnew-hero"><%= task.name || '(untitled)' %></h1>
+      <p class="pnew-hero-sub">
+        <%= task.type || 'Task' %><% if (task.deadline) { %> &middot; Due <%= task.deadline %><% } %>
+      </p>
+    </div>
+    <% if (!isCompleted) { %>
+      <form action="/tasks/<%= task.id %>/complete" method="POST">
+        <button type="submit" class="pnew-btn-save"><i class="bi bi-check-circle"></i> Complete</button>
+      </form>
+    <% } %>
+  </div>
+
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
+  <div class="pnew-grid">
+    <div class="pnew-main">
+
+      <div class="pnew-card">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <h2 class="pnew-card-title">Details</h2>
+            <p class="pnew-card-sub">Schedule and notes for this task.</p>
+          </div>
+          <button type="button" class="pnew-btn-save" id="detailsEditBtn" onclick="document.getElementById('detailsView').style.display='none'; document.getElementById('detailsEditForm').style.display='block'; this.style.display='none';">
+            <i class="bi bi-pencil-square"></i> Edit
+          </button>
+        </div>
+
+        <div id="detailsView">
+          <div class="pnew-classification-row">
+            <div>
+              <label class="pnew-field-label"><i class="bi bi-calendar3"></i> Date</label>
+              <div class="pnew-static-field"><%= task.date || '—' %></div>
+            </div>
+            <div>
+              <label class="pnew-field-label"><i class="bi bi-calendar-event"></i> Deadline</label>
+              <div class="pnew-static-field"><%= task.deadline || '—' %></div>
+            </div>
+          </div>
+
+          <% if (task.details) { %>
+            <label class="pnew-field-label mt-3"><i class="bi bi-card-text"></i> Notes</label>
+            <p class="pnew-card-sub mb-0" style="white-space: pre-wrap; color: #1f2a44;"><%= task.details %></p>
+          <% } %>
+        </div>
+
+        <form id="detailsEditForm" action="/tasks/<%= task.id %>/details" method="POST" style="display: none;">
+          <div class="pnew-classification-row">
+            <div>
+              <label class="pnew-field-label"><i class="bi bi-calendar3"></i> Date</label>
+              <input type="date" name="date" class="pnew-input" value="<%= task.date || '' %>">
+            </div>
+            <div>
+              <label class="pnew-field-label"><i class="bi bi-calendar-event"></i> Deadline</label>
+              <input type="date" name="deadline" class="pnew-input" value="<%= task.deadline || '' %>">
+            </div>
+          </div>
+
+          <label class="pnew-field-label mt-3"><i class="bi bi-card-text"></i> Notes</label>
+          <textarea name="details" class="pnew-textarea" rows="4"><%= task.details || '' %></textarea>
+
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save</button>
+            <button type="button" class="pnew-btn-cancel" onclick="document.getElementById('detailsEditForm').style.display='none'; document.getElementById('detailsView').style.display='block'; document.getElementById('detailsEditBtn').style.display='inline-flex';">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Sub-tasks</h2>
+        <p class="pnew-card-sub"><%= task.records.length %> update<%= task.records.length === 1 ? '' : 's' %> logged</p>
+
+        <div class="note-thread">
+          <% if (!task.records.length) { %>
+            <p class="text-muted mb-0">No sub-task updates yet.</p>
+          <% } %>
+          <% task.records.forEach((r, i) => { %>
+            <% const rInitial = (r.recordedByName || '?').trim().charAt(0).toUpperCase(); %>
+            <div class="note-item">
+              <div class="note-item-head">
+                <span class="note-avatar <%= noteAvatarClasses[i % noteAvatarClasses.length] %>"><%= rInitial %></span>
+                <span class="fw-semibold note-author"><%= r.recordedByName || 'Someone' %></span>
+                <span class="text-muted small note-item-time"><%= r.dateRecorded || '' %></span>
+              </div>
+              <div class="note-bubble">
+                <% if (r.category) { %><span class="pnew-badge" style="margin: 0 0 0.35rem;"><%= r.category %></span><% } %>
+                <% if (r.details) { %><div class="note-text"><%= r.details %></div><% } %>
+                <% if (r.attachments && r.attachments.length) { %>
+                  <div class="d-flex flex-wrap gap-2 mt-2">
+                    <% r.attachments.forEach(file => { %>
+                      <a href="<%= file.url %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-paperclip"></i><%= file.filename %></a>
+                    <% }) %>
+                  </div>
+                <% } %>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+
+        <div class="note-composer mt-3">
+          <form action="/tasks/<%= task.id %>/records" method="POST" enctype="multipart/form-data" id="subtaskForm">
+            <div class="note-compose-box">
+              <div class="d-flex gap-2">
+                <span class="note-avatar note-avatar-you"><%= youInitial %></span>
+                <textarea name="details" class="note-textarea" rows="2" placeholder="Log a sub-task update..."></textarea>
+              </div>
+              <div class="note-compose-footer">
+                <div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width: 0;">
+                  <select name="category" class="note-link-input-inline" style="flex: 0 0 auto; max-width: 160px; cursor: pointer;">
+                    <option value="">Category</option>
+                    <% recordCategoryChoices.forEach(c => { %>
+                      <option value="<%= c %>"><%= c %></option>
+                    <% }) %>
+                  </select>
+                  <label class="note-link-field" style="cursor: pointer; flex: 0 0 auto; white-space: nowrap;">
+                    <i class="bi bi-paperclip"></i>
+                    <span id="subtaskFileLabel">Attach</span>
+                    <input type="file" name="attachment" multiple style="display: none;" id="subtaskFileInput">
+                  </label>
+                </div>
+                <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const input = document.getElementById('subtaskFileInput');
+          const label = document.getElementById('subtaskFileLabel');
+          if (input && label) {
+            input.addEventListener('change', function () {
+              const n = input.files ? input.files.length : 0;
+              label.textContent = n ? (n + ' file' + (n === 1 ? '' : 's')) : 'Attach';
+            });
+          }
+        })();
+      </script>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Comments (<%= (task.comments || []).length %>)</h2>
+        <p class="pnew-card-sub">Notes and updates shared about this task.</p>
+
+        <form action="/tasks/<%= task.id %>/comments" method="POST" enctype="multipart/form-data">
+          <div class="note-compose-box">
+            <div class="d-flex gap-2">
+              <span class="note-avatar note-avatar-you"><%= youInitial %></span>
+              <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a comment..." required></textarea>
+            </div>
+            <div class="note-compose-footer">
+              <label class="note-link-field" style="cursor: pointer;">
+                <i class="bi bi-paperclip"></i>
+                <span id="taskCommentFileLabel">Attach</span>
+                <input type="file" name="attachment" multiple style="display: none;" id="taskCommentFileInput">
+              </label>
+              <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="note-thread">
+          <% if (!(task.comments || []).length) { %>
+            <p class="text-muted mb-0">No comments yet.</p>
+          <% } %>
+          <% (task.comments ? task.comments.slice().reverse() : []).forEach((c, i) => { %>
+            <% const cInitial = (c.author || '?').trim().charAt(0).toUpperCase(); %>
+            <% if (c.type === 'email') { %>
+              <div class="note-item note-item-email">
+                <div class="note-item-head">
+                  <span class="note-avatar note-avatar-email"><i class="bi bi-envelope-fill"></i></span>
+                  <div class="note-email-meta">
+                    <span class="note-email-from"><%= c.author %></span>
+                    <span class="note-email-subj"><%= c.emailSubject || '(no subject)' %></span>
+                  </div>
+                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+                </div>
+                <div class="note-bubble note-email-bubble">
+                  <div class="note-text" style="white-space: pre-wrap;"><%= c.comment %></div>
+                  <% if (c.attachments && c.attachments.length) { %>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                      <% c.attachments.forEach(file => { %>
+                        <a href="<%= file.url %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-paperclip"></i><%= file.filename %></a>
+                      <% }) %>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            <% } else { %>
+              <div class="note-item">
+                <div class="note-item-head">
+                  <span class="note-avatar <%= noteAvatarClasses[i % noteAvatarClasses.length] %>"><%= cInitial %></span>
+                  <span class="fw-semibold note-author"><%= c.author || 'Someone' %></span>
+                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+                </div>
+                <div class="note-bubble">
+                  <div class="note-text"><%= c.comment %></div>
+                  <% if (c.attachments && c.attachments.length) { %>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                      <% c.attachments.forEach(file => { %>
+                        <a href="<%= file.url %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-paperclip"></i><%= file.filename %></a>
+                      <% }) %>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            <% } %>
+          <% }) %>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const input = document.getElementById('taskCommentFileInput');
+          const label = document.getElementById('taskCommentFileLabel');
+          if (input && label) {
+            input.addEventListener('change', function () {
+              const n = input.files ? input.files.length : 0;
+              label.textContent = n ? (n + ' file' + (n === 1 ? '' : 's')) : 'Attach';
+            });
+          }
+        })();
+      </script>
+
+    </div>
+
+    <div class="pnew-aside">
+      <div class="pnew-summary-card">
+        <div class="pnew-summary-title">Overview</div>
+        <div class="pnew-summary-row"><span>Type</span><span><%= task.type || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Status</span><span><%= task.status || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Date</span><span><%= task.date || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Deadline</span><span><%= task.deadline || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Sub-tasks</span><span><%= task.records.length %></span></div>
+        <div class="pnew-summary-row"><span>Files</span><span><%= task.attachments.length %></span></div>
+        <div class="pnew-summary-row"><span>Created</span><span><%= fmtCreated(task.createdAt) %></span></div>
+        <div class="pnew-summary-row pnew-summary-row--email">
+          <span>Task email</span>
+          <span class="project-email-chip">
+            <% const _taskEmail = 'task-' + task.id + '@' + emailDomain; %>
+            <span class="project-email-addr"><%= _taskEmail %></span>
+            <button type="button" class="project-email-copy" title="Copy address" onclick="(function(btn){navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(function(){btn.innerHTML='<i class=\'bi bi-check-lg\'></i>';setTimeout(function(){btn.innerHTML='<i class=\'bi bi-copy\'></i>';},1500)});})(this)"><i class="bi bi-copy"></i></button>
+          </span>
+        </div>
+        <p class="project-email-hint">CC this address when emailing clients — replies appear here automatically.</p>
+      </div>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Attachments</h2>
+        <p class="pnew-card-sub"><%= task.attachments.length %> file<%= task.attachments.length === 1 ? '' : 's' %></p>
+
+        <div class="pnew-file-list">
+          <% task.attachments.forEach(file => { %>
+            <div class="pnew-file-row">
+              <i class="bi bi-file-earmark"></i>
+              <a href="<%= file.url %>" target="_blank" rel="noopener" class="pnew-file-name" style="text-decoration: none;"><%= file.filename %></a>
+            </div>
+          <% }) %>
+        </div>
+
+        <form action="/tasks/<%= task.id %>/attachments" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mt-3">
+          <input type="file" name="attachments" id="taskAttachInput" multiple required style="display:none;">
+          <label for="taskAttachInput" class="pnew-btn-cancel" style="cursor:pointer; margin:0;">
+            <i class="bi bi-paperclip"></i>
+            <span id="taskAttachLabel">Choose files</span>
+          </label>
+          <button type="submit" class="pnew-btn-save"><i class="bi bi-upload"></i> Upload</button>
+        </form>
+        <script>
+          (function(){
+            var inp = document.getElementById('taskAttachInput');
+            var lbl = document.getElementById('taskAttachLabel');
+            if (inp && lbl) inp.addEventListener('change', function(){
+              var n = inp.files ? inp.files.length : 0;
+              lbl.textContent = n ? (n + ' file' + (n===1?'':'s') + ' selected') : 'Choose files';
+            });
+          })();
+        </script>
+      </div>
+
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Owner</h2>
+        <p class="pnew-card-sub">Set automatically to whoever created this task — it can't be changed.</p>
+
+        <% if (task.owners && task.owners.length) { %>
+          <div class="pnew-static-field"><i class="bi bi-person-fill me-1"></i><%= task.owners.map(o => o.name).join(', ') %></div>
+        <% } else { %>
+          <div class="pnew-card-sub mb-0">No owner set.</div>
+        <% } %>
+      </div>
+
+      <div class="pnew-card">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <h2 class="pnew-card-title">Assigned users</h2>
+            <p class="pnew-card-sub">Everyone helping get this done.</p>
+          </div>
+          <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#assigneePicker" aria-expanded="false" aria-controls="assigneePicker">
+            <i class="bi bi-person-plus"></i> Edit
+          </button>
+        </div>
+
+        <% if (task.assignees && task.assignees.length) { %>
+          <div class="pnew-static-field"><%= task.assignees.map(a => a.name).join(', ') %></div>
+        <% } else { %>
+          <div class="pnew-card-sub mb-0">No one assigned yet.</div>
+        <% } %>
+
+        <div class="collapse mt-3" id="assigneePicker">
+          <form action="/tasks/<%= task.id %>/assignees" method="POST">
+            <div class="d-flex flex-column gap-2 mb-3" style="max-height: 180px; overflow-y: auto;">
+              <% task.teamUsers.forEach(u => { %>
+                <label class="form-check small mb-0">
+                  <input type="checkbox" class="form-check-input" name="emails" value="<%= u.email %>"
+                    <%= (task.assigneeEmails||[]).includes(u.email.toLowerCase()) ? 'checked' : '' %>>
+                  <%= u.name %>
+                </label>
+              <% }) %>
+            </div>
+            <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save assignees</button>
+          </form>
+        </div>
+      </div>
+
+      <% if (task.project) { %>
+        <div class="pnew-tip-card">
+          <i class="bi bi-folder2-open"></i>
+          <div class="pnew-tip-title">Part of a project</div>
+          <div class="pnew-tip-text">This task belongs to <a href="/projects/<%= task.project.id %>"><%= task.project.name %></a>. View it for the full timeline and related products.</div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
