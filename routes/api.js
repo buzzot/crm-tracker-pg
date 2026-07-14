@@ -1,7 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const crm = require('../services/crm');
-const email = require('../services/email');
+
+// IMAP email service not implemented in the Postgres edition.
+const email = {
+  isConfigured: () => false,
+  findCandidates: async () => [],
+  getMessageByMessageId: async () => { throw new Error('IMAP not configured.'); }
+};
 
 // Click-to-expand detail for an Activity (used on the company page).
 router.get('/api/activities/:id', async (req, res) => {
