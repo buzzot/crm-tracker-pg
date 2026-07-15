@@ -7,8 +7,9 @@ const { query, transaction } = require('../config/db');
 // one of their groups.
 
 function accessFilter(user, alias = '') {
+  // If no user supplied (or admin), return unfiltered.
+  if (!user || user.role === 'Admin') return { where: '1=1', params: [] };
   const p = alias ? alias + '.' : '';
-  if (user.role === 'Admin') return { where: '1=1', params: [] };
   const ids = [user.id, ...(user.groupIds || [])];
   // owner OR group member
   return {
@@ -889,6 +890,13 @@ async function getContactDetail(id) {
 
 const schema = {
   tables: {
+    company: {
+      statusChoices: ['Active', 'Inactive', 'Prospect', 'Partner'],
+      industryChoices: ['Technology', 'Manufacturing', 'Healthcare', 'Finance', 'Retail', 'Education', 'Other']
+    },
+    contacts: {
+      statusChoices: ['Active', 'Inactive']
+    },
     activities: {
       typeChoices: ['Call', 'Email', 'LinkedIn', 'Meeting', 'Demo', 'Other'],
       resultChoices: ['No answer', 'Left voicemail', 'Replied', 'Meeting booked', 'Not interested', 'Completed']
@@ -897,7 +905,8 @@ const schema = {
       stageChoices: ['Prospecting', 'Qualification', 'Needs Analysis', 'Proposal / Price Quote', 'Negotiation', 'Closed Won', 'Closed Lost']
     },
     projects: {
-      statusChoices: ['Active', 'On Hold', 'Completed', 'Cancelled']
+      statusChoices: ['Active', 'On Hold', 'Completed', 'Cancelled'],
+      categoryChoices: ['Implementation', 'Support', 'Consulting', 'Development', 'Other']
     },
     tasks: {
       statusChoices: ['To Do', 'In Progress', 'Blocked', 'Completed'],

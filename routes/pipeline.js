@@ -5,7 +5,8 @@ const crm = require('../services/crm');
 router.get('/pipeline', async (req, res, next) => {
   try {
     const { role, email } = req.session.user;
-    const { board: fullBoard, stageChoices } = await crm.getPipelineBoard();
+    const { board: fullBoard } = await crm.getPipelineBoard(req.session.user);
+    const stageChoices = crm.schema.tables.deals.stageChoices;
     const board = role === 'Sales'
       ? fullBoard.map((b) => {
           const deals = crm.scopeToOwner(b.deals, email);

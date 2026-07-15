@@ -16,13 +16,14 @@ function timeAgo(dateStr) {
 
 router.get('/', async (req, res, next) => {
   try {
-    const { role, email } = req.session.user;
+    const user = req.session.user;
+    const { role, email } = user;
     const [{ board: fullBoard }, allCompanies, allActivities, projects, tasks, rawComments] = await Promise.all([
-      crm.getPipelineBoard(),
-      crm.listCompanies(),
-      crm.listActivities(),
-      crm.listProjects(),
-      crm.listProjectActivities(),
+      crm.getPipelineBoard(user),
+      crm.listCompanies(user),
+      crm.listActivities(user),
+      crm.listProjects(user),
+      crm.listProjectActivities(user),
       crm.listAllComments(10)
     ]);
 

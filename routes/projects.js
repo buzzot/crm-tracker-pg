@@ -214,8 +214,8 @@ router.get('/projects/:id/tasks/new', async (req, res, next) => {
     res.render('project-task-new', {
       title: 'New Task',
       project,
-      typeChoices: crm.schema.tables.projectActivities.typeChoices,
-      statusChoices: crm.schema.tables.projectActivities.statusChoices,
+      typeChoices: crm.schema.tables.tasks.typeChoices,
+      statusChoices: crm.schema.tables.tasks.statusChoices,
       error: null,
       values: {}
     });
@@ -237,8 +237,8 @@ router.post('/projects/:id/tasks', async (req, res, next) => {
       return res.status(400).render('project-task-new', {
         title: 'New Task',
         project,
-        typeChoices: crm.schema.tables.projectActivities.typeChoices,
-        statusChoices: crm.schema.tables.projectActivities.statusChoices,
+        typeChoices: crm.schema.tables.tasks.typeChoices,
+        statusChoices: crm.schema.tables.tasks.statusChoices,
         error: err.message,
         values: req.body
       });
