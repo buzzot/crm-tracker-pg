@@ -708,6 +708,15 @@ async function createProduct({ name, notes, category, phase, inputVoltage, board
   return getProduct(r.rows[0].id);
 }
 
+async function getProductDetail(id) {
+  const [product, comments] = await Promise.all([
+    getProduct(id),
+    listCommentsByEntity('product', id)
+  ]);
+  if (!product) return { name: null };
+  return { ...product, comments };
+}
+
 async function updateProduct(id, fields) {
   const { name, notes, category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent } = fields;
   await query(
@@ -1036,6 +1045,7 @@ module.exports = {
   listProducts,
   listProductsWithProjects,
   getProduct: async (id) => getProduct(id),
+  getProductDetail,
   createProduct,
   updateProduct,
   replaceProductImage,
