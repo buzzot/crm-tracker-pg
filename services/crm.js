@@ -371,11 +371,23 @@ async function listDeals(user) {
 
 async function getDeal(id) {
   const r = await query(
-    `SELECT d.*, c.name AS company_name, u.name AS owner_name
+    `SELECT d.*, c.name AS company_name, u.name AS owner_name,
+            COALESCE(
+              json_agg(DISTINCT jsonb_build_object('id', p.id, 'name', p.name))
+              FILTER (WHERE p.id IS NOT NULL), '[]'
+            ) AS projects_linked,
+            COALESCE(
+              json_agg(DISTINCT jsonb_build_object('id', pr.id, 'name', pr.name))
+              FILTER (WHERE pr.id IS NOT NULL), '[]'
+            ) AS products_linked
      FROM deals d
      LEFT JOIN companies c ON c.id = d.company_id
      LEFT JOIN users u ON u.id = d.owner_id
-     WHERE d.id=$1`,
+     LEFT JOIN projects p ON p.company_id = d.company_id
+     LEFT JOIN product_projects pp ON pp.project_id = p.id
+     LEFT JOIN products pr ON pr.id = pp.product_id
+     WHERE d.id=$1
+     GROUP BY d.id, c.name, u.name`,
     [id]
   );
   return r.rows[0] ? mapDeal(r.rows[0]) : null;
@@ -427,6 +439,8 @@ function mapDeal(row) {
     ownerName: row.owner_name || null,
     groupId: row.group_id || null,
     groupName: row.group_name || null,
+    projects: Array.isArray(row.projects_linked) ? row.projects_linked.filter(p => p.id) : [],
+    products: Array.isArray(row.products_linked) ? row.products_linked.filter(p => p.id) : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -469,12 +483,19 @@ async function listProjects(user) {
 
 async function getProject(id) {
   const r = await query(
-    `SELECT p.*, c.name AS company_name, u.name AS owner_name, g.name AS group_name
+    `SELECT p.*, c.name AS company_name, u.name AS owner_name, g.name AS group_name,
+            COALESCE(
+              json_agg(DISTINCT jsonb_build_object('id', pr.id, 'name', pr.name))
+              FILTER (WHERE pr.id IS NOT NULL), '[]'
+            ) AS products_linked
      FROM projects p
      LEFT JOIN companies c ON c.id = p.company_id
      LEFT JOIN users u ON u.id = p.owner_id
      LEFT JOIN groups g ON g.id = p.group_id
-     WHERE p.id=$1`,
+     LEFT JOIN product_projects pp ON pp.project_id = p.id
+     LEFT JOIN products pr ON pr.id = pp.product_id
+     WHERE p.id=$1
+     GROUP BY p.id, c.name, u.name, g.name`,
     [id]
   );
   return r.rows[0] ? mapProject(r.rows[0]) : null;
@@ -522,6 +543,7 @@ function mapProject(row) {
     ownerName: row.owner_name || null,
     groupId: row.group_id || null,
     groupName: row.group_name || null,
+    products: Array.isArray(row.products_linked) ? row.products_linked.filter(p => p.id) : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
