@@ -580,7 +580,7 @@ async function getTaskDetail(id) {
     listTaskLogs(id)
   ]);
   if (!task) return { name: null };
-  return { ...task, comments, activityRecords: logs };
+  return { ...task, comments, activityRecords: logs, records: logs };
 }
 
 async function createTask({ name, projectId, type, date, deadline, status, details, ownerId }) {
