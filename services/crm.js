@@ -743,6 +743,7 @@ function mapProduct(row) {
     maxInputCurrent: row.max_input_current || null,
     maxOutputCurrent: row.max_output_current || null,
     image: row.image_url ? [{ url: row.image_url }] : [],
+    projects,
     projectIds: projects.map(p => p.id),
     projectNames: projects.map(p => p.name),
     createdAt: row.created_at
