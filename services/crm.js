@@ -231,7 +231,7 @@ async function listActivities(user) {
     `SELECT a.*,
             u.name AS owner_name,
             COALESCE(
-              json_agg(DISTINCT jsonb_build_object('id', c.id, 'name', co.name))
+              json_agg(DISTINCT jsonb_build_object('id', c.contact_id, 'name', co.full_name))
                 FILTER (WHERE c.contact_id IS NOT NULL), '[]'
             ) AS attendees,
             COALESCE(
