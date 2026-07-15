@@ -33,7 +33,8 @@ router.post('/login', async (req, res) => {
     };
     res.redirect('/');
   } catch (err) {
-    res.render('login', { error: 'Login failed. Please try again.', layout: false });
+    console.error('[login error]', err.message, err.stack);
+    res.render('login', { error: 'Login failed: ' + err.message, layout: false });
   }
 });
 
