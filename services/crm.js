@@ -208,15 +208,20 @@ async function updateContact(id, { fullName, email, phone, title, companyId }) {
 }
 
 function mapContact(row) {
+  const nameParts = (row.full_name || '').split(' ');
   return {
     id: row.id,
     fullName: row.full_name,
+    firstName: nameParts[0] || null,
+    lastName: nameParts.slice(1).join(' ') || null,
     email: row.email || null,
     phone: row.phone || null,
     title: row.title || null,
+    notes: row.notes || null,
     companyId: row.company_id || null,
     companyIds: row.company_id ? [row.company_id] : [],
     companyName: row.company_name || null,
+    company: row.company_id ? { id: row.company_id, name: row.company_name } : null,
     ownerId: row.owner_id || null,
     groupId: row.group_id || null,
     createdAt: row.created_at
@@ -526,24 +531,32 @@ async function getProjectDetail(id) {
     listCommentsByEntity('project', id)
   ]);
   if (!project) return { name: null };
-  return { ...project, tasks, comments };
+  return { ...project, tasks, subtasks: tasks, comments };
 }
 
 function mapProject(row) {
+  const products = Array.isArray(row.products_linked) ? row.products_linked.filter(p => p.id) : [];
   return {
     id: row.id,
     name: row.name,
     status: row.status || null,
     details: row.details || null,
+    description: row.details || null,
+    category: row.category || null,
+    startDate: row.start_date ? String(row.start_date).slice(0, 10) : null,
+    endDate: row.end_date ? String(row.end_date).slice(0, 10) : null,
     companyId: row.company_id || null,
     companyIds: row.company_id ? [row.company_id] : [],
     companyName: row.company_name || null,
+    companies: row.company_id ? [{ id: row.company_id, name: row.company_name }] : [],
     dealId: row.deal_id || null,
+    deals: [],
     ownerId: row.owner_id || null,
     ownerName: row.owner_name || null,
     groupId: row.group_id || null,
     groupName: row.group_name || null,
-    products: Array.isArray(row.products_linked) ? row.products_linked.filter(p => p.id) : [],
+    products,
+    attachments: [],
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
