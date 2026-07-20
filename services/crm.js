@@ -17,6 +17,13 @@ function toMediaUrl(urlOrPath) {
   return urlOrPath; // External URL — leave as-is
 }
 
+// Convert a pg DATE/TIMESTAMP value (JS Date object) or string to "YYYY-MM-DD"
+function toDateStr(val) {
+  if (!val) return null;
+  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  return String(val).slice(0, 10);
+}
+
 // ─── Access control helpers ──────────────────────────────────────────────────
 // All list functions accept a `user` object { id, role, groupIds[] }.
 // Admin sees everything. Others see records they own or whose group_id matches
@@ -351,9 +358,9 @@ function mapActivity(row) {
     id: row.id,
     name: row.name,
     type: row.type || null,
-    date: row.date ? String(row.date).slice(0, 10) : null,
-    dueDate: row.due_date ? String(row.due_date).slice(0, 10) : null,
-    statusDate: row.status_date ? String(row.status_date).slice(0, 10) : null,
+    date: toDateStr(row.date),
+    dueDate: toDateStr(row.due_date),
+    statusDate: toDateStr(row.status_date),
     result: row.result || null,
     details: row.details || null,
     regarding: row.regarding || null,
@@ -566,8 +573,8 @@ function mapProject(row) {
     details: row.details || null,
     description: row.details || null,
     category: row.category || null,
-    startDate: row.start_date ? String(row.start_date).slice(0, 10) : null,
-    endDate: row.end_date ? String(row.end_date).slice(0, 10) : null,
+    startDate: toDateStr(row.start_date),
+    endDate: toDateStr(row.end_date),
     companyId: row.company_id || null,
     companyIds: row.company_id ? [row.company_id] : [],
     companyName: row.company_name || null,
@@ -688,8 +695,8 @@ function mapTask(row) {
     id: row.id,
     name: row.name,
     type: row.type || null,
-    date: row.date ? String(row.date).slice(0, 10) : null,
-    deadline: row.deadline ? String(row.deadline).slice(0, 10) : null,
+    date: toDateStr(row.date),
+    deadline: toDateStr(row.deadline),
     status: row.status || 'To Do',
     details: row.details || null,
     projectId: row.project_id || null,
