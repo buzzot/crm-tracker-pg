@@ -25,30 +25,83 @@ function toDateStr(val) {
 }
 
 // ─── Access control helpers ──────────────────────────────────────────────────
+// Role hierarchy (3 tiers):
+//   Admin   — sees everything, no filter
+//   Manager — sees all records in their groups (owner OR same group)
+//   Staff   — sees only records they own OR are explicitly assigned to
+//
 // All list functions accept a `user` object { id, role, groupIds[] }.
-// Admin sees everything. Others see records they own or whose group_id matches
-// one of their groups.
+// entityType ('project'|'deal'|'activity') enables assignment-based access for Staff.
 
-function accessFilter(user, alias = '') {
-  // If no user supplied (or admin), return unfiltered.
+function accessFilter(user, alias = '', entityType = null) {
   if (!user || user.role === 'Admin') return { where: '1=1', params: [] };
+
   const p = alias ? alias + '.' : '';
-  const ids = [user.id, ...(user.groupIds || [])];
-  // owner OR group member
+
+  if (user.role === 'Manager') {
+    // Managers see records they own OR in any of their groups
+    const groupIds = user.groupIds || [];
+    return {
+      where: `(${p}owner_id = $1 OR ${p}group_id = ANY($2::uuid[]))`,
+      params: [user.id, groupIds]
+    };
+  }
+
+  // Staff: own records + explicitly assigned via user_assignments
+  if (entityType) {
+    return {
+      where: `(${p}owner_id = $1 OR EXISTS (
+        SELECT 1 FROM user_assignments ua
+        WHERE ua.entity_id = ${p}id
+          AND ua.entity_type = $2
+          AND ua.user_id = $1
+      ))`,
+      params: [user.id, entityType]
+    };
+  }
+
+  // Fallback (no entityType provided): owner only
   return {
-    where: `(${p}owner_id = $1 OR ${p}group_id = ANY($2::uuid[]))`,
-    params: [user.id, ids]
+    where: `${p}owner_id = $1`,
+    params: [user.id]
   };
 }
 
 // ─── User & group helpers ────────────────────────────────────────────────────
 
+// Role → allowed titles mapping (for UI dropdowns)
+const ROLE_TITLES = {
+  Admin:   ['CEO', 'President', 'VP Sales', 'VP Operations', 'Director of Sales', 'Director'],
+  Manager: ['Sales Manager', 'Account Manager', 'Project Manager', 'Regional Manager', 'Team Lead'],
+  Staff:   ['Sales Rep', 'Account Executive', 'Business Development Rep', 'Sales Associate', 'Coordinator'],
+};
+const ALL_ROLES   = Object.keys(ROLE_TITLES);
+const ALL_TITLES  = Object.values(ROLE_TITLES).flat();
+
+function mapUser(row) {
+  return {
+    id:        row.id,
+    email:     row.email,
+    name:      row.name,
+    role:      row.role,
+    title:     row.title  || null,
+    phone:     row.phone  || null,
+    avatarUrl: row.avatar_url || null,
+    isActive:  row.is_active,
+    createdAt: row.created_at,
+  };
+}
+
 async function getUserById(id) {
-  const r = await query('SELECT id, email, name, role FROM users WHERE id=$1 AND is_active=true', [id]);
-  return r.rows[0] || null;
+  const r = await query(
+    'SELECT id, email, name, role, title, phone, avatar_url, is_active, created_at FROM users WHERE id=$1 AND is_active=true',
+    [id]
+  );
+  return r.rows[0] ? mapUser(r.rows[0]) : null;
 }
 
 async function getUserByEmail(email) {
+  // Return raw row so auth middleware can access password_hash
   const r = await query('SELECT * FROM users WHERE email=$1 AND is_active=true', [email]);
   return r.rows[0] || null;
 }
@@ -59,24 +112,65 @@ async function getUserGroupIds(userId) {
 }
 
 async function listTeamUsers() {
-  const r = await query('SELECT id, email, name, role, is_active, created_at FROM users ORDER BY name');
-  return r.rows;
+  const r = await query(
+    'SELECT id, email, name, role, title, phone, is_active, created_at FROM users ORDER BY name'
+  );
+  return r.rows.map(mapUser);
 }
 
-async function createUser({ email, name, role, passwordHash }) {
+async function createUser({ email, name, role, title, phone, passwordHash }) {
   const r = await query(
-    'INSERT INTO users (email, name, role, password_hash) VALUES ($1,$2,$3,$4) RETURNING id, email, name, role',
-    [email, name, role || 'Sales', passwordHash]
+    `INSERT INTO users (email, name, role, title, phone, password_hash)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, email, name, role, title, phone, is_active, created_at`,
+    [email, name, role || 'Staff', title || null, phone || null, passwordHash]
   );
-  return r.rows[0];
+  return mapUser(r.rows[0]);
 }
 
-async function updateUser(id, { name, role, isActive }) {
+async function updateUser(id, { name, email, role, title, phone, isActive }) {
   const r = await query(
-    'UPDATE users SET name=COALESCE($2,name), role=COALESCE($3,role), is_active=COALESCE($4,is_active) WHERE id=$1 RETURNING id, email, name, role, is_active',
-    [id, name, role, isActive]
+    `UPDATE users
+     SET name=COALESCE($2,name), email=COALESCE($3,email),
+         role=COALESCE($4,role), title=COALESCE($5,title),
+         phone=COALESCE($6,phone),
+         is_active=COALESCE($7,is_active)
+     WHERE id=$1
+     RETURNING id, email, name, role, title, phone, is_active, created_at`,
+    [id, name, email, role, title, phone, isActive]
   );
-  return r.rows[0];
+  return r.rows[0] ? mapUser(r.rows[0]) : null;
+}
+
+// ─── Assignment helpers ───────────────────────────────────────────────────────
+
+async function assignUser({ entityType, entityId, userId, assignedBy }) {
+  await query(
+    `INSERT INTO user_assignments (user_id, entity_type, entity_id, assigned_by)
+     VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+    [userId, entityType, entityId, assignedBy]
+  );
+}
+
+async function unassignUser({ entityType, entityId, userId }) {
+  await query(
+    `DELETE FROM user_assignments WHERE user_id=$1 AND entity_type=$2 AND entity_id=$3`,
+    [userId, entityType, entityId]
+  );
+}
+
+async function listAssignments(entityType, entityId) {
+  const r = await query(
+    `SELECT ua.user_id, ua.assigned_at, u.name, u.email, u.title, u.role
+     FROM user_assignments ua
+     JOIN users u ON u.id = ua.user_id
+     WHERE ua.entity_type=$1 AND ua.entity_id=$2
+     ORDER BY u.name`,
+    [entityType, entityId]
+  );
+  return r.rows.map(row => ({
+    userId: row.user_id, name: row.name, email: row.email,
+    title: row.title, role: row.role, assignedAt: row.assigned_at
+  }));
 }
 
 async function listGroups() {
@@ -261,7 +355,7 @@ function mapContact(row) {
 // ─── Activities ──────────────────────────────────────────────────────────────
 
 async function listActivities(user) {
-  const { where, params } = accessFilter(user, 'a');
+  const { where, params } = accessFilter(user, 'a', 'activity');
   const r = await query(
     `SELECT a.*,
             u.name AS owner_name,
@@ -390,7 +484,7 @@ async function getActivityDetail(id) {
 // ─── Deals ───────────────────────────────────────────────────────────────────
 
 async function listDeals(user) {
-  const { where, params } = accessFilter(user, 'd');
+  const { where, params } = accessFilter(user, 'd', 'deal');
   const r = await query(
     `SELECT d.*, c.name AS company_name, u.name AS owner_name, g.name AS group_name
      FROM deals d
@@ -502,7 +596,7 @@ async function getPipelineBoard(user) {
 // ─── Projects ────────────────────────────────────────────────────────────────
 
 async function listProjects(user) {
-  const { where, params } = accessFilter(user, 'p');
+  const { where, params } = accessFilter(user, 'p', 'project');
   const r = await query(
     `SELECT p.*, c.name AS company_name, u.name AS owner_name, g.name AS group_name
      FROM projects p
@@ -1068,12 +1162,18 @@ module.exports = {
   schema,
   scopeToOwner,
   // Users & groups
+  ROLE_TITLES,
+  ALL_ROLES,
+  ALL_TITLES,
   getUserById,
   getUserByEmail,
   getUserGroupIds,
   listTeamUsers,
   createUser,
   updateUser,
+  assignUser,
+  unassignUser,
+  listAssignments,
   listGroups,
   createGroup,
   listGroupMembers,

@@ -1,47 +1,133 @@
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h3 mb-0">Users</h1>
-</div>
+<div class="pnew-page">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="pnew-hero" style="font-size:1.6rem;">Team Members</h1>
+    <a href="/admin/users/new" class="pnew-btn-save"><i class="bi bi-person-plus-fill me-1"></i>Add User</a>
+  </div>
 
-<p class="text-muted small">
-  This list is built from the "Owner" collaborator fields already on Company,
-  Deals, Activities, and Project Activities — anyone assigned as an owner
-  anywhere in the base shows up here. Role/access for everyone but the admin
-  is determined live at login time from their own permission level on the
-  Airtable base.
-</p>
+  <% if (flash) { %>
+    <div class="alert alert-<%= flash.type === 'error' ? 'danger' : 'success' %> alert-dismissible fade show" role="alert">
+      <%= flash.message %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
 
-<div class="card">
-  <div class="card-body p-0">
-    <div class="table-responsive">
-    <table class="table mb-0">
+  <!-- Role legend -->
+  <div class="d-flex gap-2 flex-wrap mb-3" style="font-size:0.8rem; color:var(--crm-muted-fg);">
+    <span><span class="user-badge user-badge-Admin">Admin</span> full access to all records</span>
+    <span style="opacity:0.4;">·</span>
+    <span><span class="user-badge user-badge-Manager">Manager</span> all records in their group</span>
+    <span style="opacity:0.4;">·</span>
+    <span><span class="user-badge user-badge-Staff">Staff</span> own + assigned records only</span>
+  </div>
+
+  <div class="pnew-card p-0" style="overflow:hidden;">
+    <table class="admin-users-table">
       <thead>
         <tr>
-          <th>Name</th>
+          <th>Name / Title</th>
           <th>Email</th>
+          <th>Phone</th>
           <th>Role</th>
-          <th>Owned records</th>
+          <th>Status</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
         <% if (!users.length) { %>
-          <tr><td colspan="4" class="text-muted text-center py-3">No collaborators found yet.</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-4">No users yet.</td></tr>
         <% } %>
         <% users.forEach(u => { %>
-          <tr>
-            <td><%= u.name %></td>
-            <td><%= u.email %></td>
+          <tr class="<%= !u.isActive ? 'user-inactive' : '' %>">
             <td>
-              <% if (u.role === 'Admin') { %>
-                <span class="badge text-bg-dark">Admin</span>
+              <div class="d-flex align-items-center gap-2">
+                <div class="user-avatar"><%= (u.name||'?').trim().charAt(0).toUpperCase() %></div>
+                <div>
+                  <div class="user-name"><%= u.name %></div>
+                  <% if (u.title) { %><div class="user-title-sub"><%= u.title %></div><% } %>
+                </div>
+              </div>
+            </td>
+            <td class="user-email"><%= u.email %></td>
+            <td class="user-phone"><%= u.phone || '—' %></td>
+            <td><span class="user-badge user-badge-<%= u.role %>"><%= u.role %></span></td>
+            <td>
+              <% if (u.isActive) { %>
+                <span class="user-status-active">Active</span>
               <% } else { %>
-                <span class="badge text-bg-secondary">Collaborator</span>
+                <span class="user-status-inactive">Inactive</span>
               <% } %>
             </td>
-            <td><%= u.recordCount %></td>
+            <td class="text-end" style="white-space:nowrap;">
+              <a href="/admin/users/<%= u.id %>/edit" class="btn btn-sm btn-outline-secondary me-1" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="POST" action="/admin/users/<%= u.id %>/deactivate" style="display:inline;"
+                    onsubmit="return confirm('<%= u.isActive ? 'Deactivate' : 'Reactivate' %> <%= u.name %>?')">
+                <button type="submit" class="btn btn-sm <%= u.isActive ? 'btn-outline-warning' : 'btn-outline-success' %>"
+                        title="<%= u.isActive ? 'Deactivate' : 'Reactivate' %>">
+                  <i class="bi bi-<%= u.isActive ? 'pause-circle' : 'play-circle' %>"></i>
+                </button>
+              </form>
+            </td>
           </tr>
         <% }) %>
       </tbody>
     </table>
-    </div>
   </div>
 </div>
+
+<style>
+.admin-users-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.admin-users-table thead th {
+  padding: 0.65rem 1rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--crm-muted-fg);
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-muted);
+  white-space: nowrap;
+}
+.admin-users-table tbody tr {
+  border-bottom: 1px solid var(--crm-border);
+  transition: background 0.12s;
+}
+.admin-users-table tbody tr:last-child { border-bottom: none; }
+.admin-users-table tbody tr:hover { background: var(--crm-muted); }
+.admin-users-table td { padding: 0.75rem 1rem; vertical-align: middle; }
+
+.user-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--crm-accent);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.82rem; font-weight: 700;
+  flex-shrink: 0;
+}
+.user-inactive .user-avatar { background: var(--crm-muted); color: var(--crm-muted-fg); }
+.user-name { font-weight: 600; color: var(--crm-fg); }
+.user-title-sub { font-size: 0.75rem; color: var(--crm-muted-fg); }
+.user-email { color: var(--crm-muted-fg); font-size: 0.82rem; }
+.user-phone { color: var(--crm-muted-fg); font-size: 0.82rem; }
+.user-inactive { opacity: 0.55; }
+
+.user-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.user-badge-Admin   { background: #2d2d2d; color: #fff; }
+.user-badge-Manager { background: oklch(0.55 0.18 250); color: #fff; }
+.user-badge-Staff   { background: var(--crm-muted); color: var(--crm-muted-fg); border: 1px solid var(--crm-border); }
+
+.user-status-active   { color: var(--crm-success); font-size: 0.78rem; font-weight: 600; }
+.user-status-inactive { color: var(--crm-muted-fg); font-size: 0.78rem; }
+</style>

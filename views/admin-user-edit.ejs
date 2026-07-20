@@ -1,0 +1,130 @@
+<div class="pnew-page" style="max-width:600px; margin:0 auto;">
+  <a href="/admin" class="pnew-back-link"><i class="bi bi-arrow-left"></i> Team Members</a>
+
+  <h1 class="pnew-hero" style="font-size:1.4rem; margin-top:0.5rem;">
+    <%= editUser ? 'Edit User' : 'Add User' %>
+  </h1>
+
+  <% if (flash) { %>
+    <div class="alert alert-<%= flash.type === 'error' ? 'danger' : 'success' %> mb-3">
+      <%= flash.message %>
+    </div>
+  <% } %>
+
+  <form method="POST" action="/admin/users/<%= editUser ? editUser.id + '/edit' : 'new' %>">
+
+    <!-- Name + Email -->
+    <div class="pnew-card mb-3">
+      <div class="pnew-summary-title">Identity</div>
+
+      <div class="mb-3">
+        <label class="form-label form-label-sm">Full name <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="form-control form-control-sm"
+               value="<%= editUser ? editUser.name : '' %>" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label form-label-sm">Email <span class="text-danger">*</span></label>
+        <input type="email" name="email" class="form-control form-control-sm"
+               value="<%= editUser ? editUser.email : '' %>" required>
+      </div>
+
+      <div class="mb-0">
+        <label class="form-label form-label-sm">Phone</label>
+        <input type="text" name="phone" class="form-control form-control-sm"
+               value="<%= editUser ? (editUser.phone || '') : '' %>"
+               placeholder="+1 (555) 000-0000">
+      </div>
+    </div>
+
+    <!-- Role + Title -->
+    <div class="pnew-card mb-3">
+      <div class="pnew-summary-title">Role &amp; Access</div>
+
+      <div class="mb-3">
+        <label class="form-label form-label-sm">Role <span class="text-danger">*</span></label>
+        <select name="role" id="roleSelect" class="form-select form-select-sm" onchange="syncTitles(this.value)" required>
+          <% ALL_ROLES.forEach(r => { %>
+            <option value="<%= r %>" <%= (editUser && editUser.role === r) ? 'selected' : '' %>><%= r %></option>
+          <% }) %>
+        </select>
+        <div class="form-text" style="font-size:0.75rem; margin-top:0.25rem;">
+          <span id="roleHint"></span>
+        </div>
+      </div>
+
+      <div class="mb-0">
+        <label class="form-label form-label-sm">Title</label>
+        <select name="title" id="titleSelect" class="form-select form-select-sm">
+          <option value="">— Select title —</option>
+          <% Object.values(ROLE_TITLES).flat().forEach(t => { %>
+            <option value="<%= t %>" <%= (editUser && editUser.title === t) ? 'selected' : '' %>><%= t %></option>
+          <% }) %>
+        </select>
+        <div class="form-text" style="font-size:0.75rem;">Title is informational; role controls access.</div>
+      </div>
+    </div>
+
+    <!-- Password -->
+    <div class="pnew-card mb-3">
+      <div class="pnew-summary-title"><%= editUser ? 'Change Password' : 'Password' %></div>
+      <div class="mb-0">
+        <input type="password" name="password" class="form-control form-control-sm"
+               placeholder="<%= editUser ? 'Leave blank to keep current' : 'Set initial password' %>"
+               <%= editUser ? '' : 'required' %> autocomplete="new-password">
+      </div>
+    </div>
+
+    <!-- Active toggle (edit only) -->
+    <% if (editUser) { %>
+    <div class="pnew-card mb-3">
+      <div class="pnew-summary-title">Status</div>
+      <div class="form-check form-switch mt-1">
+        <input class="form-check-input" type="checkbox" name="isActive" value="1" id="isActiveCheck"
+               <%= editUser.isActive ? 'checked' : '' %>>
+        <label class="form-check-label" for="isActiveCheck" style="font-size:0.875rem;">Account is active</label>
+      </div>
+      <div class="form-text" style="font-size:0.75rem;">Inactive users cannot log in.</div>
+    </div>
+    <% } %>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="pnew-btn-save">
+        <%= editUser ? 'Save Changes' : 'Create User' %>
+      </button>
+      <a href="/admin" class="pnew-btn-cancel">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+// Title options grouped by role
+const ROLE_TITLES = <%- JSON.stringify(ROLE_TITLES) %>;
+const ROLE_HINTS  = {
+  Admin:   'Full access to every record in the system.',
+  Manager: 'Sees all records in their assigned group(s). Can assign users to records.',
+  Staff:   'Sees only records they own or have been explicitly assigned to.',
+};
+
+function syncTitles(role) {
+  const sel     = document.getElementById('titleSelect');
+  const current = sel.value;
+  const hint    = document.getElementById('roleHint');
+
+  // Rebuild option list
+  sel.innerHTML = '<option value="">— Select title —</option>';
+  (ROLE_TITLES[role] || []).forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    if (t === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  // Show hint
+  hint.textContent = ROLE_HINTS[role] || '';
+}
+
+// Run on load
+syncTitles(document.getElementById('roleSelect').value);
+</script>
