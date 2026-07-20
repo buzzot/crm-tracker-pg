@@ -46,15 +46,15 @@
         <div class="pnew-products-header">
           <div>
             <h2 class="pnew-card-title">Contacts</h2>
-            <p class="pnew-card-sub"><%= persons.length %> linked</p>
+            <p class="pnew-card-sub"><%= contacts.length %> linked</p>
           </div>
           <a href="/companies/<%= company.id %>/contacts/new" class="pnew-btn-save">Add</a>
         </div>
         <div class="pnew-product-list">
-          <% if (!persons.length) { %>
+          <% if (!contacts.length) { %>
             <div class="pnew-product-empty">No contacts linked.</div>
           <% } %>
-          <% persons.forEach(p => { %>
+          <% contacts.forEach(p => { %>
             <a href="/contacts/<%= p.id %>" class="company-contact-row" style="text-decoration: none;">
               <span class="company-contact-avatar"><%= (p.fullName||'?').trim().charAt(0).toUpperCase() %></span>
               <span class="company-contact-info">
