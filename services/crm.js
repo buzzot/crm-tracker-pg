@@ -26,12 +26,13 @@ function toDateStr(val) {
 
 // ─── Access control helpers ──────────────────────────────────────────────────
 // Role hierarchy (3 tiers):
-//   Admin   — sees everything, no filter
-//   Manager — sees all records in their groups (owner OR same group)
-//   Staff   — sees only records they own OR are explicitly assigned to
-//
-// All list functions accept a `user` object { id, role, groupIds[] }.
-// entityType ('project'|'deal'|'activity') enables assignment-based access for Staff.
+//   Admin   — sees everything
+//   Manager — sees all records in their groups
+//   Staff   — per-entity rules:
+//     companies / projects / deals : created (owner_id OR created_by) OR assigned via user_assignments
+//     activities                   : only their own (owner_id)
+//     tasks                        : owner OR assignee OR auditor (handled in listTasks directly)
+//     products                     : everyone sees all (no filter)
 
 function accessFilter(user, alias = '', entityType = null) {
   if (!user || user.role === 'Admin') return { where: '1=1', params: [] };
@@ -39,7 +40,6 @@ function accessFilter(user, alias = '', entityType = null) {
   const p = alias ? alias + '.' : '';
 
   if (user.role === 'Manager') {
-    // Managers see records they own OR in any of their groups
     const groupIds = user.groupIds || [];
     return {
       where: `(${p}owner_id = $1 OR ${p}group_id = ANY($2::uuid[]))`,
@@ -47,10 +47,19 @@ function accessFilter(user, alias = '', entityType = null) {
     };
   }
 
-  // Staff: own records + explicitly assigned via user_assignments
-  if (entityType) {
+  // Staff — entity-specific rules
+  if (entityType === 'activity') {
+    // Own activities only — no assignment-based access
     return {
-      where: `(${p}owner_id = $1 OR EXISTS (
+      where: `${p}owner_id = $1`,
+      params: [user.id]
+    };
+  }
+
+  if (entityType === 'company' || entityType === 'project' || entityType === 'deal') {
+    // Created (owner_id or created_by) OR explicitly assigned
+    return {
+      where: `(${p}owner_id = $1 OR ${p}created_by = $1 OR EXISTS (
         SELECT 1 FROM user_assignments ua
         WHERE ua.entity_id = ${p}id
           AND ua.entity_type = $2
@@ -60,7 +69,7 @@ function accessFilter(user, alias = '', entityType = null) {
     };
   }
 
-  // Fallback (no entityType provided): owner only
+  // Fallback: owner only
   return {
     where: `${p}owner_id = $1`,
     params: [user.id]
@@ -216,7 +225,7 @@ async function removeGroupMember(groupId, userId) {
 // ─── Companies ───────────────────────────────────────────────────────────────
 
 async function listCompanies(user) {
-  const { where, params } = accessFilter(user);
+  const { where, params } = accessFilter(user, 'c', 'company');
   const r = await query(
     `SELECT c.*, u.name AS owner_name, g.name AS group_name
      FROM companies c
@@ -291,12 +300,12 @@ function mapCompany(row) {
 // ─── Contacts ────────────────────────────────────────────────────────────────
 
 async function listContacts(user) {
-  const { where, params } = accessFilter(user);
+  const { where, params } = accessFilter(user, 'ct', 'contact');
   const r = await query(
     `SELECT ct.*, c.name AS company_name
      FROM contacts ct
      LEFT JOIN companies c ON c.id = ct.company_id
-     WHERE ${where.replace(/owner_id/g, 'ct.owner_id').replace(/group_id/g, 'ct.group_id')}
+     WHERE ${where}
      ORDER BY ct.full_name`,
     params
   );
