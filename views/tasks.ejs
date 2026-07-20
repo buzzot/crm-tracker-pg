@@ -1,0 +1,159 @@
+<%
+  function fmtDate(d) {
+    if (!d) return '—';
+    const dt = new Date(d + 'T00:00:00');
+    if (isNaN(dt)) return d;
+    return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  const today = new Date(); today.setHours(0,0,0,0);
+  function isOverdue(task) {
+    if (!task.deadline || task.status === 'Completed') return false;
+    return new Date(task.deadline + 'T00:00:00') < today;
+  }
+  const statusColors = {
+    'To Do':       { bg: '#eef0f3', fg: '#5b6172' },
+    'In Progress': { bg: '#e7eefc', fg: '#2b5fb8' },
+    'Completed':   { bg: '#dff5e3', fg: '#1c7a3c' },
+    'Overdue':     { bg: '#fbe5e7', fg: '#c23b4a' },
+  };
+  function statusStyle(task) {
+    const key = isOverdue(task) ? 'Overdue' : (task.status || 'To Do');
+    const c = statusColors[key] || statusColors['To Do'];
+    return `background:${c.bg};color:${c.fg};`;
+  }
+
+  // Filter
+  const activeFilter = (typeof filter !== 'undefined' ? filter : 'active');
+  let shown = tasks;
+  if (activeFilter === 'active')    shown = tasks.filter(t => t.status !== 'Completed');
+  if (activeFilter === 'completed') shown = tasks.filter(t => t.status === 'Completed');
+%>
+
+<div class="pnew-page">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="pnew-hero" style="font-size:1.6rem;">Tasks</h1>
+    <a href="/tasks/new" class="pnew-btn-save"><i class="bi bi-plus-lg me-1"></i>New Task</a>
+  </div>
+
+  <!-- Filter tabs -->
+  <div class="task-filter-tabs mb-3">
+    <a href="/tasks?status=active"    class="task-filter-tab <%= activeFilter === 'active'    ? 'active' : '' %>">Active <span class="task-count"><%= tasks.filter(t => t.status !== 'Completed').length %></span></a>
+    <a href="/tasks?status=completed" class="task-filter-tab <%= activeFilter === 'completed' ? 'active' : '' %>">Completed <span class="task-count"><%= tasks.filter(t => t.status === 'Completed').length %></span></a>
+    <a href="/tasks?status=all"       class="task-filter-tab <%= activeFilter === 'all'       ? 'active' : '' %>">All <span class="task-count"><%= tasks.length %></span></a>
+  </div>
+
+  <% if (!shown.length) { %>
+    <div class="pnew-card text-center py-5" style="color: var(--crm-muted-fg);">
+      <i class="bi bi-check2-square" style="font-size:2rem; display:block; margin-bottom:0.5rem;"></i>
+      <% if (activeFilter === 'completed') { %>No completed tasks yet.<% } else { %>No active tasks. <a href="/tasks/new">Create one.</a><% } %>
+    </div>
+  <% } else { %>
+    <div class="pnew-card p-0" style="overflow:hidden;">
+      <table class="task-list-table">
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Project</th>
+            <th>Assigned to</th>
+            <th>Start</th>
+            <th>Deadline</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% shown.forEach(task => { %>
+            <tr onclick="location.href='/tasks/<%= task.id %>'" style="cursor:pointer;" class="<%= isOverdue(task) ? 'task-row-overdue' : '' %>">
+              <td>
+                <div class="task-name-cell">
+                  <span class="task-name"><%= task.name %></span>
+                  <% if (task.auditorName) { %>
+                    <span class="task-auditor-chip"><i class="bi bi-eye"></i> <%= task.auditorName %></span>
+                  <% } %>
+                </div>
+              </td>
+              <td class="task-meta">
+                <% if (task.projectName) { %>
+                  <i class="bi bi-folder2" style="opacity:0.5;"></i> <%= task.projectName %>
+                <% } else { %>—<% } %>
+              </td>
+              <td class="task-meta">
+                <% if (task.assignees && task.assignees.length) { %>
+                  <div class="task-assignee-avatars">
+                    <% task.assignees.slice(0,3).forEach(a => { %>
+                      <span class="task-assignee-av" title="<%= a.name %>"><%= (a.name||'?').charAt(0).toUpperCase() %></span>
+                    <% }) %>
+                    <% if (task.assignees.length > 3) { %><span class="task-assignee-more">+<%= task.assignees.length - 3 %></span><% } %>
+                  </div>
+                <% } else { %><span style="color:var(--crm-muted-fg);">—</span><% } %>
+              </td>
+              <td class="task-meta"><%= fmtDate(task.startDate || task.date) %></td>
+              <td class="task-meta <%= isOverdue(task) ? 'task-deadline-overdue' : '' %>">
+                <%= fmtDate(task.deadline) %>
+              </td>
+              <td>
+                <span class="task-status-badge" style="<%= statusStyle(task) %>">
+                  <%= isOverdue(task) ? 'Overdue' : (task.status || 'To Do') %>
+                </span>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+
+<style>
+.task-filter-tabs { display:flex; gap:0.25rem; border-bottom:1px solid var(--crm-border); }
+.task-filter-tab {
+  padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 500;
+  color: var(--crm-muted-fg); text-decoration: none; border-bottom: 2px solid transparent;
+  margin-bottom: -1px; transition: color 0.15s, border-color 0.15s;
+}
+.task-filter-tab:hover { color: var(--crm-fg); }
+.task-filter-tab.active { color: var(--crm-accent); border-bottom-color: var(--crm-accent); }
+.task-count {
+  display: inline-block; background: var(--crm-muted); color: var(--crm-muted-fg);
+  border-radius: 999px; font-size: 0.7rem; font-weight: 700;
+  padding: 0.05rem 0.4rem; margin-left: 0.25rem;
+}
+
+.task-list-table { width:100%; border-collapse:collapse; font-size:0.875rem; }
+.task-list-table thead th {
+  padding: 0.6rem 1rem; font-size: 0.72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--crm-muted-fg); border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-muted); white-space: nowrap;
+}
+.task-list-table tbody tr { border-bottom: 1px solid var(--crm-border); transition: background 0.12s; }
+.task-list-table tbody tr:last-child { border-bottom: none; }
+.task-list-table tbody tr:hover { background: var(--crm-muted); }
+.task-list-table td { padding: 0.7rem 1rem; vertical-align: middle; }
+.task-row-overdue { background: oklch(0.97 0.015 20); }
+
+.task-name-cell { display:flex; flex-direction:column; gap:0.2rem; }
+.task-name { font-weight:600; color:var(--crm-fg); }
+.task-auditor-chip {
+  display:inline-flex; align-items:center; gap:0.25rem;
+  font-size:0.72rem; color:var(--crm-muted-fg);
+  background:var(--crm-muted); border-radius:999px;
+  padding:0.1rem 0.5rem; width:fit-content;
+}
+.task-meta { font-size:0.82rem; color:var(--crm-muted-fg); white-space:nowrap; }
+.task-deadline-overdue { color: oklch(0.5 0.2 20) !important; font-weight:600; }
+
+.task-assignee-avatars { display:flex; gap:0.2rem; align-items:center; }
+.task-assignee-av {
+  width:24px; height:24px; border-radius:50%;
+  background:var(--crm-accent); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.7rem; font-weight:700;
+  border: 1px solid var(--crm-bg);
+}
+.task-assignee-more { font-size:0.75rem; color:var(--crm-muted-fg); }
+
+.task-status-badge {
+  display:inline-block; padding:0.2rem 0.55rem; border-radius:999px;
+  font-size:0.72rem; font-weight:700; white-space:nowrap;
+}
+</style>

@@ -1,0 +1,106 @@
+<div class="pnew-page" style="max-width:680px; margin:0 auto;">
+  <a href="/tasks" class="pnew-back-link"><i class="bi bi-arrow-left"></i> Tasks</a>
+  <h1 class="pnew-hero" style="font-size:1.4rem; margin-top:0.5rem;">New Task</h1>
+
+  <form method="POST" action="/tasks/new">
+
+    <!-- Core details -->
+    <div class="pnew-card mb-3">
+      <div class="pnew-summary-title">Task details</div>
+
+      <div class="mb-3">
+        <label class="form-label form-label-sm fw-semibold">Task name <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="form-control form-control-sm" placeholder="What needs to get done?" required autofocus>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label form-label-sm fw-semibold">Description</label>
+        <textarea name="description" class="form-control form-control-sm" rows="3" placeholder="Provide context, acceptance criteria, notes…"></textarea>
+      </div>
+
+      <div class="row g-2 mb-0">
+        <div class="col-sm-6">
+          <label class="form-label form-label-sm fw-semibold">Deadline</label>
+          <input type="date" name="deadline" class="form-control form-control-sm">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label form-label-sm fw-semibold">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <% statusChoices.forEach(s => { %>
+              <option value="<%= s %>" <%= s === 'To Do' ? 'selected' : '' %>><%= s %></option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Project link -->
+    <div class="pnew-card mb-3">
+      <div class="pnew-summary-title">Project</div>
+      <label class="form-label form-label-sm fw-semibold">Link to project <span class="text-muted fw-normal">(optional)</span></label>
+      <select name="projectId" class="form-select form-select-sm">
+        <option value="">— No project —</option>
+        <% projects.forEach(p => { %>
+          <option value="<%= p.id %>" <%= (typeof prefillProjectId !== 'undefined' && prefillProjectId === p.id) ? 'selected' : '' %>><%= p.name %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <!-- People -->
+    <div class="pnew-card mb-3">
+      <div class="pnew-summary-title">People</div>
+
+      <div class="mb-3">
+        <label class="form-label form-label-sm fw-semibold">Assign to</label>
+        <p class="form-text mb-2" style="font-size:0.75rem;">Select one or more team members who will work on this task.</p>
+        <div class="task-people-checkboxes">
+          <% teamUsers.forEach(u => { %>
+            <label class="task-people-check">
+              <input type="checkbox" name="assigneeIds" value="<%= u.id %>">
+              <span class="task-people-av"><%= (u.name||'?').charAt(0).toUpperCase() %></span>
+              <span>
+                <span class="task-people-name"><%= u.name %></span>
+                <% if (u.title) { %><span class="task-people-title"><%= u.title %></span><% } %>
+              </span>
+            </label>
+          <% }) %>
+          <% if (!teamUsers.length) { %><span class="text-muted" style="font-size:0.82rem;">No team members yet.</span><% } %>
+        </div>
+      </div>
+
+      <div class="mb-0">
+        <label class="form-label form-label-sm fw-semibold">Auditor <span class="text-muted fw-normal">(optional)</span></label>
+        <p class="form-text mb-2" style="font-size:0.75rem;">A Manager or Admin who oversees this task — they can see it and receive updates.</p>
+        <select name="auditorId" class="form-select form-select-sm">
+          <option value="">— No auditor —</option>
+          <% teamUsers.filter(u => u.role === 'Admin' || u.role === 'Manager').forEach(u => { %>
+            <option value="<%= u.id %>"><%= u.name %><% if (u.title) { %> · <%= u.title %><% } %></option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="pnew-btn-save">Create Task</button>
+      <a href="/tasks" class="pnew-btn-cancel">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<style>
+.task-people-checkboxes { display:flex; flex-direction:column; gap:0.35rem; max-height:200px; overflow-y:auto; }
+.task-people-check {
+  display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0.5rem;
+  border-radius:8px; cursor:pointer; transition:background 0.12s;
+}
+.task-people-check:hover { background:var(--crm-muted); }
+.task-people-check input { flex-shrink:0; }
+.task-people-av {
+  width:28px; height:28px; border-radius:50%; flex-shrink:0;
+  background:var(--crm-accent); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.75rem; font-weight:700;
+}
+.task-people-name { display:block; font-size:0.85rem; font-weight:600; color:var(--crm-fg); }
+.task-people-title { display:block; font-size:0.72rem; color:var(--crm-muted-fg); }
+</style>

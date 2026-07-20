@@ -688,28 +688,73 @@ function mapProject(row) {
 
 // ─── Tasks ───────────────────────────────────────────────────────────────────
 
+// ─── Task query builder (shared by listTasks + getTask) ──────────────────────
+
+const TASK_SELECT = `
+  SELECT t.*,
+    p.name  AS project_name, p.id AS project_id_val,
+    u.name  AS owner_name,
+    au2.name AS auditor_name,
+    COALESCE(json_agg(DISTINCT jsonb_build_object('id', ta.user_id, 'name', asgn.name))
+      FILTER (WHERE ta.user_id IS NOT NULL), '[]') AS assignees
+  FROM tasks t
+  LEFT JOIN projects p  ON p.id  = t.project_id
+  LEFT JOIN users u     ON u.id  = t.owner_id
+  LEFT JOIN users au2   ON au2.id = t.auditor_id
+  LEFT JOIN task_assignees ta ON ta.task_id = t.id
+  LEFT JOIN users asgn ON asgn.id = ta.user_id`;
+
+function mapTask(row) {
+  const assignees = Array.isArray(row.assignees) ? row.assignees.filter(a => a.id) : [];
+  return {
+    id:           row.id,
+    name:         row.name,
+    type:         row.type || null,
+    description:  row.details || null,   // alias
+    details:      row.details || null,
+    startDate:    toDateStr(row.start_date) || toDateStr(row.created_at),
+    date:         toDateStr(row.date),
+    deadline:     toDateStr(row.deadline),
+    status:       row.status || 'To Do',
+    projectId:    row.project_id || null,
+    projectIds:   row.project_id ? [row.project_id] : [],
+    projectName:  row.project_name || null,
+    ownerId:      row.owner_id || null,
+    ownerName:    row.owner_name || null,
+    auditorId:    row.auditor_id || null,
+    auditorName:  row.auditor_name || null,
+    assignees,
+    assigneeIds:  assignees.map(a => a.id),
+    completedAt:  row.completed_at || null,
+    createdAt:    row.created_at,
+    updatedAt:    row.updated_at,
+  };
+}
+
 async function listTasks({ projectId, user } = {}) {
   const conditions = [];
   const params = [];
-  if (projectId) { conditions.push(`t.project_id=$${params.push(projectId)}`); }
-  if (user && user.role !== 'Admin') {
-    conditions.push(`(t.owner_id=$${params.push(user.id)} OR EXISTS (
-      SELECT 1 FROM task_assignees ta WHERE ta.task_id=t.id AND ta.user_id=$${params.push(user.id)}
-    ) OR t.group_id=ANY($${params.push(user.groupIds || [])}::uuid[]))`);
+  if (projectId) {
+    conditions.push(`t.project_id=$${params.push(projectId)}`);
+  }
+  if (user && user.role === 'Staff') {
+    // Staff see tasks they own OR are assigned to OR are auditing
+    conditions.push(`(
+      t.owner_id=$${params.push(user.id)}
+      OR t.auditor_id=$${params.push(user.id)}
+      OR EXISTS (SELECT 1 FROM task_assignees ta2 WHERE ta2.task_id=t.id AND ta2.user_id=$${params.push(user.id)})
+    )`);
+  } else if (user && user.role === 'Manager') {
+    // Managers see tasks in their groups' projects
+    const groupIds = user.groupIds || [];
+    conditions.push(`(
+      t.owner_id=$${params.push(user.id)}
+      OR EXISTS (SELECT 1 FROM projects gp WHERE gp.id=t.project_id AND gp.group_id=ANY($${params.push(groupIds)}::uuid[]))
+    )`);
   }
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
   const r = await query(
-    `SELECT t.*, p.name AS project_name, u.name AS owner_name,
-            COALESCE(json_agg(DISTINCT jsonb_build_object('id', ta.user_id, 'name', au.name))
-              FILTER (WHERE ta.user_id IS NOT NULL), '[]') AS assignees
-     FROM tasks t
-     LEFT JOIN projects p ON p.id = t.project_id
-     LEFT JOIN users u ON u.id = t.owner_id
-     LEFT JOIN task_assignees ta ON ta.task_id = t.id
-     LEFT JOIN users au ON au.id = ta.user_id
-     ${where}
-     GROUP BY t.id, p.name, u.name
-     ORDER BY t.created_at DESC`,
+    `${TASK_SELECT} ${where} GROUP BY t.id, p.name, p.id, u.name, au2.name ORDER BY t.created_at DESC`,
     params
   );
   return r.rows.map(mapTask);
@@ -717,45 +762,85 @@ async function listTasks({ projectId, user } = {}) {
 
 async function getTask(id) {
   const r = await query(
-    `SELECT t.*, p.name AS project_name, u.name AS owner_name,
-            COALESCE(json_agg(DISTINCT jsonb_build_object('id', ta.user_id, 'name', au.name))
-              FILTER (WHERE ta.user_id IS NOT NULL), '[]') AS assignees
-     FROM tasks t
-     LEFT JOIN projects p ON p.id = t.project_id
-     LEFT JOIN users u ON u.id = t.owner_id
-     LEFT JOIN task_assignees ta ON ta.task_id = t.id
-     LEFT JOIN users au ON au.id = ta.user_id
-     WHERE t.id=$1
-     GROUP BY t.id, p.name, u.name`,
+    `${TASK_SELECT} WHERE t.id=$1 GROUP BY t.id, p.name, p.id, u.name, au2.name`,
     [id]
   );
   return r.rows[0] ? mapTask(r.rows[0]) : null;
 }
 
-async function getTaskDetail(id) {
-  const [task, comments, logs] = await Promise.all([
-    getTask(id),
-    listCommentsByEntity('task', id),
-    listTaskLogs(id)
-  ]);
-  if (!task) return { name: null };
-  return { ...task, comments, activityRecords: logs, records: logs };
+async function getTaskDeadlineHistory(taskId) {
+  const r = await query(
+    `SELECT tdh.*, u.name AS changer_name
+     FROM task_deadline_history tdh
+     LEFT JOIN users u ON u.id = tdh.changed_by_id
+     WHERE tdh.task_id=$1 ORDER BY tdh.changed_at DESC`,
+    [taskId]
+  );
+  return r.rows.map(row => ({
+    id:           row.id,
+    oldDeadline:  toDateStr(row.old_deadline),
+    newDeadline:  toDateStr(row.new_deadline),
+    reason:       row.reason || null,
+    changedByName: row.changer_name || row.changed_by_name || 'Unknown',
+    changedAt:    row.changed_at,
+  }));
 }
 
-async function createTask({ name, projectId, type, date, deadline, status, details, ownerId }) {
+async function getTaskDetail(id) {
+  const [task, comments, logs, attachments, deadlineHistory, teamUsers] = await Promise.all([
+    getTask(id),
+    listCommentsByEntity('task', id),
+    listTaskLogs(id),
+    listAttachments('task', id),
+    getTaskDeadlineHistory(id),
+    listTeamUsers(),
+  ]);
+  if (!task) return { name: null };
+  const owners = task.ownerId ? [{ id: task.ownerId, name: task.ownerName }] : [];
+  const project = task.projectId ? { id: task.projectId, name: task.projectName } : null;
+  return {
+    ...task,
+    comments,
+    activityRecords: logs,
+    records: logs,
+    attachments,
+    deadlineHistory,
+    owners,
+    project,
+    teamUsers,
+    assigneeIds: task.assigneeIds || [],
+  };
+}
+
+async function createTask({ name, projectId, type, date, deadline, status, details, description, ownerId, auditorId }) {
+  const desc = description || details || null;
   const r = await query(
-    `INSERT INTO tasks (name, project_id, type, date, deadline, status, details, owner_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [name, projectId, type, date, deadline, status || 'To Do', details, ownerId]
+    `INSERT INTO tasks (name, project_id, type, date, start_date, deadline, status, details, owner_id, auditor_id)
+     VALUES ($1,$2,$3,$4,CURRENT_DATE,$5,$6,$7,$8,$9) RETURNING id`,
+    [name, projectId || null, type || null, date || null, deadline || null, status || 'To Do', desc, ownerId || null, auditorId || null]
   );
   return getTask(r.rows[0].id);
 }
 
-async function updateTaskDetails(id, { name, type, date, deadline, status, details }) {
+async function updateTaskDetails(id, { name, type, date, deadline, status, details, description, changedById, changedByName, deadlineReason }) {
+  // Detect deadline change and log it
+  const existing = await getTask(id);
+  const desc = description || details || null;
+  if (existing && deadline !== undefined) {
+    const oldDl = existing.deadline || null;
+    const newDl = deadline || null;
+    if (oldDl !== newDl) {
+      await query(
+        `INSERT INTO task_deadline_history (task_id, old_deadline, new_deadline, reason, changed_by_id, changed_by_name)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [id, oldDl || null, newDl || null, deadlineReason || null, changedById || null, changedByName || null]
+      );
+    }
+  }
   await query(
     `UPDATE tasks SET name=COALESCE($2,name), type=$3, date=$4, deadline=$5,
-       status=COALESCE($6,status), details=$7, updated_at=NOW() WHERE id=$1`,
-    [id, name, type, date, deadline, status, details]
+       status=COALESCE($6,status), details=COALESCE($7,details), updated_at=NOW() WHERE id=$1`,
+    [id, name || null, type || null, date || null, deadline !== undefined ? (deadline || null) : existing?.deadline || null, status || null, desc]
   );
   return getTask(id);
 }
@@ -767,7 +852,12 @@ async function completeTask(id) {
   );
 }
 
-async function setTaskAssignees(taskId, userIds) {
+async function setTaskAuditor(taskId, auditorId) {
+  await query('UPDATE tasks SET auditor_id=$2, updated_at=NOW() WHERE id=$1', [taskId, auditorId || null]);
+  return getTask(taskId);
+}
+
+async function setTaskAssignees({ taskId, userIds }) {
   await transaction(async (client) => {
     await client.query('DELETE FROM task_assignees WHERE task_id=$1', [taskId]);
     for (const uid of (userIds || [])) {
@@ -780,29 +870,7 @@ async function setTaskAssignees(taskId, userIds) {
 }
 
 async function linkTaskToProject(taskId, projectId) {
-  await query('UPDATE tasks SET project_id=$2 WHERE id=$1', [projectId, taskId]);
-}
-
-function mapTask(row) {
-  const assignees = Array.isArray(row.assignees) ? row.assignees.filter(a => a.id) : [];
-  return {
-    id: row.id,
-    name: row.name,
-    type: row.type || null,
-    date: toDateStr(row.date),
-    deadline: toDateStr(row.deadline),
-    status: row.status || 'To Do',
-    details: row.details || null,
-    projectId: row.project_id || null,
-    projectIds: row.project_id ? [row.project_id] : [],
-    projectName: row.project_name || null,
-    ownerId: row.owner_id || null,
-    ownerName: row.owner_name || null,
-    assignees,
-    assigneeIds: assignees.map(a => a.id),
-    completedAt: row.completed_at || null,
-    createdAt: row.created_at
-  };
+  await query('UPDATE tasks SET project_id=$2 WHERE id=$1', [taskId, projectId]);
 }
 
 // ─── Task logs (activity records) ────────────────────────────────────────────
@@ -1224,19 +1292,24 @@ module.exports = {
   listProjectComments,
   addProjectComment,
   listProjectsWithSubtasks,
-  // Tasks (project activities)
-  listProjectActivities,
-  getProjectActivity,
-  createProjectActivity,
+  // Tasks
+  listTasks,
+  getTask,
+  createTask,
   getTaskDetail,
   updateTaskDetails,
   completeTask,
-  assignTask,
+  setTaskAuditor,
   setTaskAssignees,
   linkTaskToProject,
+  getTaskDeadlineHistory,
   addTaskAttachments,
   listTaskComments,
   addTaskComment,
+  // Legacy project-activity aliases
+  listProjectActivities,
+  getProjectActivity,
+  createProjectActivity,
   listProjectActivityRecords,
   addProjectActivityRecord,
   // Products
