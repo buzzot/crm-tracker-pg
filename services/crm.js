@@ -1043,14 +1043,14 @@ function mapComment(row) {
 }
 
 // Shim functions matching old Airtable crm.js signatures used by routes
-async function addTaskComment({ taskId, author, comment, link, files }) {
-  return addComment({ entityType: 'task', entityId: taskId, content: comment, authorName: author, link });
+async function addTaskComment({ taskId, author, comment, link, files, type, emailSubject }) {
+  return addComment({ entityType: 'task', entityId: taskId, content: comment, authorName: author, link, type, emailSubject });
 }
-async function addActivityComment({ activityId, author, comment, link, files }) {
-  return addComment({ entityType: 'activity', entityId: activityId, content: comment, authorName: author, link });
+async function addActivityComment({ activityId, author, comment, link, files, type, emailSubject }) {
+  return addComment({ entityType: 'activity', entityId: activityId, content: comment, authorName: author, link, type, emailSubject });
 }
-async function addProjectComment({ projectId, author, comment, link, files }) {
-  return addComment({ entityType: 'project', entityId: projectId, content: comment, authorName: author, link });
+async function addProjectComment({ projectId, author, comment, link, files, type, emailSubject }) {
+  return addComment({ entityType: 'project', entityId: projectId, content: comment, authorName: author, link, type, emailSubject });
 }
 async function addDealComment({ dealId, author, comment, link }) {
   return addComment({ entityType: 'deal', entityId: dealId, content: comment, authorName: author, link });

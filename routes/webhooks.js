@@ -37,9 +37,10 @@ function verifyMailgun(timestamp, token, signature) {
  */
 function parseRecipient(recipient) {
   if (!recipient) return null;
-  const m = recipient.match(/^(project|task|activity)-(rec[A-Za-z0-9]+)@/i);
+  // Match UUID format: project-<uuid>@domain or task-<uuid>@domain
+  const m = recipient.match(/^(project|task|activity)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@/i);
   if (!m) return null;
-  return { type: m[1].toLowerCase(), id: m[2] };
+  return { type: m[1].toLowerCase(), id: m[2].toLowerCase() };
 }
 
 /**
@@ -88,10 +89,12 @@ router.post('/webhooks/email', upload.any(), async (req, res) => {
   const attachments = (req.files || []).filter(f => f.fieldname.startsWith('attachment'));
 
   const commentPayload = {
-    author:  emailFrom,
-    comment: emailBody,
-    link:    `EMAILSUBJ:${emailSubject}`,
-    files:   attachments.length ? attachments : undefined
+    author:       emailFrom,
+    comment:      emailBody,
+    type:         'email',
+    emailSubject: emailSubject,
+    link:         `EMAILSUBJ:${emailSubject}`,
+    files:        attachments.length ? attachments : undefined
   };
 
   try {
@@ -104,7 +107,7 @@ router.post('/webhooks/email', upload.any(), async (req, res) => {
     }
     console.log(`[webhook/email] Saved email from ${emailFrom} → ${target.type} ${target.id} | subject: ${emailSubject} | attachments: ${attachments.length}`);
   } catch (err) {
-    console.error('[webhook/email] Failed to save email to Airtable:', err.message || err);
+    console.error('[webhook/email] Failed to save email to database:', err.message || err);
   }
 });
 
