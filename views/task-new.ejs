@@ -54,7 +54,8 @@
         <label class="form-label form-label-sm fw-semibold">Assign to</label>
         <p class="form-text mb-2" style="font-size:0.75rem;">Select one or more team members who will work on this task.</p>
         <div class="task-people-checkboxes">
-          <% teamUsers.forEach(u => { %>
+          <% const _staffOnly = currentUser && currentUser.role === 'Staff';
+             teamUsers.filter(u => !_staffOnly || u.role === 'Staff').forEach(u => { %>
             <label class="task-people-check">
               <input type="checkbox" name="assigneeIds" value="<%= u.id %>">
               <span class="task-people-av"><%= (u.name||'?').charAt(0).toUpperCase() %></span>

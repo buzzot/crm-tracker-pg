@@ -421,7 +421,7 @@
           <div class="collapse mt-3" id="assigneePicker">
             <form action="/tasks/<%= task.id %>/assignees" method="POST">
               <div class="d-flex flex-column gap-1 mb-3" style="max-height:180px;overflow-y:auto;">
-                <% (task.teamUsers || []).forEach(u => { %>
+                <% (task.teamUsers || []).filter(u => currentUserRole !== 'Staff' || u.role === 'Staff').forEach(u => { %>
                   <label class="task-people-check">
                     <input type="checkbox" name="userIds" value="<%= u.id %>"
                       <%= (task.assigneeIds || []).includes(u.id) ? 'checked' : '' %>>
