@@ -1,5 +1,6 @@
 'use strict';
 const { query, transaction } = require('../config/db');
+const storage = require('./storage');
 
 // ─── Access control helpers ──────────────────────────────────────────────────
 // All list functions accept a `user` object { id, role, groupIds[] }.
@@ -989,11 +990,43 @@ async function listProductsWithProjects() {
   return products;
 }
 
-// Stubs for attachment upload — will integrate Supabase Storage in next session
-async function addActivityAttachments() {}
-async function addProjectAttachments() {}
-async function addTaskAttachments() {}
-async function replaceProductImage() {}
+// ─── Attachment uploads (Supabase Storage) ───────────────────────────────────
+
+async function _uploadFiles(entityType, entityId, files, uploadedById = null) {
+  if (!files || !files.length) return [];
+  const inserted = [];
+  for (const file of files) {
+    const { path: storagePath, publicUrl, filename, contentType, sizeBytes } =
+      await storage.uploadMulterFile({ entityType, entityId, file });
+    const r = await query(
+      `INSERT INTO attachments (filename, content_type, storage_path, public_url, size_bytes, entity_type, entity_id, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [filename, contentType, storagePath, publicUrl, sizeBytes, entityType, entityId, uploadedById]
+    );
+    inserted.push(r.rows[0]);
+  }
+  return inserted;
+}
+
+async function addActivityAttachments(activityId, files, uploadedById) {
+  return _uploadFiles('activity', activityId, files, uploadedById);
+}
+
+async function addProjectAttachments(projectId, files, uploadedById) {
+  return _uploadFiles('project', projectId, files, uploadedById);
+}
+
+async function addTaskAttachments(taskId, files, uploadedById) {
+  return _uploadFiles('task', taskId, files, uploadedById);
+}
+
+async function replaceProductImage(productId, file, uploadedById) {
+  const [result] = await _uploadFiles('products', productId, [file], uploadedById);
+  if (result) {
+    await query('UPDATE products SET image_url=$1 WHERE id=$2', [result.public_url, productId]);
+  }
+  return getProduct(productId);
+}
 async function assignTask(taskId, userId) { return setTaskAssignees(taskId, [userId]); }
 async function createProjectFromDeal(dealId, user) {
   const deal = await getDeal(dealId);
