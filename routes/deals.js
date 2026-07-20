@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const crm = require('../services/crm');
 
-async function loadDealPageData(deal) {
-  const [allProjects, allProducts] = await Promise.all([crm.listProjects(), crm.listProducts()]);
+async function loadDealPageData(deal, user) {
+  const [allProjects, allProducts] = await Promise.all([crm.listProjects(user), crm.listProducts()]);
   const companyId = (deal.companyIds || [])[0];
   const companyProjects = companyId ? allProjects.filter((p) => p.companyIds.includes(companyId)) : allProjects;
   return { allProjects: companyProjects, allProducts };
@@ -11,9 +11,10 @@ async function loadDealPageData(deal) {
 
 router.get('/deals/:id', async (req, res, next) => {
   try {
+    const user = req.session.user;
     const deal = await crm.getDealDetail(req.params.id);
     if (!deal.name) return res.status(404).render('error', { title: 'Not found', message: 'Deal not found.' });
-    const { allProjects, allProducts } = await loadDealPageData(deal);
+    const { allProjects, allProducts } = await loadDealPageData(deal, user);
     res.render('deal-detail', {
       title: deal.name,
       deal,
@@ -31,8 +32,6 @@ router.get('/deals/:id', async (req, res, next) => {
   }
 });
 
-// Update the deal's core fields (name, stage, amount, probability, close date,
-// primary contact). Posted from the inline edit form in the sidebar.
 router.post('/deals/:id/details', async (req, res, next) => {
   try {
     const { name, stage, amount, probability, closeDate, primaryContactId } = req.body;
@@ -41,8 +40,9 @@ router.post('/deals/:id/details', async (req, res, next) => {
     res.redirect(`/deals/${req.params.id}`);
   } catch (err) {
     try {
+      const user = req.session.user;
       const deal = await crm.getDealDetail(req.params.id);
-      const { allProjects, allProducts } = await loadDealPageData(deal);
+      const { allProjects, allProducts } = await loadDealPageData(deal, user);
       return res.status(400).render('deal-detail', {
         title: deal.name,
         deal,
@@ -61,7 +61,6 @@ router.post('/deals/:id/details', async (req, res, next) => {
   }
 });
 
-// Update which Projects and/or Products are linked to this deal.
 router.post('/deals/:id/links', async (req, res, next) => {
   try {
     let projectIds = req.body.projectIds;
@@ -78,8 +77,6 @@ router.post('/deals/:id/links', async (req, res, next) => {
   }
 });
 
-// Create a brand-new Project directly from this deal (inherits the deal's
-// company, and is immediately linked back onto the deal).
 router.post('/deals/:id/projects', async (req, res, next) => {
   try {
     const { name, status, category, description, startDate, endDate } = req.body;
@@ -91,8 +88,9 @@ router.post('/deals/:id/projects', async (req, res, next) => {
     res.redirect(`/deals/${req.params.id}`);
   } catch (err) {
     try {
+      const user = req.session.user;
       const deal = await crm.getDealDetail(req.params.id);
-      const { allProjects, allProducts } = await loadDealPageData(deal);
+      const { allProjects, allProducts } = await loadDealPageData(deal, user);
       return res.status(400).render('deal-detail', {
         title: deal.name,
         deal,
@@ -111,9 +109,6 @@ router.post('/deals/:id/projects', async (req, res, next) => {
   }
 });
 
-// Log a new activity (call/email/meeting/document, etc.) against this deal —
-// reuses the existing Activities feature, scoped to the deal via its new
-// "Deal" link field.
 router.post('/deals/:id/activities', async (req, res, next) => {
   try {
     const { name, type, date, details, regarding, result } = req.body;
@@ -123,8 +118,9 @@ router.post('/deals/:id/activities', async (req, res, next) => {
     res.redirect(`/deals/${req.params.id}`);
   } catch (err) {
     try {
+      const user = req.session.user;
       const deal = await crm.getDealDetail(req.params.id);
-      const { allProjects, allProducts } = await loadDealPageData(deal);
+      const { allProjects, allProducts } = await loadDealPageData(deal, user);
       return res.status(400).render('deal-detail', {
         title: deal.name,
         deal,
@@ -143,7 +139,6 @@ router.post('/deals/:id/activities', async (req, res, next) => {
   }
 });
 
-// Post a note/comment on this deal, attributed to the logged-in user.
 router.post('/deals/:id/comments', async (req, res, next) => {
   try {
     const { comment, link } = req.body;
@@ -152,8 +147,9 @@ router.post('/deals/:id/comments', async (req, res, next) => {
     res.redirect(`/deals/${req.params.id}`);
   } catch (err) {
     try {
+      const user = req.session.user;
       const deal = await crm.getDealDetail(req.params.id);
-      const { allProjects, allProducts } = await loadDealPageData(deal);
+      const { allProjects, allProducts } = await loadDealPageData(deal, user);
       return res.status(400).render('deal-detail', {
         title: deal.name,
         deal,

@@ -8,9 +8,9 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 }
 });
 
-async function loadFormData(activity) {
+async function loadFormData(activity, user) {
   const companyId = (activity.companyIds || [])[0];
-  const [contacts, projects] = await Promise.all([crm.listContacts(), crm.listProjects()]);
+  const [contacts, projects] = await Promise.all([crm.listContacts(user), crm.listProjects(user)]);
   const persons = companyId ? contacts.filter((c) => c.companyIds.includes(companyId)) : contacts;
   const companyProjects = companyId ? projects.filter((p) => p.companyIds.includes(companyId)) : projects;
   return { persons, projects: companyProjects };
@@ -18,13 +18,12 @@ async function loadFormData(activity) {
 
 router.get('/activities', async (req, res, next) => {
   try {
-    const { role, email } = req.session.user;
-    const [allActivities, allCompanies, projects] = await Promise.all([
-      crm.listActivities(),
-      crm.listCompanies(),
-      crm.listProjects()
+    const user = req.session.user;
+    const [activities, allCompanies, projects] = await Promise.all([
+      crm.listActivities(user),
+      crm.listCompanies(user),
+      crm.listProjects(user)
     ]);
-    const activities = role === 'Sales' ? crm.scopeToOwner(allActivities, email) : allActivities;
     const companyById = new Map(allCompanies.map((c) => [c.id, c]));
     const projectById = new Map(projects.map((p) => [p.id, p]));
 
@@ -45,11 +44,10 @@ router.get('/activities', async (req, res, next) => {
 
 router.get('/activities/:id', async (req, res, next) => {
   try {
+    const user = req.session.user;
     const activity = await crm.getActivityDetail(req.params.id);
     if (!activity.name) return res.status(404).render('error', { title: 'Not found', message: 'Activity not found.' });
-    const { persons, projects } = await loadFormData(activity);
-    // Airtable returns "regarding" as a full ISO 8601 string; the
-    // datetime-local input only accepts the first 16 chars ("YYYY-MM-DDTHH:mm").
+    const { persons, projects } = await loadFormData(activity, user);
     activity.regardingInput = activity.regarding ? String(activity.regarding).slice(0, 16) : '';
     res.render('activity-detail', {
       title: activity.name,
@@ -79,8 +77,9 @@ router.post('/activities/:id', async (req, res, next) => {
     res.redirect(`/activities/${req.params.id}`);
   } catch (err) {
     try {
+      const user = req.session.user;
       const activity = await crm.getActivityDetail(req.params.id);
-      const { persons, projects } = await loadFormData(activity);
+      const { persons, projects } = await loadFormData(activity, user);
       return res.status(400).render('activity-detail', {
         title: activity.name,
         activity: {
@@ -109,8 +108,9 @@ router.post('/activities/:id/comments', upload.array('attachment', 5), async (re
     res.redirect(`/activities/${req.params.id}`);
   } catch (err) {
     try {
+      const user = req.session.user;
       const activity = await crm.getActivityDetail(req.params.id);
-      const { persons, projects } = await loadFormData(activity);
+      const { persons, projects } = await loadFormData(activity, user);
       return res.status(400).render('activity-detail', {
         title: activity.name,
         activity,

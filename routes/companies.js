@@ -1,57 +1,60 @@
+'use strict';
 const express = require('express');
-const multer = require('multer');
-const router = express.Router();
-const crm = require('../services/crm');
+const multer  = require('multer');
+const router  = express.Router();
+const crm     = require('../services/crm');
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }
-});
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+// ─── List ─────────────────────────────────────────────────────────────────────
 
 router.get('/companies', async (req, res, next) => {
   try {
-    const { role, email } = req.session.user;
-    const all = await crm.listCompanies();
-    const companies = role === 'Sales' ? crm.scopeToOwner(all, email) : all;
+    const user = req.session.user;
+    const companies = await crm.listCompanies(user);
     res.render('companies', { title: 'Companies', companies });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
+
+// ─── New ──────────────────────────────────────────────────────────────────────
 
 router.get('/companies/new', (req, res) => {
   res.render('company-new', {
     title: 'Add Company',
     statusChoices: crm.schema.tables.company.statusChoices,
     industryChoices: crm.schema.tables.company.industryChoices,
-    error: null,
-    values: {}
+    error: null, values: {}
   });
 });
 
 router.post('/companies', async (req, res, next) => {
   try {
     const { name, industry, status, web, billingAddress, notes } = req.body;
-    const company = await crm.createCompany({ name, industry, status, web, billingAddress, notes });
+    const user = req.session.user;
+    const company = await crm.createCompany({
+      name, industry, status, web, billingAddress, notes,
+      ownerId: user ? user.id : null,
+      createdBy: user ? user.id : null,
+    });
     res.redirect(`/companies/${company.id}`);
   } catch (err) {
     res.status(400).render('company-new', {
       title: 'Add Company',
       statusChoices: crm.schema.tables.company.statusChoices,
       industryChoices: crm.schema.tables.company.industryChoices,
-      error: err.message,
-      values: req.body
+      error: err.message, values: req.body
     });
   }
 });
+
+// ─── Edit ─────────────────────────────────────────────────────────────────────
 
 router.get('/companies/:id/edit', async (req, res, next) => {
   try {
     const company = await crm.getCompany(req.params.id);
     if (!company) return res.status(404).render('error', { title: 'Not found', message: 'Company not found.' });
     res.render('company-edit', {
-      title: `Edit ${company.name}`,
-      company,
+      title: `Edit ${company.name}`, company,
       statusChoices: crm.schema.tables.company.statusChoices,
       industryChoices: crm.schema.tables.company.industryChoices,
       error: null
@@ -78,34 +81,42 @@ router.post('/companies/:id', async (req, res, next) => {
   }
 });
 
+// ─── Detail ───────────────────────────────────────────────────────────────────
+
 router.get('/companies/:id', async (req, res, next) => {
   try {
-    const { role, email } = req.session.user;
+    const user = req.session.user;
     const detail = await crm.getCompanyDetail(req.params.id);
     if (!detail.company) return res.status(404).render('error', { title: 'Not found', message: 'Company not found.' });
-    if (role === 'Sales' && !detail.company.ownerEmails.includes(email.toLowerCase())) {
-      return res.status(403).render('error', { title: 'Forbidden', message: 'You do not own this company record.' });
+    // Staff access check: must be owner/created_by or assigned
+    if (user && user.role === 'Staff') {
+      const c = detail.company;
+      const isOwner = c.ownerId === user.id || c.createdBy === user.id;
+      if (!isOwner) {
+        // Check user_assignments
+        const assignments = await crm.listAssignments('company', req.params.id);
+        const isAssigned = assignments.some(a => a.userId === user.id);
+        if (!isAssigned) {
+          return res.status(403).render('error', { title: 'Forbidden', message: 'You do not have access to this company.' });
+        }
+      }
     }
     res.render('company-detail', { title: detail.company.name, ...detail });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
+
+// ─── Sub-resource new forms ───────────────────────────────────────────────────
 
 router.get('/companies/:id/contacts/new', async (req, res, next) => {
   try {
     const company = await crm.getCompany(req.params.id);
     if (!company) return res.status(404).render('error', { title: 'Not found', message: 'Company not found.' });
     res.render('contact-new', {
-      title: 'Add Contact',
-      company,
+      title: 'Add Contact', company,
       statusChoices: crm.schema.tables.contacts.statusChoices,
-      error: null,
-      values: {}
+      error: null, values: {}
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 router.post('/companies/:id/contacts', async (req, res, next) => {
@@ -116,36 +127,28 @@ router.post('/companies/:id/contacts', async (req, res, next) => {
   } catch (err) {
     try {
       const company = await crm.getCompany(req.params.id);
-      return res.status(400).render('contact-new', {
-        title: 'Add Contact',
-        company,
+      res.status(400).render('contact-new', {
+        title: 'Add Contact', company,
         statusChoices: crm.schema.tables.contacts.statusChoices,
-        error: err.message,
-        values: req.body
+        error: err.message, values: req.body
       });
-    } catch (err2) {
-      next(err2);
-    }
+    } catch (err2) { next(err2); }
   }
 });
 
 router.get('/companies/:id/deals/new', async (req, res, next) => {
   try {
+    const user = req.session.user;
     const company = await crm.getCompany(req.params.id);
     if (!company) return res.status(404).render('error', { title: 'Not found', message: 'Company not found.' });
-    const contacts = await crm.listContacts();
-    const persons = contacts.filter((c) => c.companyIds.includes(req.params.id));
+    const contacts = await crm.listContacts(user);
+    const persons = contacts.filter(c => c.companyIds.includes(req.params.id));
     res.render('deal-new', {
-      title: 'Create Deal',
-      company,
-      persons,
+      title: 'Create Deal', company, persons,
       stageChoices: crm.schema.tables.deals.stageChoices,
-      error: null,
-      values: {}
+      error: null, values: {}
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 router.post('/companies/:id/deals', async (req, res, next) => {
@@ -155,20 +158,16 @@ router.post('/companies/:id/deals', async (req, res, next) => {
     res.redirect(`/companies/${req.params.id}`);
   } catch (err) {
     try {
+      const user = req.session.user;
       const company = await crm.getCompany(req.params.id);
-      const contacts = await crm.listContacts();
-      const persons = contacts.filter((c) => c.companyIds.includes(req.params.id));
-      return res.status(400).render('deal-new', {
-        title: 'Create Deal',
-        company,
-        persons,
+      const contacts = await crm.listContacts(user);
+      const persons = contacts.filter(c => c.companyIds.includes(req.params.id));
+      res.status(400).render('deal-new', {
+        title: 'Create Deal', company, persons,
         stageChoices: crm.schema.tables.deals.stageChoices,
-        error: err.message,
-        values: req.body
+        error: err.message, values: req.body
       });
-    } catch (err2) {
-      next(err2);
-    }
+    } catch (err2) { next(err2); }
   }
 });
 
@@ -178,105 +177,85 @@ router.get('/companies/:id/projects/new', async (req, res, next) => {
     if (!company) return res.status(404).render('error', { title: 'Not found', message: 'Company not found.' });
     const products = await crm.listProducts();
     res.render('project-new', {
-      title: 'Create Project',
-      company,
-      products,
+      title: 'Create Project', company, products,
       statusChoices: crm.schema.tables.projects.statusChoices,
       categoryChoices: crm.schema.tables.projects.categoryChoices,
       productCategoryChoices: crm.schema.tables.products.categoryChoices,
-      error: null,
-      values: {}
+      error: null, values: {}
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 router.post('/companies/:id/projects', upload.array('attachments', 10), async (req, res, next) => {
   try {
     const { name, status, category, description, startDate, endDate } = req.body;
-    let productIds = req.body.productIds;
-    if (!productIds) productIds = [];
+    let productIds = req.body.productIds || [];
     if (!Array.isArray(productIds)) productIds = [productIds];
-    const project = await crm.createProject({ name, companyId: req.params.id, productIds, status, category, description, startDate, endDate });
-    if (req.files && req.files.length) {
-      await crm.addProjectAttachments(project.id, req.files);
-    }
+    const user = req.session.user;
+    const project = await crm.createProject({
+      name, companyId: req.params.id, productIds, status, category, description, startDate, endDate,
+      ownerId: user ? user.id : null,
+    });
+    if (req.files && req.files.length) await crm.addProjectAttachments(project.id, req.files);
     res.redirect(`/companies/${req.params.id}`);
   } catch (err) {
     try {
       const company = await crm.getCompany(req.params.id);
       const products = await crm.listProducts();
-      return res.status(400).render('project-new', {
-        title: 'Create Project',
-        company,
-        products,
+      res.status(400).render('project-new', {
+        title: 'Create Project', company, products,
         statusChoices: crm.schema.tables.projects.statusChoices,
         categoryChoices: crm.schema.tables.projects.categoryChoices,
         productCategoryChoices: crm.schema.tables.products.categoryChoices,
-        error: err.message,
-        values: req.body
+        error: err.message, values: req.body
       });
-    } catch (err2) {
-      next(err2);
-    }
+    } catch (err2) { next(err2); }
   }
 });
 
 router.get('/companies/:id/activities/new', async (req, res, next) => {
   try {
+    const user = req.session.user;
     const company = await crm.getCompany(req.params.id);
     if (!company) return res.status(404).render('error', { title: 'Not found', message: 'Company not found.' });
-    const contacts = await crm.listContacts();
-    const persons = contacts.filter((c) => c.companyIds.includes(req.params.id));
-    const projects = await crm.listProjects();
-    const companyProjects = projects.filter((p) => p.companyIds.includes(req.params.id));
+    const [contacts, projects] = await Promise.all([
+      crm.listContacts(user),
+      crm.listProjects(user),
+    ]);
+    const persons = contacts.filter(c => c.companyIds.includes(req.params.id));
+    const companyProjects = projects.filter(p => p.companyIds.includes(req.params.id));
     res.render('activity-new', {
-      title: 'New Activity',
-      company,
-      persons,
-      projects: companyProjects,
+      title: 'New Activity', company, persons, projects: companyProjects,
       typeChoices: crm.schema.tables.activities.typeChoices,
       resultChoices: crm.schema.tables.activities.resultChoices,
-      error: null,
-      values: {}
+      error: null, values: {}
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 router.post('/companies/:id/activities', async (req, res, next) => {
   try {
     const { name, type, dueDate, details, regarding, result } = req.body;
-    let attendeeIds = req.body.attendeeIds;
-    if (!attendeeIds) attendeeIds = [];
+    let attendeeIds = req.body.attendeeIds || [];
     if (!Array.isArray(attendeeIds)) attendeeIds = [attendeeIds];
-    let projectIds = req.body.projectIds;
-    if (!projectIds) projectIds = [];
+    let projectIds = req.body.projectIds || [];
     if (!Array.isArray(projectIds)) projectIds = [projectIds];
     await crm.createActivity({ name, companyId: req.params.id, type, dueDate, details, regarding, result, attendeeIds, projectIds });
     res.redirect(`/companies/${req.params.id}`);
   } catch (err) {
     try {
+      const user = req.session.user;
       const company = await crm.getCompany(req.params.id);
-      const contacts = await crm.listContacts();
-      const persons = contacts.filter((c) => c.companyIds.includes(req.params.id));
-      const projects = await crm.listProjects();
-      const companyProjects = projects.filter((p) => p.companyIds.includes(req.params.id));
-      return res.status(400).render('activity-new', {
-        title: 'New Activity',
-        company,
-        persons,
-        projects: companyProjects,
+      const [contacts, projects] = await Promise.all([crm.listContacts(user), crm.listProjects(user)]);
+      const persons = contacts.filter(c => c.companyIds.includes(req.params.id));
+      const companyProjects = projects.filter(p => p.companyIds.includes(req.params.id));
+      res.status(400).render('activity-new', {
+        title: 'New Activity', company, persons, projects: companyProjects,
         typeChoices: crm.schema.tables.activities.typeChoices,
         resultChoices: crm.schema.tables.activities.resultChoices,
-        error: err.message,
-        values: req.body
+        error: err.message, values: req.body
       });
-    } catch (err2) {
-      next(err2);
-    }
+    } catch (err2) { next(err2); }
   }
 });
 

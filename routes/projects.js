@@ -10,7 +10,8 @@ const upload = multer({
 
 router.get('/projects', async (req, res, next) => {
   try {
-    const projects = await crm.listProjectsWithSubtasks();
+    const user = req.session.user;
+    const projects = await crm.listProjectsWithSubtasks(user);
     res.render('projects', { title: 'Projects', projects });
   } catch (err) {
     next(err);
@@ -19,7 +20,8 @@ router.get('/projects', async (req, res, next) => {
 
 router.get('/projects/new', async (req, res, next) => {
   try {
-    const [companies, products] = await Promise.all([crm.listCompanies(), crm.listProducts()]);
+    const user = req.session.user;
+    const [companies, products] = await Promise.all([crm.listCompanies(user), crm.listProducts()]);
     res.render('project-new', {
       title: 'Create Project',
       company: null,
@@ -49,7 +51,8 @@ router.post('/projects', upload.array('attachments', 10), async (req, res, next)
     res.redirect(`/projects/${project.id}`);
   } catch (err) {
     try {
-      const [companies, products] = await Promise.all([crm.listCompanies(), crm.listProducts()]);
+      const user = req.session.user;
+      const [companies, products] = await Promise.all([crm.listCompanies(user), crm.listProducts()]);
       return res.status(400).render('project-new', {
         title: 'Create Project',
         company: null,
@@ -82,9 +85,10 @@ router.get('/projects/:id', async (req, res, next) => {
 
 router.get('/projects/:id/edit', async (req, res, next) => {
   try {
+    const user = req.session.user;
     const [project, companies, products] = await Promise.all([
       crm.getProjectDetail(req.params.id),
-      crm.listCompanies(),
+      crm.listCompanies(user),
       crm.listProducts()
     ]);
     if (!project.name) return res.status(404).render('error', { title: 'Not found', message: 'Project not found.' });
@@ -134,7 +138,7 @@ router.post('/projects/:id/edit', async (req, res, next) => {
     try {
       const [project, companies, products] = await Promise.all([
         crm.getProjectDetail(req.params.id),
-        crm.listCompanies(),
+        crm.listCompanies(req.session.user),
         crm.listProducts()
       ]);
       let productIds = req.body.productIds;
