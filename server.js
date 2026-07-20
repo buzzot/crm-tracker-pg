@@ -29,6 +29,7 @@ const dealsRoutes = require('./routes/deals');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
 const webhookRoutes = require('./routes/webhooks');
+const mediaRoutes   = require('./routes/media');
 
 const app = express();
 
@@ -68,6 +69,9 @@ if (isProd) {
 app.use((req, res, next) => {
   res.locals.currentUser = req.session.user || null;
   res.locals.emailDomain = process.env.EMAIL_DOMAIN || 'mg.samyoucrm.com';
+  // Helper for views: convert a Supabase storage_path to a /media/ URL
+  res.locals.mediaUrl = (storagePath) =>
+    storagePath ? `/media/${storagePath}` : null;
   next();
 });
 
@@ -77,8 +81,11 @@ app.post('/login', authRoutes);   // handled inside authRoutes
 // Mailgun inbound webhook — must be before requireAuth (no session cookie)
 app.use(webhookRoutes);
 
-// Everything below requires login.
+// Media proxy — requires login, serves private Supabase Storage files
 app.use(requireAuth);
+app.use(mediaRoutes);
+
+// Everything below requires login.
 app.use(dashboardRoutes);
 app.use(pipelineRoutes);
 app.use(companiesRoutes);

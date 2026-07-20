@@ -2,6 +2,21 @@
 const { query, transaction } = require('../config/db');
 const storage = require('./storage');
 
+// Convert a Supabase public URL or raw storage path to a /media/<path> URL
+// so the app serves files via the signed-URL proxy rather than directly.
+function toMediaUrl(urlOrPath) {
+  if (!urlOrPath) return null;
+  if (urlOrPath.startsWith('/media/')) return urlOrPath;
+  const BUCKET = process.env.SUPABASE_BUCKET || 'crm-files';
+  // Full Supabase public URL: extract everything after /public/<bucket>/
+  const marker = `/object/public/${BUCKET}/`;
+  const idx = urlOrPath.indexOf(marker);
+  if (idx !== -1) return `/media/${urlOrPath.slice(idx + marker.length)}`;
+  // Bare path (no leading slash)
+  if (!urlOrPath.startsWith('http')) return `/media/${urlOrPath}`;
+  return urlOrPath; // External URL — leave as-is
+}
+
 // ─── Access control helpers ──────────────────────────────────────────────────
 // All list functions accept a `user` object { id, role, groupIds[] }.
 // Admin sees everything. Others see records they own or whose group_id matches
@@ -157,8 +172,8 @@ function mapCompany(row) {
     website: row.website || null,
     billingAddress: row.billing_address || null,
     notes: row.notes || null,
-    logo: row.logo_url || null,
-    logoUrl: row.logo_url || null,
+    logo: toMediaUrl(row.logo_url),
+    logoUrl: toMediaUrl(row.logo_url),
     ownerId: row.owner_id || null,
     ownerName: row.owner_name || null,
     ownerEmails: [],   // PG uses id-based ownership, not email arrays
@@ -785,7 +800,7 @@ function mapProduct(row) {
     maxInputPower: row.max_input_power || null,
     maxInputCurrent: row.max_input_current || null,
     maxOutputCurrent: row.max_output_current || null,
-    image: row.image_url ? [{ url: row.image_url }] : [],
+    image: row.image_url ? [{ url: toMediaUrl(row.image_url) }] : [],
     projects,
     projectIds: projects.map(p => p.id),
     projectNames: projects.map(p => p.name),
@@ -892,7 +907,7 @@ async function listAttachments(entityType, entityId) {
     id: row.id,
     filename: row.filename,
     contentType: row.content_type,
-    url: row.public_url,
+    url: toMediaUrl(row.storage_path) || toMediaUrl(row.public_url),
     sizeBytes: row.size_bytes,
     createdAt: row.created_at
   }));

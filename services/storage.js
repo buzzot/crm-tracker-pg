@@ -103,4 +103,24 @@ async function deleteFile(storagePath) {
   });
 }
 
-module.exports = { ensureBucket, uploadBuffer, uploadFromUrl, uploadMulterFile, deleteFile, BUCKET };
+/**
+ * Generate a signed URL for a private file.
+ * @param {string} storagePath  - path within the bucket, e.g. "products/uuid/image.jpg"
+ * @param {number} expiresIn    - seconds until the URL expires (default 1 hour)
+ */
+async function getSignedUrl(storagePath, expiresIn = 3600) {
+  const res = await fetch(
+    `${SUPABASE_URL}/storage/v1/object/sign/${BUCKET}/${storagePath}`,
+    {
+      method: 'POST',
+      headers: storageHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ expiresIn }),
+    }
+  );
+  if (!res.ok) throw new Error(`Could not sign URL: ${await res.text()}`);
+  const { signedURL } = await res.json();
+  // signedURL is a relative path like /storage/v1/object/sign/...?token=...
+  return signedURL.startsWith('http') ? signedURL : `${SUPABASE_URL}${signedURL}`;
+}
+
+module.exports = { ensureBucket, uploadBuffer, uploadFromUrl, uploadMulterFile, deleteFile, getSignedUrl, BUCKET };
