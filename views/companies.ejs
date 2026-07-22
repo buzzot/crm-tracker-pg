@@ -5,7 +5,7 @@
     if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
     return (words[0][0] + words[1][0]).toUpperCase();
   }
-  const AVATAR_COLORS = ['co-av-blue', 'co-av-purple', 'co-av-gold', 'co-av-teal', 'co-av-pink'];
+  const AVATAR_COLORS = ['avatar-blue', 'avatar-purple', 'avatar-gold', 'avatar-teal', 'avatar-pink'];
   function avatarColor(i) { return AVATAR_COLORS[i % AVATAR_COLORS.length]; }
 
   const statusChoices = ['Planned', 'Lead', 'Client'];
@@ -14,261 +14,96 @@
   companies.forEach(c => { if (c.status && statusCounts.hasOwnProperty(c.status)) statusCounts[c.status]++; });
 %>
 
-<div class="pnew-page">
-
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h1 class="pnew-hero" style="font-size:1.6rem;">
-      Companies
-      <span class="co-total-count"><%= companies.length %></span>
-    </h1>
-    <a href="/companies/new" class="pnew-btn-save"><i class="bi bi-plus-lg me-1"></i>Add Company</a>
-  </div>
-
-  <!-- Filter tabs + search -->
-  <div class="co-toolbar mb-3">
-    <div class="task-filter-tabs" id="statusFilterTabs">
-      <button type="button" class="task-filter-tab active" data-status="all">
-        All <span class="task-count"><%= companies.length %></span>
-      </button>
-      <% statusChoices.forEach(s => { %>
-        <button type="button" class="task-filter-tab" data-status="<%= s %>">
-          <%= s %> <span class="task-count"><%= statusCounts[s] %></span>
-        </button>
-      <% }) %>
-    </div>
-    <div class="co-search-wrap">
-      <i class="bi bi-search"></i>
-      <input type="text" id="companySearch" placeholder="Search companies…">
-    </div>
-  </div>
-
-  <% if (!companies.length) { %>
-    <div class="pnew-card text-center py-5" style="color:var(--crm-muted-fg);">
-      <i class="bi bi-building" style="font-size:2rem; display:block; margin-bottom:0.5rem;"></i>
-      No companies yet. <a href="/companies/new">Add one.</a>
-    </div>
-  <% } else { %>
-    <div class="pnew-card p-0" style="overflow:hidden;">
-      <table class="co-table" id="companiesTable">
-        <thead>
-          <tr>
-            <th>Company</th>
-            <th>Industry</th>
-            <th>Status</th>
-            <th>Website</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% companies.forEach((c, i) => { %>
-            <tr class="co-row"
-              data-status="<%= c.status || '' %>"
-              data-search="<%= [c.name, c.industry, c.status, c.web].filter(Boolean).join(' ').toLowerCase() %>"
-              onclick="window.location='/companies/<%= c.id %>'">
-
-              <td>
-                <div class="co-name-cell">
-                  <span class="co-avatar <%= avatarColor(i) %>"><%= initials(c.name) %></span>
-                  <div>
-                    <div class="co-name"><%= c.name %></div>
-                    <% if (c.web) { %><div class="co-website-sub"><%= c.web %></div><% } %>
-                  </div>
-                </div>
-              </td>
-
-              <td>
-                <% if (c.industry) { %>
-                  <span class="co-industry-tag"><%= c.industry %></span>
-                <% } else { %>
-                  <span class="co-muted">—</span>
-                <% } %>
-              </td>
-
-              <td>
-                <% if (c.status) { %>
-                  <span class="co-status-badge co-status-<%= c.status.replace(/\s+/g,'') %>">
-                    <span class="co-status-dot"></span><%= c.status %>
-                  </span>
-                <% } else { %>
-                  <span class="co-muted">—</span>
-                <% } %>
-              </td>
-
-              <td>
-                <% if (c.web) { %>
-                  <a href="<%= c.web.startsWith('http') ? c.web : 'https://' + c.web %>"
-                     target="_blank" rel="noopener"
-                     class="co-link" onclick="event.stopPropagation()">
-                    <i class="bi bi-box-arrow-up-right"></i> Visit
-                  </a>
-                <% } else { %>
-                  <span class="co-muted">—</span>
-                <% } %>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-  <% } %>
-
+<div class="companies-page-header">
+  <h1 class="companies-page-title">Companies <span class="companies-page-count"><%= companies.length %></span></h1>
+  <a href="/companies/new" class="btn-add-company">Add Company</a>
 </div>
 
-<style>
-/* ── Toolbar ───────────────────────────────────────────── */
-.co-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-.co-search-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: var(--crm-surface);
-  border: 1px solid var(--crm-border);
-  border-radius: 8px;
-  padding: 0.3rem 0.65rem;
-  font-size: 0.82rem;
-  color: var(--crm-muted-fg);
-  min-width: 200px;
-}
-.co-search-wrap input {
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 0.85rem;
-  color: var(--crm-fg);
-  width: 100%;
-}
-.co-search-wrap input::placeholder { color: var(--crm-muted-fg); }
+<div class="companies-toolbar">
+  <div class="status-filter-tabs" id="statusFilterTabs">
+    <button type="button" class="filter-tab active" data-status="all">All <span class="filter-tab-count"><%= companies.length %></span></button>
+    <% statusChoices.forEach(s => { %>
+      <button type="button" class="filter-tab" data-status="<%= s %>"><%= s %> <span class="filter-tab-count"><%= statusCounts[s] %></span></button>
+    <% }) %>
+  </div>
+  <div class="companies-search-wrap">
+    <i class="bi bi-search"></i>
+    <input type="text" id="companySearch" placeholder="Search companies...">
+  </div>
+</div>
 
-/* ── Total count badge ─────────────────────────────────── */
-.co-total-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--crm-muted);
-  color: var(--crm-muted-fg);
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0.1rem 0.55rem;
-  margin-left: 0.4rem;
-  vertical-align: middle;
-}
-
-/* ── Table ─────────────────────────────────────────────── */
-.co-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-.co-table thead th {
-  padding: 0.6rem 1rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--crm-muted-fg);
-  border-bottom: 1px solid var(--crm-border);
-  background: var(--crm-muted);
-  white-space: nowrap;
-}
-.co-table tbody tr { border-bottom: 1px solid var(--crm-border); transition: background 0.12s; }
-.co-table tbody tr:last-child { border-bottom: none; }
-.co-row { cursor: pointer; }
-.co-row:hover { background: var(--crm-muted); }
-.co-table td { padding: 0.75rem 1rem; vertical-align: middle; }
-
-/* ── Name cell ─────────────────────────────────────────── */
-.co-name-cell { display: flex; align-items: center; gap: 0.65rem; }
-.co-name { font-weight: 600; color: var(--crm-fg); }
-.co-website-sub { font-size: 0.75rem; color: var(--crm-muted-fg); margin-top: 0.1rem; }
-
-/* ── Avatar ────────────────────────────────────────────── */
-.co-avatar {
-  width: 34px; height: 34px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.75rem; font-weight: 700; color: #fff;
-  flex-shrink: 0;
-}
-.co-av-blue   { background: oklch(0.55 0.2 258); }
-.co-av-purple { background: oklch(0.56 0.22 295); }
-.co-av-gold   { background: oklch(0.72 0.16 75); }
-.co-av-teal   { background: oklch(0.6 0.17 175); }
-.co-av-pink   { background: oklch(0.62 0.22 350); }
-
-/* ── Industry tag ──────────────────────────────────────── */
-.co-industry-tag {
-  display: inline-block;
-  background: var(--crm-muted);
-  color: var(--crm-muted-fg);
-  border: 1px solid var(--crm-border);
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  padding: 0.2rem 0.55rem;
-  white-space: nowrap;
-}
-
-/* ── Status badge ──────────────────────────────────────── */
-.co-status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-.co-status-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.7;
-  flex-shrink: 0;
-}
-.co-status-Planned { background: var(--crm-muted); color: var(--crm-muted-fg); }
-.co-status-Lead    { background: #e7eefc; color: #2b5fb8; }
-.co-status-Client  { background: #dff5e3; color: #1c7a3c; }
-
-/* ── Link ──────────────────────────────────────────────── */
-.co-link {
-  font-size: 0.8rem;
-  color: var(--crm-accent);
-  text-decoration: none;
-  font-weight: 500;
-}
-.co-link:hover { text-decoration: underline; }
-
-/* ── Muted placeholder ─────────────────────────────────── */
-.co-muted { color: var(--crm-muted-fg); font-size: 0.85rem; }
-</style>
+<div class="companies-table-card">
+  <table class="companies-table" id="companiesTable">
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th>Industry</th>
+        <th>Status</th>
+        <th>Website</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% companies.forEach((c, i) => { %>
+        <tr class="company-row"
+          data-status="<%= c.status || '' %>"
+          data-search="<%= [c.name, c.industry, c.status, c.web].filter(Boolean).join(' ').toLowerCase() %>"
+          onclick="window.location='/companies/<%= c.id %>'">
+          <td data-label="Company">
+            <div class="company-name-cell">
+              <span class="company-avatar <%= avatarColor(i) %>"><%= initials(c.name) %></span>
+              <div class="company-name-block">
+                <div class="company-name"><%= c.name %></div>
+                <div class="company-website-sub"><%= c.web || 'No website on file' %></div>
+              </div>
+            </div>
+          </td>
+          <td data-label="Industry">
+            <% if (c.industry) { %><span class="industry-tag"><%= c.industry %></span><% } else { %><span class="muted-cell">—</span><% } %>
+          </td>
+          <td data-label="Status">
+            <% if (c.status) { %>
+              <span class="badge company-status-<%= c.status.replace(/\s+/g,'') %>"><span class="status-dot"></span><%= c.status %></span>
+            <% } else { %><span class="muted-cell">—</span><% } %>
+          </td>
+          <td data-label="Website">
+            <% if (c.web) { %>
+              <a href="<%= c.web %>" target="_blank" rel="noopener" class="table-link" onclick="event.stopPropagation()"><%= c.web %> <i class="bi bi-box-arrow-up-right"></i></a>
+            <% } else { %><span class="muted-cell">—</span><% } %>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% if (!companies.length) { %>
+    <div class="companies-empty-state">No companies yet.</div>
+  <% } %>
+</div>
 
 <script>
-(function () {
-  const searchInput = document.getElementById('companySearch');
-  const tabs = document.querySelectorAll('#statusFilterTabs .task-filter-tab');
-  const rows = document.querySelectorAll('#companiesTable tbody tr');
-  let activeStatus = 'all';
+  (function () {
+    const searchInput = document.getElementById('companySearch');
+    const tabs = document.querySelectorAll('#statusFilterTabs .filter-tab');
+    const rows = document.querySelectorAll('#companiesTable tbody tr');
+    let activeStatus = 'all';
 
-  function applyFilters() {
-    const q = searchInput.value.toLowerCase();
-    rows.forEach(row => {
-      const matchesStatus = activeStatus === 'all' || row.dataset.status === activeStatus;
-      const matchesSearch = !q || row.dataset.search.includes(q);
-      row.style.display = (matchesStatus && matchesSearch) ? '' : 'none';
+    function applyFilters() {
+      const q = searchInput.value.toLowerCase();
+      rows.forEach((row) => {
+        const matchesStatus = activeStatus === 'all' || row.dataset.status === activeStatus;
+        const matchesSearch = !q || row.dataset.search.includes(q);
+        row.style.display = (matchesStatus && matchesSearch) ? '' : 'none';
+      });
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        tabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeStatus = tab.dataset.status;
+        applyFilters();
+      });
     });
-  }
 
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      activeStatus = tab.dataset.status;
-      applyFilters();
-    });
-  });
-
-  searchInput.addEventListener('input', applyFilters);
-})();
+    searchInput.addEventListener('input', applyFilters);
+  })();
 </script>
