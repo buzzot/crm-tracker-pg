@@ -272,6 +272,16 @@ async function updateCompany(id, fields) {
   return getCompany(id);
 }
 
+async function updateCompanyLogo(companyId, file) {
+  const { path: storagePath } = await storage.uploadMulterFile({
+    entityType: 'company',
+    entityId: companyId,
+    file
+  });
+  await query('UPDATE companies SET logo_url=$1, updated_at=NOW() WHERE id=$2', [storagePath, companyId]);
+  return toMediaUrl(storagePath);
+}
+
 function mapCompany(row) {
   return {
     id: row.id,
@@ -1261,6 +1271,7 @@ module.exports = {
   getCompany,
   createCompany,
   updateCompany,
+  updateCompanyLogo,
   getCompanyDetail,
   // Contacts
   listContacts,

@@ -259,4 +259,13 @@ router.post('/companies/:id/activities', async (req, res, next) => {
   }
 });
 
+router.post('/companies/:id/logo', upload.single('logo'), async (req, res, next) => {
+  try {
+    if (req.file) await crm.updateCompanyLogo(req.params.id, req.file);
+    res.redirect(`/companies/${req.params.id}`);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

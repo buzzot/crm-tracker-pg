@@ -11,8 +11,28 @@
         <div class="pnew-badge"><i class="bi bi-building"></i> <%= company.status %></div>
       <% } %>
       <% if (company.logo) { %>
-        <img src="<%= company.logo %>" alt="<%= company.name %> logo" style="height: 2rem; width: auto; object-fit: contain; display: block; margin-bottom: 0.4rem; border-radius: 4px;">
+        <img src="<%= company.logo %>" alt="<%= company.name %> logo"
+          style="height: 2.5rem; width: auto; max-width: 120px; object-fit: contain; display: block; margin-bottom: 0.4rem; border-radius: 6px;"
+          onerror="this.replaceWith(document.getElementById('co-logo-placeholder'))">
       <% } %>
+      <span id="co-logo-placeholder" style="display:none;"></span>
+      <!-- Logo upload (replaces broken/missing logo) -->
+      <form action="/companies/<%= company.id %>/logo" method="POST" enctype="multipart/form-data"
+        style="margin-bottom: 0.5rem;" id="coLogoForm">
+        <label style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; font-size:0.75rem; color:var(--crm-muted-fg);">
+          <i class="bi bi-image"></i>
+          <span id="coLogoLabel"><% if (!company.logo) { %>Upload logo<% } else { %>Change logo<% } %></span>
+          <input type="file" name="logo" accept="image/*" style="display:none;" id="coLogoInput">
+        </label>
+      </form>
+      <script>
+        document.getElementById('coLogoInput').addEventListener('change', function() {
+          if (this.files.length) {
+            document.getElementById('coLogoLabel').textContent = this.files[0].name;
+            document.getElementById('coLogoForm').submit();
+          }
+        });
+      </script>
       <h1 class="pnew-hero"><%= company.name %></h1>
       <p class="pnew-hero-sub"><%= company.industry || 'No industry set' %></p>
     </div>
