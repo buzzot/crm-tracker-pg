@@ -2,19 +2,21 @@
 const { query, transaction } = require('../config/db');
 const storage = require('./storage');
 
-// Convert a Supabase public URL or raw storage path to a /media/<path> URL
-// so the app serves files via the signed-URL proxy rather than directly.
+// Convert a storage path or old URL to a direct Supabase public URL.
+// The crm-files bucket is public — no proxy or signing needed.
 function toMediaUrl(urlOrPath) {
   if (!urlOrPath) return null;
-  if (urlOrPath.startsWith('/media/')) return urlOrPath;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
   const BUCKET = process.env.SUPABASE_BUCKET || 'crm-files';
-  // Full Supabase public URL: extract everything after /public/<bucket>/
-  const marker = `/object/public/${BUCKET}/`;
-  const idx = urlOrPath.indexOf(marker);
-  if (idx !== -1) return `/media/${urlOrPath.slice(idx + marker.length)}`;
-  // Bare path (no leading slash)
-  if (!urlOrPath.startsWith('http')) return `/media/${urlOrPath}`;
-  return urlOrPath; // External URL — leave as-is
+  // Already a full URL for this Supabase project — return as-is
+  if (SUPABASE_URL && urlOrPath.startsWith(SUPABASE_URL)) return urlOrPath;
+  // Bare storage path (e.g. "companies/uuid/file.png") → direct public URL
+  if (!urlOrPath.startsWith('http') && SUPABASE_URL) {
+    const path = urlOrPath.startsWith('/') ? urlOrPath.slice(1) : urlOrPath;
+    return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
+  }
+  // External or unknown URL — return as-is (likely expired Airtable CDN)
+  return urlOrPath;
 }
 
 // Convert a pg DATE/TIMESTAMP value (JS Date object) or string to "YYYY-MM-DD"
