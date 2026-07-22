@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   email       TEXT,
   phone       TEXT,
   title       TEXT,
+  notes       TEXT,
   company_id  UUID REFERENCES companies(id) ON DELETE SET NULL,
   owner_id    UUID REFERENCES users(id) ON DELETE SET NULL,
   group_id    UUID REFERENCES groups(id) ON DELETE SET NULL,

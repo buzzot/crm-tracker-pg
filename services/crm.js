@@ -362,7 +362,7 @@ function mapContact(row) {
     email: row.email || null,
     phone: row.phone || null,
     title: row.title || null,
-    notes: row.notes || null,
+    notes: row.notes || null,   // contacts.notes column (added via migrate-contacts-notes.sql)
     companyId: row.company_id || null,
     companyIds: row.company_id ? [row.company_id] : [],
     companyName: row.company_name || null,
