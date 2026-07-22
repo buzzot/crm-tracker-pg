@@ -18,8 +18,8 @@ router.get('/contacts/:id', async (req, res, next) => {
 
 router.post('/contacts/:id/details', async (req, res, next) => {
   try {
-    const { title, email, phone, notes } = req.body;
-    await crm.updateContact({ contactId: req.params.id, title, email, phone, notes });
+    const { title, email, phone } = req.body;
+    await crm.updateContact(req.params.id, { title, email, phone });
     res.redirect(`/contacts/${req.params.id}`);
   } catch (err) {
     try {
