@@ -343,11 +343,11 @@ async function createContact({ fullName, email, phone, title, companyId, ownerId
   return getContact(r.rows[0].id);
 }
 
-async function updateContact(id, { fullName, email, phone, title, companyId }) {
+async function updateContact(id, { fullName, email, phone, title, notes, companyId }) {
   await query(
     `UPDATE contacts SET full_name=COALESCE($2,full_name), email=$3, phone=$4, title=$5,
-       company_id=$6, updated_at=NOW() WHERE id=$1`,
-    [id, fullName, email, phone, title, companyId]
+       notes=$6, company_id=COALESCE($7,company_id), updated_at=NOW() WHERE id=$1`,
+    [id, fullName, email, phone, title, notes ?? null, companyId]
   );
   return getContact(id);
 }

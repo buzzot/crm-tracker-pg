@@ -76,6 +76,7 @@
       </div>
 
       <form id="basicInfoEditForm" action="/contacts/<%= contact.id %>/details" method="POST" style="display: none;">
+        <input type="hidden" name="companyId" value="<%= contact.companyId || '' %>">
         <% if (contact.company || contact.fullName) { %>
           <div class="pnew-classification-row mb-3">
             <% if (contact.company) { %>
