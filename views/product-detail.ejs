@@ -155,9 +155,13 @@
       <div class="pnew-card">
         <div class="product-photo-frame">
           <% if (photoUrl) { %>
-            <img src="<%= photoUrl %>" alt="<%= product.name %>" class="product-photo-img">
+            <img src="<%= photoUrl %>" alt="<%= product.name %>" class="product-photo-img"
+                 onerror="this.style.display='none'; document.getElementById('prod-photo-placeholder').style.display='flex';">
+            <div class="product-photo-placeholder" id="prod-photo-placeholder" style="display:none;">
+              <i class="bi bi-box-seam"></i>
+            </div>
           <% } else { %>
-            <div class="product-photo-placeholder">
+            <div class="product-photo-placeholder" id="prod-photo-placeholder">
               <i class="bi bi-box-seam"></i>
             </div>
           <% } %>

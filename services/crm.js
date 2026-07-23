@@ -1259,7 +1259,9 @@ async function addTaskAttachments(taskId, files, uploadedById) {
 async function replaceProductImage(productId, file, uploadedById) {
   const [result] = await _uploadFiles('products', productId, [file], uploadedById);
   if (result) {
-    await query('UPDATE products SET image_url=$1 WHERE id=$2', [result.public_url, productId]);
+    // Store the bare storage path so toMediaUrl() always generates a fresh public URL.
+    // Consistent with how logo_url works for companies.
+    await query('UPDATE products SET image_url=$1 WHERE id=$2', [result.storage_path, productId]);
   }
   return getProduct(productId);
 }
