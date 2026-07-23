@@ -1,9 +1,26 @@
-<div class="pnew-page" style="max-width:600px; margin:0 auto;">
-  <a href="/admin" class="pnew-back-link"><i class="bi bi-arrow-left"></i> Team Members</a>
+<%
+  const isEdit = !!editUser;
+  const initial = isEdit ? (editUser.name||'?').trim().charAt(0).toUpperCase() : '+';
+%>
 
-  <h1 class="pnew-hero" style="font-size:1.4rem; margin-top:0.5rem;">
-    <%= editUser ? 'Edit User' : 'Add User' %>
-  </h1>
+<div class="pnew-page" style="max-width:580px; margin:0 auto;">
+
+  <a href="/admin" class="pnew-back-link"><i class="bi bi-arrow-left"></i> Team</a>
+
+  <!-- Hero -->
+  <div class="pnew-hero-row" style="margin-top:0.75rem; margin-bottom:1.5rem;">
+    <div class="aue-hero-avatar au-avatar-<%= isEdit ? (editUser.role||'Staff') : 'Staff' %>">
+      <%= initial %>
+    </div>
+    <div>
+      <h1 class="pnew-hero"><%= isEdit ? editUser.name : 'New Member' %></h1>
+      <% if (isEdit && editUser.title) { %>
+        <p class="pnew-hero-sub"><%= editUser.title %></p>
+      <% } else if (!isEdit) { %>
+        <p class="pnew-hero-sub">Fill in the details below</p>
+      <% } %>
+    </div>
+  </div>
 
   <% if (flash) { %>
     <div class="alert alert-<%= flash.type === 'error' ? 'danger' : 'success' %> mb-3">
@@ -11,86 +28,127 @@
     </div>
   <% } %>
 
-  <form method="POST" action="/admin/users/<%= editUser ? editUser.id + '/edit' : 'new' %>">
+  <form method="POST" action="/admin/users/<%= isEdit ? editUser.id + '/edit' : 'new' %>" id="aueForm">
 
-    <!-- Name + Email -->
+    <!-- Identity -->
     <div class="pnew-card mb-3">
-      <div class="pnew-summary-title">Identity</div>
-
-      <div class="mb-3">
-        <label class="form-label form-label-sm">Full name <span class="text-danger">*</span></label>
-        <input type="text" name="name" class="form-control form-control-sm"
-               value="<%= editUser ? editUser.name : '' %>" required>
-      </div>
-
-      <div class="mb-3">
-        <label class="form-label form-label-sm">Email <span class="text-danger">*</span></label>
-        <input type="email" name="email" class="form-control form-control-sm"
-               value="<%= editUser ? editUser.email : '' %>" required>
-      </div>
-
-      <div class="mb-0">
-        <label class="form-label form-label-sm">Phone</label>
-        <input type="text" name="phone" class="form-control form-control-sm"
-               value="<%= editUser ? (editUser.phone || '') : '' %>"
-               placeholder="+1 (555) 000-0000">
-      </div>
-    </div>
-
-    <!-- Role + Title -->
-    <div class="pnew-card mb-3">
-      <div class="pnew-summary-title">Role &amp; Access</div>
-
-      <div class="mb-3">
-        <label class="form-label form-label-sm">Role <span class="text-danger">*</span></label>
-        <select name="role" id="roleSelect" class="form-select form-select-sm" onchange="syncTitles(this.value)" required>
-          <% ALL_ROLES.forEach(r => { %>
-            <option value="<%= r %>" <%= (editUser && editUser.role === r) ? 'selected' : '' %>><%= r %></option>
-          <% }) %>
-        </select>
-        <div class="form-text" style="font-size:0.75rem; margin-top:0.25rem;">
-          <span id="roleHint"></span>
+      <div class="pnew-card-header-row" style="margin-bottom:1rem;">
+        <div class="pnew-card-header-text">
+          <span class="pnew-card-icon"><i class="bi bi-person-vcard"></i></span>
+          <h2 class="pnew-card-title">Identity</h2>
         </div>
       </div>
 
-      <div class="mb-0">
-        <label class="form-label form-label-sm">Title</label>
-        <select name="title" id="titleSelect" class="form-select form-select-sm">
-          <option value="">— Select title —</option>
-          <% Object.values(ROLE_TITLES).flat().forEach(t => { %>
-            <option value="<%= t %>" <%= (editUser && editUser.title === t) ? 'selected' : '' %>><%= t %></option>
-          <% }) %>
-        </select>
-        <div class="form-text" style="font-size:0.75rem;">Title is informational; role controls access.</div>
+      <div class="pnew-classification-row mb-3">
+        <div>
+          <label class="pnew-field-label">Full name <span style="color:#e53e3e">*</span></label>
+          <input type="text" name="name" class="pnew-input" placeholder="Jane Smith"
+                 value="<%= isEdit ? editUser.name : '' %>" required>
+        </div>
+        <div>
+          <label class="pnew-field-label">Email <span style="color:#e53e3e">*</span></label>
+          <input type="email" name="email" class="pnew-input" placeholder="jane@company.com"
+                 value="<%= isEdit ? editUser.email : '' %>" required>
+        </div>
+      </div>
+
+      <div>
+        <label class="pnew-field-label">Phone</label>
+        <input type="text" name="phone" class="pnew-input" placeholder="+1 (555) 000-0000"
+               value="<%= isEdit ? (editUser.phone || '') : '' %>">
+      </div>
+    </div>
+
+    <!-- Role & Access -->
+    <div class="pnew-card mb-3">
+      <div class="pnew-card-header-row" style="margin-bottom:1rem;">
+        <div class="pnew-card-header-text">
+          <span class="pnew-card-icon"><i class="bi bi-shield-check"></i></span>
+          <h2 class="pnew-card-title">Role &amp; Access</h2>
+        </div>
+      </div>
+
+      <div class="pnew-classification-row mb-3">
+        <div>
+          <label class="pnew-field-label">Role <span style="color:#e53e3e">*</span></label>
+          <select name="role" id="roleSelect" class="pnew-input" onchange="onRoleChange(this.value)" required>
+            <% ALL_ROLES.forEach(r => { %>
+              <option value="<%= r %>" <%= (isEdit && editUser.role === r) ? 'selected' : (!isEdit && r === 'Staff' ? 'selected' : '') %>><%= r %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
+          <label class="pnew-field-label">Title</label>
+          <select name="title" id="titleSelect" class="pnew-input">
+            <option value="">— Select title —</option>
+            <% Object.values(ROLE_TITLES).flat().forEach(t => { %>
+              <option value="<%= t %>" <%= (isEdit && editUser.title === t) ? 'selected' : '' %>><%= t %></option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+
+      <!-- Role hint badges -->
+      <div class="aue-role-hints" id="roleHints">
+        <div class="aue-role-hint" id="hint-Admin">
+          <span class="au-badge au-badge-Admin">Admin</span>
+          <span class="aue-hint-text">Full access to every record in the system.</span>
+        </div>
+        <div class="aue-role-hint" id="hint-Manager">
+          <span class="au-badge au-badge-Manager">Manager</span>
+          <span class="aue-hint-text">Sees all records in their group(s). Can assign users to records.</span>
+        </div>
+        <div class="aue-role-hint" id="hint-Staff">
+          <span class="au-badge au-badge-Staff">Staff</span>
+          <span class="aue-hint-text">Sees only records they own or have been explicitly assigned to.</span>
+        </div>
       </div>
     </div>
 
     <!-- Password -->
     <div class="pnew-card mb-3">
-      <div class="pnew-summary-title"><%= editUser ? 'Change Password' : 'Password' %></div>
-      <div class="mb-0">
-        <input type="password" name="password" class="form-control form-control-sm"
-               placeholder="<%= editUser ? 'Leave blank to keep current' : 'Set initial password' %>"
-               <%= editUser ? '' : 'required' %> autocomplete="new-password">
+      <div class="pnew-card-header-row" style="margin-bottom:1rem;">
+        <div class="pnew-card-header-text">
+          <span class="pnew-card-icon"><i class="bi bi-lock"></i></span>
+          <h2 class="pnew-card-title"><%= isEdit ? 'Change Password' : 'Password' %></h2>
+        </div>
+      </div>
+      <div style="position:relative;">
+        <input type="password" name="password" id="pwdInput" class="pnew-input" style="padding-right:2.5rem;"
+               placeholder="<%= isEdit ? 'Leave blank to keep current' : 'Set initial password' %>"
+               <%= isEdit ? '' : 'required' %> autocomplete="new-password">
+        <button type="button" onclick="togglePwd()" class="aue-pwd-eye" tabindex="-1" title="Show/hide">
+          <i class="bi bi-eye" id="pwdEyeIcon"></i>
+        </button>
       </div>
     </div>
 
-    <!-- Active toggle (edit only) -->
-    <% if (editUser) { %>
+    <!-- Status (edit only) -->
+    <% if (isEdit) { %>
     <div class="pnew-card mb-3">
-      <div class="pnew-summary-title">Status</div>
-      <div class="form-check form-switch mt-1">
-        <input class="form-check-input" type="checkbox" name="isActive" value="1" id="isActiveCheck"
-               <%= editUser.isActive ? 'checked' : '' %>>
-        <label class="form-check-label" for="isActiveCheck" style="font-size:0.875rem;">Account is active</label>
+      <div class="pnew-card-header-row" style="margin-bottom:0.75rem;">
+        <div class="pnew-card-header-text">
+          <span class="pnew-card-icon"><i class="bi bi-toggles"></i></span>
+          <h2 class="pnew-card-title">Account Status</h2>
+        </div>
+        <label class="aue-switch">
+          <input type="checkbox" name="isActive" value="1" id="isActiveCheck" <%= editUser.isActive ? 'checked' : '' %>>
+          <span class="aue-switch-track"></span>
+        </label>
       </div>
-      <div class="form-text" style="font-size:0.75rem;">Inactive users cannot log in.</div>
+      <p class="pnew-card-sub mb-0" id="statusLabel">
+        <% if (editUser.isActive) { %>
+          Account is <strong style="color:var(--crm-success)">active</strong> — user can log in.
+        <% } else { %>
+          Account is <strong style="color:var(--crm-muted-fg)">inactive</strong> — login disabled.
+        <% } %>
+      </p>
     </div>
     <% } %>
 
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 mt-1">
       <button type="submit" class="pnew-btn-save">
-        <%= editUser ? 'Save Changes' : 'Create User' %>
+        <i class="bi bi-check-lg me-1"></i><%= isEdit ? 'Save Changes' : 'Create Member' %>
       </button>
       <a href="/admin" class="pnew-btn-cancel">Cancel</a>
     </div>
@@ -98,33 +156,128 @@
 </div>
 
 <script>
-// Title options grouped by role
 const ROLE_TITLES = <%- JSON.stringify(ROLE_TITLES) %>;
-const ROLE_HINTS  = {
-  Admin:   'Full access to every record in the system.',
-  Manager: 'Sees all records in their assigned group(s). Can assign users to records.',
-  Staff:   'Sees only records they own or have been explicitly assigned to.',
-};
 
-function syncTitles(role) {
+function onRoleChange(role) {
+  // Sync title options
   const sel     = document.getElementById('titleSelect');
   const current = sel.value;
-  const hint    = document.getElementById('roleHint');
-
-  // Rebuild option list
   sel.innerHTML = '<option value="">— Select title —</option>';
   (ROLE_TITLES[role] || []).forEach(t => {
     const opt = document.createElement('option');
-    opt.value = t;
-    opt.textContent = t;
+    opt.value = t; opt.textContent = t;
     if (t === current) opt.selected = true;
     sel.appendChild(opt);
   });
 
-  // Show hint
-  hint.textContent = ROLE_HINTS[role] || '';
+  // Show correct hint
+  document.querySelectorAll('.aue-role-hint').forEach(el => {
+    el.style.display = el.id === 'hint-' + role ? 'flex' : 'none';
+  });
+
+  // Update hero avatar class
+  const avatar = document.querySelector('.aue-hero-avatar');
+  if (avatar) {
+    avatar.className = 'aue-hero-avatar au-avatar-' + role;
+  }
 }
 
-// Run on load
-syncTitles(document.getElementById('roleSelect').value);
+function togglePwd() {
+  const inp  = document.getElementById('pwdInput');
+  const icon = document.getElementById('pwdEyeIcon');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    icon.className = 'bi bi-eye-slash';
+  } else {
+    inp.type = 'password';
+    icon.className = 'bi bi-eye';
+  }
+}
+
+<% if (isEdit) { %>
+document.getElementById('isActiveCheck').addEventListener('change', function() {
+  const lbl = document.getElementById('statusLabel');
+  lbl.innerHTML = this.checked
+    ? 'Account is <strong style="color:var(--crm-success)">active</strong> — user can log in.'
+    : 'Account is <strong style="color:var(--crm-muted-fg)">inactive</strong> — login disabled.';
+});
+<% } %>
+
+// Init on load
+onRoleChange(document.getElementById('roleSelect').value);
 </script>
+
+<style>
+/* Hero avatar (reuse au-avatar colors) */
+.aue-hero-avatar {
+  width: 52px; height: 52px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.au-avatar-Admin   { background: #1f2a44; }
+.au-avatar-Manager { background: oklch(0.52 0.18 250); }
+.au-avatar-Staff   { background: oklch(0.55 0.14 290); }
+
+/* Badge reuse */
+.au-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.au-badge-Admin   { background: #1f2a44; color: #fff; }
+.au-badge-Manager { background: oklch(0.52 0.18 250); color: #fff; }
+.au-badge-Staff   { background: var(--crm-muted); color: var(--crm-muted-fg); border: 1px solid var(--crm-border); }
+
+/* Role hints */
+.aue-role-hint {
+  display: none;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--crm-muted);
+  border-radius: 8px;
+}
+.aue-hint-text { font-size: 0.78rem; color: var(--crm-muted-fg); }
+
+/* Password toggle */
+.aue-pwd-eye {
+  position: absolute;
+  right: 0.6rem; top: 50%;
+  transform: translateY(-50%);
+  background: none; border: none;
+  color: var(--crm-muted-fg); cursor: pointer;
+  font-size: 0.95rem; padding: 0.2rem;
+}
+.aue-pwd-eye:hover { color: var(--crm-fg); }
+
+/* Toggle switch */
+.aue-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.aue-switch input { opacity: 0; width: 0; height: 0; }
+.aue-switch-track {
+  position: absolute; inset: 0;
+  background: var(--crm-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.aue-switch-track::before {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  left: 3px; top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.aue-switch input:checked + .aue-switch-track { background: var(--crm-success, #22c55e); }
+.aue-switch input:checked + .aue-switch-track::before { transform: translateX(20px); }
+</style>

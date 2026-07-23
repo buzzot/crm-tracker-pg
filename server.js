@@ -15,7 +15,7 @@ if (isProd && (!sessionSecret || sessionSecret === 'change-this-to-a-long-random
   );
 }
 
-const { requireAuth, requireAdmin } = require('./middleware/auth');
+const { requireAuth, requireAdmin, requirePasswordChange } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const pipelineRoutes = require('./routes/pipeline');
@@ -28,6 +28,7 @@ const contactsRoutes = require('./routes/contacts');
 const dealsRoutes = require('./routes/deals');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
+const profileRoutes = require('./routes/profile');
 const webhookRoutes = require('./routes/webhooks');
 const mediaRoutes   = require('./routes/media');
 
@@ -83,7 +84,9 @@ app.use(webhookRoutes);
 
 // Media proxy — requires login, serves private Supabase Storage files
 app.use(requireAuth);
+app.use(requirePasswordChange);
 app.use(mediaRoutes);
+app.use(profileRoutes);
 
 // Everything below requires login.
 app.use(dashboardRoutes);

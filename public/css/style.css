@@ -168,6 +168,16 @@ body {
   font-size: 0.85rem;
   color: var(--crm-muted-fg);
 }
+.user-chip-link {
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 0.2rem 0.5rem;
+  transition: background 0.12s;
+}
+.user-chip-link:hover {
+  background: var(--crm-muted);
+  color: var(--crm-fg);
+}
 
 .user-avatar {
   width: 26px;

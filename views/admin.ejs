@@ -1,133 +1,329 @@
+<%
+  const ROLE_ORDER = { Admin: 0, Manager: 1, Staff: 2 };
+  const sorted = [...users].sort((a,b) => (ROLE_ORDER[a.role]??9) - (ROLE_ORDER[b.role]??9) || a.name.localeCompare(b.name));
+  const activeCount   = users.filter(u => u.isActive).length;
+  const inactiveCount = users.length - activeCount;
+%>
+
 <div class="pnew-page">
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h1 class="pnew-hero" style="font-size:1.6rem;">Team Members</h1>
-    <a href="/admin/users/new" class="pnew-btn-save"><i class="bi bi-person-plus-fill me-1"></i>Add User</a>
+
+  <!-- Header -->
+  <div class="au-header">
+    <div>
+      <h1 class="au-title">Team</h1>
+      <p class="au-sub"><%= activeCount %> active<% if (inactiveCount) { %> · <span style="color:var(--crm-muted-fg)"><%= inactiveCount %> inactive</span><% } %></p>
+    </div>
+    <a href="/admin/users/new" class="pnew-btn-save"><i class="bi bi-person-plus-fill me-1"></i>Add Member</a>
   </div>
 
   <% if (flash) { %>
-    <div class="alert alert-<%= flash.type === 'error' ? 'danger' : 'success' %> alert-dismissible fade show" role="alert">
+    <div class="alert alert-<%= flash.type === 'error' ? 'danger' : 'success' %> alert-dismissible fade show mb-3" role="alert">
       <%= flash.message %>
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
   <% } %>
 
-  <!-- Role legend -->
-  <div class="d-flex gap-2 flex-wrap mb-3" style="font-size:0.8rem; color:var(--crm-muted-fg);">
-    <span><span class="user-badge user-badge-Admin">Admin</span> full access to all records</span>
-    <span style="opacity:0.4;">·</span>
-    <span><span class="user-badge user-badge-Manager">Manager</span> all records in their group</span>
-    <span style="opacity:0.4;">·</span>
-    <span><span class="user-badge user-badge-Staff">Staff</span> own + assigned records only</span>
+  <!-- Filter bar -->
+  <div class="au-toolbar">
+    <div class="au-role-tabs" id="auRoleTabs">
+      <button class="au-tab active" data-role="all">All <span class="au-tab-count"><%= users.length %></span></button>
+      <% ['Admin','Manager','Staff'].forEach(r => {
+           const cnt = users.filter(u => u.role === r).length;
+           if (cnt) { %>
+        <button class="au-tab" data-role="<%= r %>"><%= r %> <span class="au-tab-count"><%= cnt %></span></button>
+      <% } }) %>
+    </div>
+    <div class="au-search-wrap">
+      <i class="bi bi-search"></i>
+      <input type="text" id="auSearch" placeholder="Search team…">
+    </div>
   </div>
 
-  <div class="pnew-card p-0" style="overflow:hidden;">
-    <table class="admin-users-table">
-      <thead>
-        <tr>
-          <th>Name / Title</th>
-          <th>Email</th>
-          <th>Phone</th>
-          <th>Role</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (!users.length) { %>
-          <tr><td colspan="6" class="text-center text-muted py-4">No users yet.</td></tr>
-        <% } %>
-        <% users.forEach(u => { %>
-          <tr class="<%= !u.isActive ? 'user-inactive' : '' %>">
-            <td>
-              <div class="d-flex align-items-center gap-2">
-                <div class="user-avatar"><%= (u.name||'?').trim().charAt(0).toUpperCase() %></div>
-                <div>
-                  <div class="user-name"><%= u.name %></div>
-                  <% if (u.title) { %><div class="user-title-sub"><%= u.title %></div><% } %>
-                </div>
-              </div>
-            </td>
-            <td class="user-email"><%= u.email %></td>
-            <td class="user-phone"><%= u.phone || '—' %></td>
-            <td><span class="user-badge user-badge-<%= u.role %>"><%= u.role %></span></td>
-            <td>
-              <% if (u.isActive) { %>
-                <span class="user-status-active">Active</span>
-              <% } else { %>
-                <span class="user-status-inactive">Inactive</span>
-              <% } %>
-            </td>
-            <td class="text-end" style="white-space:nowrap;">
-              <a href="/admin/users/<%= u.id %>/edit" class="btn btn-sm btn-outline-secondary me-1" title="Edit">
-                <i class="bi bi-pencil"></i>
-              </a>
-              <form method="POST" action="/admin/users/<%= u.id %>/deactivate" style="display:inline;"
-                    onsubmit="return confirm('<%= u.isActive ? 'Deactivate' : 'Reactivate' %> <%= u.name %>?')">
-                <button type="submit" class="btn btn-sm <%= u.isActive ? 'btn-outline-warning' : 'btn-outline-success' %>"
-                        title="<%= u.isActive ? 'Deactivate' : 'Reactivate' %>">
-                  <i class="bi bi-<%= u.isActive ? 'pause-circle' : 'play-circle' %>"></i>
-                </button>
-              </form>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+  <!-- User cards -->
+  <div class="au-grid" id="auGrid">
+    <% sorted.forEach(u => { %>
+      <div class="au-card <%= !u.isActive ? 'au-card-inactive' : '' %>"
+           data-role="<%= u.role %>"
+           data-search="<%= [u.name, u.email, u.title, u.phone, u.role].filter(Boolean).join(' ').toLowerCase() %>">
+
+        <!-- Avatar + status dot -->
+        <div class="au-avatar-wrap">
+          <div class="au-avatar au-avatar-<%= u.role %>">
+            <%= (u.name||'?').trim().charAt(0).toUpperCase() %>
+          </div>
+          <span class="au-status-dot <%= u.isActive ? 'au-dot-active' : 'au-dot-inactive' %>" title="<%= u.isActive ? 'Active' : 'Inactive' %>"></span>
+        </div>
+
+        <!-- Info -->
+        <div class="au-info">
+          <div class="au-name"><%= u.name %></div>
+          <% if (u.title) { %><div class="au-job-title"><%= u.title %></div><% } %>
+          <div class="au-meta-row">
+            <span class="au-badge au-badge-<%= u.role %>"><%= u.role %></span>
+            <% if (u.email) { %>
+              <a href="mailto:<%= u.email %>" class="au-meta-link" onclick="event.stopPropagation()"><i class="bi bi-envelope"></i> <%= u.email %></a>
+            <% } %>
+            <% if (u.phone) { %>
+              <a href="tel:<%= u.phone %>" class="au-meta-link" onclick="event.stopPropagation()"><i class="bi bi-telephone"></i> <%= u.phone %></a>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="au-actions">
+          <a href="/admin/users/<%= u.id %>/edit" class="au-action-btn" title="Edit">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <form method="POST" action="/admin/users/<%= u.id %>/deactivate" style="display:inline;"
+                onsubmit="return confirm('<%= u.isActive ? 'Deactivate' : 'Reactivate' %> <%= u.name %>?')">
+            <button type="submit" class="au-action-btn au-action-<%= u.isActive ? 'warn' : 'ok' %>"
+                    title="<%= u.isActive ? 'Deactivate' : 'Reactivate' %>">
+              <i class="bi bi-<%= u.isActive ? 'pause-circle' : 'play-circle' %>"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+    <% }) %>
   </div>
+
+  <% if (!users.length) { %>
+    <div class="au-empty">No team members yet. <a href="/admin/users/new">Add the first one</a>.</div>
+  <% } %>
+
+  <div class="au-empty" id="auNoResults" style="display:none;">No members match your search.</div>
 </div>
 
-<style>
-.admin-users-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-.admin-users-table thead th {
-  padding: 0.65rem 1rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--crm-muted-fg);
-  border-bottom: 1px solid var(--crm-border);
-  background: var(--crm-muted);
-  white-space: nowrap;
-}
-.admin-users-table tbody tr {
-  border-bottom: 1px solid var(--crm-border);
-  transition: background 0.12s;
-}
-.admin-users-table tbody tr:last-child { border-bottom: none; }
-.admin-users-table tbody tr:hover { background: var(--crm-muted); }
-.admin-users-table td { padding: 0.75rem 1rem; vertical-align: middle; }
+<script>
+(function () {
+  const tabs   = document.querySelectorAll('#auRoleTabs .au-tab');
+  const cards  = document.querySelectorAll('#auGrid .au-card');
+  const search = document.getElementById('auSearch');
+  const noRes  = document.getElementById('auNoResults');
+  let activeRole = 'all';
 
-.user-avatar {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: var(--crm-accent);
-  color: #fff;
+  function applyFilters() {
+    const q = search.value.toLowerCase();
+    let visible = 0;
+    cards.forEach(card => {
+      const matchRole   = activeRole === 'all' || card.dataset.role === activeRole;
+      const matchSearch = !q || card.dataset.search.includes(q);
+      card.style.display = (matchRole && matchSearch) ? '' : 'none';
+      if (matchRole && matchSearch) visible++;
+    });
+    noRes.style.display = visible === 0 ? '' : 'none';
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeRole = tab.dataset.role;
+      applyFilters();
+    });
+  });
+
+  search.addEventListener('input', applyFilters);
+})();
+</script>
+
+<style>
+/* ── Layout ── */
+.au-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.au-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--crm-fg);
+  margin: 0;
+}
+.au-sub {
+  font-size: 0.82rem;
+  color: var(--crm-muted-fg);
+  margin: 0.1rem 0 0;
+}
+
+/* ── Toolbar ── */
+.au-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.au-role-tabs {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.au-tab {
+  background: none;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--crm-muted-fg);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.au-tab:hover { background: var(--crm-muted); color: var(--crm-fg); }
+.au-tab.active { background: var(--crm-fg); color: var(--crm-bg); border-color: var(--crm-fg); }
+.au-tab-count {
+  font-size: 0.72rem;
+  opacity: 0.7;
+  margin-left: 0.2rem;
+}
+.au-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--crm-muted);
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--crm-muted-fg);
+}
+.au-search-wrap input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.82rem;
+  color: var(--crm-fg);
+  width: 180px;
+}
+.au-search-wrap input::placeholder { color: var(--crm-muted-fg); }
+
+/* ── Card grid ── */
+.au-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.au-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--crm-card-bg, #fff);
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.au-card:hover {
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  border-color: var(--crm-accent);
+}
+.au-card-inactive { opacity: 0.5; }
+
+/* ── Avatar ── */
+.au-avatar-wrap { position: relative; flex-shrink: 0; }
+.au-avatar {
+  width: 44px; height: 44px;
+  border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 0.82rem; font-weight: 700;
+  font-size: 1rem; font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+.au-avatar-Admin   { background: #1f2a44; }
+.au-avatar-Manager { background: oklch(0.52 0.18 250); }
+.au-avatar-Staff   { background: oklch(0.55 0.14 290); }
+.au-status-dot {
+  position: absolute;
+  bottom: -2px; right: -2px;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--crm-bg, #fff);
+}
+.au-dot-active   { background: var(--crm-success, #22c55e); }
+.au-dot-inactive { background: var(--crm-muted-fg, #94a3b8); }
+
+/* ── Info ── */
+.au-info { flex: 1; min-width: 0; }
+.au-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--crm-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.au-job-title {
+  font-size: 0.76rem;
+  color: var(--crm-muted-fg);
+  margin-top: 0.05rem;
+}
+.au-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+.au-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.au-badge-Admin   { background: #1f2a44; color: #fff; }
+.au-badge-Manager { background: oklch(0.52 0.18 250); color: #fff; }
+.au-badge-Staff   { background: var(--crm-muted); color: var(--crm-muted-fg); border: 1px solid var(--crm-border); }
+.au-meta-link {
+  font-size: 0.76rem;
+  color: var(--crm-muted-fg);
+  text-decoration: none;
+  display: flex; align-items: center; gap: 0.25rem;
+}
+.au-meta-link:hover { color: var(--crm-accent); }
+
+/* ── Actions ── */
+.au-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   flex-shrink: 0;
 }
-.user-inactive .user-avatar { background: var(--crm-muted); color: var(--crm-muted-fg); }
-.user-name { font-weight: 600; color: var(--crm-fg); }
-.user-title-sub { font-size: 0.75rem; color: var(--crm-muted-fg); }
-.user-email { color: var(--crm-muted-fg); font-size: 0.82rem; }
-.user-phone { color: var(--crm-muted-fg); font-size: 0.82rem; }
-.user-inactive { opacity: 0.55; }
-
-.user-badge {
-  display: inline-block;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+.au-action-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-muted);
+  color: var(--crm-muted-fg);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.12s;
 }
-.user-badge-Admin   { background: #2d2d2d; color: #fff; }
-.user-badge-Manager { background: oklch(0.55 0.18 250); color: #fff; }
-.user-badge-Staff   { background: var(--crm-muted); color: var(--crm-muted-fg); border: 1px solid var(--crm-border); }
+.au-action-btn:hover { background: var(--crm-accent); color: #fff; border-color: var(--crm-accent); }
+.au-action-warn:hover { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+.au-action-ok:hover   { background: var(--crm-success, #22c55e); border-color: var(--crm-success, #22c55e); color: #fff; }
 
-.user-status-active   { color: var(--crm-success); font-size: 0.78rem; font-weight: 600; }
-.user-status-inactive { color: var(--crm-muted-fg); font-size: 0.78rem; }
+/* ── Empty ── */
+.au-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--crm-muted-fg);
+  font-size: 0.88rem;
+}
+.au-empty a { color: var(--crm-accent); text-decoration: none; }
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .au-card { flex-wrap: wrap; }
+  .au-actions { width: 100%; justify-content: flex-end; }
+  .au-search-wrap input { width: 120px; }
+}
 </style>

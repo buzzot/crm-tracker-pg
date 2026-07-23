@@ -1,0 +1,351 @@
+<%
+  const u = profileUser;
+  const initial = (u.name || u.email || '?').trim().charAt(0).toUpperCase();
+  const color = u.avatarColor || 'indigo';
+
+  const AVATAR_COLORS = [
+    { id:'indigo',  label:'Indigo',  bg:'oklch(0.50 0.20 270)' },
+    { id:'blue',    label:'Blue',    bg:'oklch(0.52 0.18 250)' },
+    { id:'teal',    label:'Teal',    bg:'oklch(0.52 0.14 195)' },
+    { id:'emerald', label:'Emerald', bg:'oklch(0.52 0.16 160)' },
+    { id:'amber',   label:'Amber',   bg:'oklch(0.62 0.18 72)'  },
+    { id:'rose',    label:'Rose',    bg:'oklch(0.52 0.20 10)'  },
+    { id:'slate',   label:'Slate',   bg:'oklch(0.35 0.02 265)' },
+  ];
+  const colorMap = {};
+  AVATAR_COLORS.forEach(c => colorMap[c.id] = c.bg);
+  const avatarBg = colorMap[color] || colorMap['indigo'];
+%>
+
+<div class="pnew-page" style="max-width:620px; margin:0 auto;">
+
+  <% if (mustChange) { %>
+  <div class="prof-must-change-banner">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <div>
+      <strong>Password change required.</strong>
+      Please set a personal password before continuing.
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Hero -->
+  <div class="prof-hero">
+    <div class="prof-avatar-wrap">
+      <div class="prof-avatar" id="profAvatar" style="background:<%= avatarBg %>">
+        <% if (u.avatarUrl) { %>
+          <img src="<%= u.avatarUrl.startsWith('http') ? u.avatarUrl : '/media/' + u.avatarUrl %>"
+               alt="Avatar" onerror="this.style.display='none'">
+        <% } else { %>
+          <span id="profInitial"><%= initial %></span>
+        <% } %>
+      </div>
+      <!-- Upload avatar button -->
+      <form action="/profile/avatar" method="POST" enctype="multipart/form-data" id="avatarForm">
+        <label class="prof-avatar-upload" title="Upload photo">
+          <i class="bi bi-camera"></i>
+          <input type="file" name="avatar" accept="image/*" style="display:none" onchange="this.form.submit()">
+        </label>
+      </form>
+    </div>
+
+    <div class="prof-hero-info">
+      <h1 class="pnew-hero"><%= u.name || u.email %></h1>
+      <% if (u.title) { %><p class="pnew-hero-sub"><%= u.title %></p><% } %>
+      <span class="au-badge au-badge-<%= u.role %>"><%= u.role %></span>
+    </div>
+  </div>
+
+  <% if (flash) { %>
+    <div class="alert alert-<%= flash.type === 'error' ? 'danger' : 'success' %> alert-dismissible fade show mb-3" role="alert">
+      <%= flash.message %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+
+  <!-- Profile form -->
+  <form action="/profile" method="POST" class="pnew-card mb-3">
+    <div class="pnew-card-header-row" style="margin-bottom:1rem;">
+      <div class="pnew-card-header-text">
+        <span class="pnew-card-icon"><i class="bi bi-person-vcard"></i></span>
+        <h2 class="pnew-card-title">Personal Info</h2>
+      </div>
+    </div>
+
+    <div class="pnew-classification-row mb-3">
+      <div>
+        <label class="pnew-field-label">Full name</label>
+        <input type="text" name="name" class="pnew-input" value="<%= u.name || '' %>" placeholder="Your name" required>
+      </div>
+      <div>
+        <label class="pnew-field-label">Title</label>
+        <select name="title" class="pnew-input">
+          <option value="">— none —</option>
+          <% Object.values(ROLE_TITLES).flat().forEach(t => { %>
+            <option value="<%= t %>" <%= u.title === t ? 'selected' : '' %>><%= t %></option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="pnew-field-label">Phone</label>
+      <input type="text" name="phone" class="pnew-input" value="<%= u.phone || '' %>" placeholder="+1 (555) 000-0000">
+    </div>
+
+    <!-- Avatar color picker -->
+    <div class="mb-3">
+      <label class="pnew-field-label">Avatar color</label>
+      <div class="prof-color-picker" id="colorPicker">
+        <% AVATAR_COLORS.forEach(c => { %>
+          <label class="prof-color-swatch <%= c.id === color ? 'selected' : '' %>" title="<%= c.label %>"
+                 style="background:<%= c.bg %>">
+            <input type="radio" name="avatarColor" value="<%= c.id %>" style="display:none;"
+                   <%= c.id === color ? 'checked' : '' %> onchange="onColorChange('<%= c.bg %>')">
+            <% if (c.id === color) { %><i class="bi bi-check-lg"></i><% } %>
+          </label>
+        <% }) %>
+      </div>
+    </div>
+
+    <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg me-1"></i>Save Profile</button>
+  </form>
+
+  <!-- Password change -->
+  <form action="/profile/password" method="POST" class="pnew-card mb-3" id="pwdForm">
+    <div class="pnew-card-header-row" style="margin-bottom:1rem;">
+      <div class="pnew-card-header-text">
+        <span class="pnew-card-icon"><i class="bi bi-lock"></i></span>
+        <h2 class="pnew-card-title">Change Password</h2>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="pnew-field-label">Current password</label>
+      <div style="position:relative;">
+        <input type="password" name="currentPassword" id="curPwd" class="pnew-input" style="padding-right:2.5rem;"
+               placeholder="Your current password" required autocomplete="current-password">
+        <button type="button" class="prof-eye-btn" onclick="toggleEye('curPwd','curEye')">
+          <i class="bi bi-eye" id="curEye"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="mb-2">
+      <label class="pnew-field-label">New password</label>
+      <div style="position:relative;">
+        <input type="password" name="newPassword" id="newPwd" class="pnew-input" style="padding-right:2.5rem;"
+               placeholder="Choose a strong password" required autocomplete="new-password"
+               oninput="onPwdInput(this.value)">
+        <button type="button" class="prof-eye-btn" onclick="toggleEye('newPwd','newEye')">
+          <i class="bi bi-eye" id="newEye"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Strength meter -->
+    <div class="prof-strength-wrap" id="strengthWrap" style="display:none;">
+      <div class="prof-strength-bar">
+        <div class="prof-strength-fill" id="strengthFill"></div>
+      </div>
+      <span class="prof-strength-label" id="strengthLabel"></span>
+      <ul class="prof-rules" id="pwdRules">
+        <li id="rule-len"><i class="bi bi-circle"></i> 8+ characters</li>
+        <li id="rule-upper"><i class="bi bi-circle"></i> Uppercase (A–Z)</li>
+        <li id="rule-lower"><i class="bi bi-circle"></i> Lowercase (a–z)</li>
+        <li id="rule-num"><i class="bi bi-circle"></i> Number (0–9)</li>
+        <li id="rule-sym"><i class="bi bi-circle"></i> Special character</li>
+      </ul>
+    </div>
+
+    <div class="mb-3">
+      <label class="pnew-field-label">Confirm new password</label>
+      <div style="position:relative;">
+        <input type="password" name="confirmPassword" id="confPwd" class="pnew-input" style="padding-right:2.5rem;"
+               placeholder="Repeat new password" required autocomplete="new-password"
+               oninput="onConfirmInput(this.value)">
+        <button type="button" class="prof-eye-btn" onclick="toggleEye('confPwd','confEye')">
+          <i class="bi bi-eye" id="confEye"></i>
+        </button>
+      </div>
+      <div class="prof-match-hint" id="matchHint"></div>
+    </div>
+
+    <button type="submit" class="pnew-btn-save" id="pwdSubmit">
+      <i class="bi bi-shield-lock me-1"></i>Change Password
+    </button>
+  </form>
+</div>
+
+<script>
+// ── Color picker ──────────────────────────────────────────────────────────────
+function onColorChange(bg) {
+  document.getElementById('profAvatar').style.background = bg;
+  document.querySelectorAll('.prof-color-swatch').forEach(s => s.classList.remove('selected'));
+  event.target.closest('.prof-color-swatch').classList.add('selected');
+}
+
+// ── Password strength ─────────────────────────────────────────────────────────
+const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Strong'];
+const STRENGTH_COLORS = ['', '#ef4444', '#f59e0b', '#3b82f6', '#22c55e', '#22c55e'];
+
+function evalRules(pwd) {
+  return {
+    len:   pwd.length >= 8,
+    upper: /[A-Z]/.test(pwd),
+    lower: /[a-z]/.test(pwd),
+    num:   /[0-9]/.test(pwd),
+    sym:   /[^A-Za-z0-9]/.test(pwd),
+  };
+}
+
+function onPwdInput(pwd) {
+  const wrap = document.getElementById('strengthWrap');
+  wrap.style.display = pwd ? '' : 'none';
+  if (!pwd) return;
+
+  const r = evalRules(pwd);
+  const passed = Object.values(r).filter(Boolean).length;
+
+  // Bar
+  const fill  = document.getElementById('strengthFill');
+  const label = document.getElementById('strengthLabel');
+  fill.style.width = (passed / 5 * 100) + '%';
+  fill.style.background = STRENGTH_COLORS[passed];
+  label.textContent = STRENGTH_LABELS[passed];
+  label.style.color = STRENGTH_COLORS[passed];
+
+  // Rule list
+  const ruleMap = { len:'rule-len', upper:'rule-upper', lower:'rule-lower', num:'rule-num', sym:'rule-sym' };
+  Object.entries(ruleMap).forEach(([key, id]) => {
+    const li = document.getElementById(id);
+    const icon = li.querySelector('i');
+    if (r[key]) {
+      icon.className = 'bi bi-check-circle-fill';
+      li.style.color = '#22c55e';
+    } else {
+      icon.className = 'bi bi-circle';
+      li.style.color = '';
+    }
+  });
+
+  // Re-check confirm
+  onConfirmInput(document.getElementById('confPwd').value);
+}
+
+function onConfirmInput(val) {
+  const newPwd = document.getElementById('newPwd').value;
+  const hint = document.getElementById('matchHint');
+  if (!val) { hint.textContent = ''; return; }
+  if (val === newPwd) {
+    hint.textContent = '✓ Passwords match';
+    hint.style.color = '#22c55e';
+  } else {
+    hint.textContent = '✗ Does not match';
+    hint.style.color = '#ef4444';
+  }
+}
+
+function toggleEye(inputId, iconId) {
+  const inp  = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
+  if (inp.type === 'password') { inp.type = 'text'; icon.className = 'bi bi-eye-slash'; }
+  else { inp.type = 'password'; icon.className = 'bi bi-eye'; }
+}
+
+// Auto-focus password section if must_change=1
+<% if (mustChange) { %>
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('curPwd')?.focus();
+  document.getElementById('pwdForm')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+<% } %>
+</script>
+
+<style>
+/* ── Must-change banner ── */
+.prof-must-change-banner {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  background: oklch(0.97 0.05 75);
+  border: 1px solid oklch(0.80 0.10 75);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.88rem;
+  color: oklch(0.45 0.12 60);
+}
+.prof-must-change-banner i { font-size: 1.1rem; margin-top: 0.1rem; flex-shrink:0; }
+
+/* ── Hero ── */
+.prof-hero {
+  display: flex; align-items: center; gap: 1.25rem;
+  margin-bottom: 1.75rem;
+}
+.prof-avatar-wrap { position: relative; flex-shrink: 0; }
+.prof-avatar {
+  width: 72px; height: 72px; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.75rem; font-weight: 700; color: #fff;
+  overflow: hidden;
+  transition: background 0.25s;
+}
+.prof-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.prof-avatar-upload {
+  position: absolute; bottom: -4px; right: -4px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--crm-accent);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 0.7rem; cursor: pointer;
+  border: 2px solid var(--crm-bg, #fff);
+  transition: opacity 0.15s;
+}
+.prof-avatar-upload:hover { opacity: 0.85; }
+
+/* ── Color picker ── */
+.prof-color-picker { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.prof-color-swatch {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #fff; font-size: 0.85rem;
+  border: 3px solid transparent;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.prof-color-swatch:hover { transform: scale(1.15); }
+.prof-color-swatch.selected { border-color: var(--crm-fg); }
+
+/* ── Strength meter ── */
+.prof-strength-wrap { margin-bottom: 1rem; }
+.prof-strength-bar {
+  height: 5px; border-radius: 999px;
+  background: var(--crm-border);
+  margin-bottom: 0.35rem;
+  overflow: hidden;
+}
+.prof-strength-fill {
+  height: 100%; border-radius: 999px;
+  width: 0; transition: width 0.3s, background 0.3s;
+}
+.prof-strength-label { font-size: 0.75rem; font-weight: 700; }
+.prof-rules {
+  list-style: none; padding: 0; margin: 0.5rem 0 0;
+  display: flex; flex-wrap: wrap; gap: 0.25rem 1rem;
+}
+.prof-rules li { font-size: 0.75rem; color: var(--crm-muted-fg); display: flex; align-items: center; gap: 0.3rem; }
+
+/* ── Match hint ── */
+.prof-match-hint { font-size: 0.75rem; margin-top: 0.3rem; min-height: 1em; }
+
+/* ── Eye toggle ── */
+.prof-eye-btn {
+  position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--crm-muted-fg);
+  cursor: pointer; padding: 0.2rem; font-size: 0.9rem;
+}
+.prof-eye-btn:hover { color: var(--crm-fg); }
+
+/* ── Badge reuse ── */
+.au-badge { display:inline-block; padding:0.15rem 0.5rem; border-radius:999px; font-size:0.68rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }
+.au-badge-Admin   { background:#1f2a44; color:#fff; }
+.au-badge-Manager { background:oklch(0.52 0.18 250); color:#fff; }
+.au-badge-Staff   { background:var(--crm-muted); color:var(--crm-muted-fg); border:1px solid var(--crm-border); }
+</style>

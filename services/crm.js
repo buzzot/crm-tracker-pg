@@ -91,21 +91,23 @@ const ALL_TITLES  = Object.values(ROLE_TITLES).flat();
 
 function mapUser(row) {
   return {
-    id:        row.id,
-    email:     row.email,
-    name:      row.name,
-    role:      row.role,
-    title:     row.title  || null,
-    phone:     row.phone  || null,
-    avatarUrl: row.avatar_url || null,
-    isActive:  row.is_active,
-    createdAt: row.created_at,
+    id:                 row.id,
+    email:              row.email,
+    name:               row.name,
+    role:               row.role,
+    title:              row.title  || null,
+    phone:              row.phone  || null,
+    avatarUrl:          row.avatar_url  || null,
+    avatarColor:        row.avatar_color || null,
+    isActive:           row.is_active,
+    mustChangePassword: row.must_change_password || false,
+    createdAt:          row.created_at,
   };
 }
 
 async function getUserById(id) {
   const r = await query(
-    'SELECT id, email, name, role, title, phone, avatar_url, is_active, created_at FROM users WHERE id=$1 AND is_active=true',
+    'SELECT id, email, name, role, title, phone, avatar_url, avatar_color, is_active, must_change_password, created_at FROM users WHERE id=$1',
     [id]
   );
   return r.rows[0] ? mapUser(r.rows[0]) : null;
@@ -124,18 +126,40 @@ async function getUserGroupIds(userId) {
 
 async function listTeamUsers() {
   const r = await query(
-    'SELECT id, email, name, role, title, phone, is_active, created_at FROM users ORDER BY name'
+    'SELECT id, email, name, role, title, phone, avatar_color, is_active, must_change_password, created_at FROM users ORDER BY name'
   );
   return r.rows.map(mapUser);
 }
 
 async function createUser({ email, name, role, title, phone, passwordHash }) {
   const r = await query(
-    `INSERT INTO users (email, name, role, title, phone, password_hash)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, email, name, role, title, phone, is_active, created_at`,
+    `INSERT INTO users (email, name, role, title, phone, password_hash, must_change_password)
+     VALUES ($1,$2,$3,$4,$5,$6,true) RETURNING id, email, name, role, title, phone, avatar_color, is_active, must_change_password, created_at`,
     [email, name, role || 'Staff', title || null, phone || null, passwordHash]
   );
   return mapUser(r.rows[0]);
+}
+
+async function updateUserProfile(id, { name, title, phone, avatarColor, avatarUrl }) {
+  if (avatarUrl !== undefined) {
+    await query(
+      `UPDATE users SET avatar_url=$2, updated_at=NOW() WHERE id=$1`,
+      [id, avatarUrl]
+    );
+  } else {
+    await query(
+      `UPDATE users SET name=COALESCE($2,name), title=$3, phone=$4, avatar_color=$5, updated_at=NOW() WHERE id=$1`,
+      [id, name || null, title || null, phone || null, avatarColor || null]
+    );
+  }
+  return getUserById(id);
+}
+
+async function updateUserPassword(id, passwordHash) {
+  await query(
+    `UPDATE users SET password_hash=$2, must_change_password=false, updated_at=NOW() WHERE id=$1`,
+    [id, passwordHash]
+  );
 }
 
 async function updateUser(id, { name, email, role, title, phone, isActive }) {
@@ -1260,6 +1284,8 @@ module.exports = {
   listTeamUsers,
   createUser,
   updateUser,
+  updateUserProfile,
+  updateUserPassword,
   assignUser,
   unassignUser,
   listAssignments,

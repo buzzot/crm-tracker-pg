@@ -29,7 +29,9 @@ router.post('/login', async (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
-      groupIds
+      groupIds,
+      mustChangePassword: user.must_change_password || false,
+      avatarColor: user.avatar_color || null,
     };
     res.redirect('/');
   } catch (err) {

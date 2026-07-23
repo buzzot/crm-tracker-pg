@@ -35,10 +35,21 @@
           <% } %>
         </ul>
         <% if (currentUser) { %>
-        <form action="/logout" method="POST" class="d-flex align-items-center gap-2">
-          <span class="user-chip"><span class="user-avatar"><%= (currentUser.name || currentUser.email || '?').charAt(0).toUpperCase() %></span><span class="d-none d-sm-inline"><%= currentUser.name || currentUser.email %></span><span class="badge text-bg-light text-dark ms-1"><%= currentUser.role %></span></span>
-          <button class="btn btn-sm btn-outline-secondary" type="submit">Log out</button>
-        </form>
+        <div class="d-flex align-items-center gap-2">
+          <a href="/profile" class="user-chip user-chip-link" title="My profile">
+            <%
+              const _navColor = currentUser.avatarColor;
+              const _navColorMap = { indigo:'oklch(0.50 0.20 270)', blue:'oklch(0.52 0.18 250)', teal:'oklch(0.52 0.14 195)', emerald:'oklch(0.52 0.16 160)', amber:'oklch(0.62 0.18 72)', rose:'oklch(0.52 0.20 10)', slate:'oklch(0.35 0.02 265)' };
+              const _navBg = _navColorMap[_navColor] || null;
+            %>
+            <span class="user-avatar" <% if (_navBg) { %>style="background:<%- _navBg %>"<% } %>><%= (currentUser.name || currentUser.email || '?').charAt(0).toUpperCase() %></span>
+            <span class="d-none d-sm-inline"><%= currentUser.name || currentUser.email %></span>
+            <span class="badge text-bg-light text-dark ms-1"><%= currentUser.role %></span>
+          </a>
+          <form action="/logout" method="POST" style="margin:0;">
+            <button class="btn btn-sm btn-outline-secondary" type="submit">Log out</button>
+          </form>
+        </div>
         <% } %>
       </div>
     </div>
