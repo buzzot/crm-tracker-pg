@@ -9,7 +9,6 @@
   function categoryColor(cat) { return CATEGORY_COLORS[normalizeCategory(cat)] || 'cat-gray'; }
 
   const photoUrl = (product.image && product.image.length) ? product.image[0].url : null;
-
   // Spec grid fills left-to-right, two per row. Phase/Input Voltage lead,
   // then Max Input Power/Horse Power and Max Input Current/Max Output
   // Current, with Board Size pinned to the bottom-right cell (a filler is
@@ -169,9 +168,10 @@
         <form action="/products/<%= product.id %>/image" method="POST" enctype="multipart/form-data" class="mt-3">
           <label class="pnew-btn-cancel" style="cursor: pointer; justify-content: center; width: 100%;">
             <i class="bi bi-camera"></i>&nbsp;<%= photoUrl ? 'Change photo' : 'Add photo' %>
-            <input type="file" name="image" accept="image/*" required style="display: none;" onchange="this.form.submit();">
+            <input type="file" name="image" accept="image/*" style="display: none;" onchange="this.form.submit();">
           </label>
         </form>
+        <!-- DEBUG img: <%- photoUrl || '(none)' %> -->
       </div>
 
       <div class="pnew-card">

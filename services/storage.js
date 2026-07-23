@@ -9,7 +9,7 @@
  *   SUPABASE_BUCKET       – storage bucket name (default: crm-files)
  */
 
-const SUPABASE_URL  = process.env.SUPABASE_URL;
+const SUPABASE_URL  = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const SERVICE_KEY   = process.env.SUPABASE_SERVICE_KEY;
 const BUCKET        = process.env.SUPABASE_BUCKET || 'crm-files';
 

@@ -6,13 +6,14 @@ const storage = require('./storage');
 // The crm-files bucket is public — no proxy or signing needed.
 function toMediaUrl(urlOrPath) {
   if (!urlOrPath) return null;
-  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
   const BUCKET = process.env.SUPABASE_BUCKET || 'crm-files';
+  if (!SUPABASE_URL) return urlOrPath;
   // Already a full URL for this Supabase project — return as-is
-  if (SUPABASE_URL && urlOrPath.startsWith(SUPABASE_URL)) return urlOrPath;
+  if (urlOrPath.startsWith(SUPABASE_URL)) return urlOrPath;
   // Bare storage path (e.g. "companies/uuid/file.png") → direct public URL
-  if (!urlOrPath.startsWith('http') && SUPABASE_URL) {
-    const path = urlOrPath.startsWith('/') ? urlOrPath.slice(1) : urlOrPath;
+  if (!urlOrPath.startsWith('http')) {
+    const path = urlOrPath.replace(/^\/+/, '');
     return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
   }
   // External or unknown URL — return as-is (likely expired Airtable CDN)
