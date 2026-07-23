@@ -204,4 +204,19 @@
       </div>
     </div>
   </div>
+
+  <div style="margin-top:2rem; padding-top:1rem; border-top:1px solid var(--crm-border); display:flex; flex-wrap:wrap; gap:1.5rem;">
+    <% if (product.createdAt) { %>
+      <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
+        Created<% if (product.createdByName) { %> by <strong><%= product.createdByName %></strong><% } %>
+        &nbsp;·&nbsp;<%= new Date(product.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
+      </span>
+    <% } %>
+    <% if (product.updatedAt && product.updatedByName) { %>
+      <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
+        Last edited by <strong><%= product.updatedByName %></strong>
+        &nbsp;·&nbsp;<%= new Date(product.updatedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
+      </span>
+    <% } %>
+  </div>
 </div>

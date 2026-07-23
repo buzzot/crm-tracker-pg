@@ -114,7 +114,7 @@ router.get('/api/project-activities/:id/email-preview', async (req, res) => {
 router.post('/api/products', async (req, res) => {
   try {
     const { name, category } = req.body;
-    const product = await crm.createProduct({ name, category });
+    const product = await crm.createProduct({ name, category, createdById: req.session.user?.id });
     res.json({ ok: true, product });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });

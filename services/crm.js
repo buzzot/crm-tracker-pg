@@ -958,25 +958,30 @@ async function listProducts() {
 
 async function getProduct(id) {
   const r = await query(
-    `SELECT pr.*, COALESCE(
-       json_agg(DISTINCT jsonb_build_object('id', p.id, 'name', p.name))
-       FILTER (WHERE p.id IS NOT NULL), '[]'
-     ) AS projects_linked
+    `SELECT pr.*,
+       uc.name AS created_by_name,
+       uu.name AS updated_by_name,
+       COALESCE(
+         json_agg(DISTINCT jsonb_build_object('id', p.id, 'name', p.name))
+         FILTER (WHERE p.id IS NOT NULL), '[]'
+       ) AS projects_linked
      FROM products pr
+     LEFT JOIN users uc ON uc.id = pr.created_by
+     LEFT JOIN users uu ON uu.id = pr.updated_by
      LEFT JOIN product_projects pp ON pp.product_id = pr.id
      LEFT JOIN projects p ON p.id = pp.project_id
      WHERE pr.id=$1
-     GROUP BY pr.id`,
+     GROUP BY pr.id, uc.name, uu.name`,
     [id]
   );
   return r.rows[0] ? mapProduct(r.rows[0]) : null;
 }
 
-async function createProduct({ name, notes, category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent }) {
+async function createProduct({ name, notes, category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent, createdById }) {
   const r = await query(
-    `INSERT INTO products (name, notes, category, phase, input_voltage, board_size, horse_power, max_input_power, max_input_current, max_output_current)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-    [name, notes, category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent]
+    `INSERT INTO products (name, notes, category, phase, input_voltage, board_size, horse_power, max_input_power, max_input_current, max_output_current, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+    [name, notes, category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent, createdById || null]
   );
   return getProduct(r.rows[0].id);
 }
@@ -990,13 +995,14 @@ async function getProductDetail(id) {
   return { ...product, comments };
 }
 
-async function updateProduct(id, fields) {
+async function updateProduct(id, fields, updatedById) {
   const { name, notes, category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent } = fields;
   await query(
     `UPDATE products SET name=COALESCE($2,name), notes=$3, category=$4, phase=$5,
        input_voltage=$6, board_size=$7, horse_power=$8, max_input_power=$9,
-       max_input_current=$10, max_output_current=$11, updated_at=NOW() WHERE id=$1`,
-    [id, name, notes, category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent]
+       max_input_current=$10, max_output_current=$11,
+       updated_by=$12, updated_at=NOW() WHERE id=$1`,
+    [id, name, notes, category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent, updatedById || null]
   );
   return getProduct(id);
 }
@@ -1019,7 +1025,10 @@ function mapProduct(row) {
     projects,
     projectIds: projects.map(p => p.id),
     projectNames: projects.map(p => p.name),
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    createdByName: row.created_by_name || null,
+    updatedAt: row.updated_at,
+    updatedByName: row.updated_by_name || null,
   };
 }
 

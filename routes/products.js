@@ -35,7 +35,7 @@ router.get('/products/:id', async (req, res, next) => {
 router.post('/products/:id/details', async (req, res, next) => {
   try {
     const { category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent, notes } = req.body;
-    await crm.updateProduct(req.params.id, { category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent, notes });
+    await crm.updateProduct(req.params.id, { category, phase, inputVoltage, boardSize, horsePower, maxInputPower, maxInputCurrent, maxOutputCurrent, notes }, req.session.user.id);
     res.redirect(`/products/${req.params.id}`);
   } catch (err) {
     try {
