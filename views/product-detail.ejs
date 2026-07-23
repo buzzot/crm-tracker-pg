@@ -9,9 +9,6 @@
   function categoryColor(cat) { return CATEGORY_COLORS[normalizeCategory(cat)] || 'cat-gray'; }
 
   const photoUrl = (product.image && product.image.length) ? product.image[0].url : null;
-  /* DEBUG — remove after diagnosing */
-  const _rawImageUrl = product.image && product.image[0] ? product.image[0].url : '(none)';
-%><!-- DEBUG image_url: <%- _rawImageUrl %> --><%
 
   // Spec grid fills left-to-right, two per row. Phase/Input Voltage lead,
   // then Max Input Power/Horse Power and Max Input Current/Max Output
