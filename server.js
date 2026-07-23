@@ -111,6 +111,12 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
+const { ensureBucket } = require('./services/storage');
+
 app.listen(PORT, () => {
   console.log(`CRM tracker running at http://localhost:${PORT}`);
+  // Ensure the Supabase Storage bucket exists (safe if already created).
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    ensureBucket().catch(err => console.error('[storage] ensureBucket failed:', err.message));
+  }
 });
