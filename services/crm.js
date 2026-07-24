@@ -1067,13 +1067,21 @@ async function addComment({ entityType, entityId, content, authorId, authorName,
   return r.rows[0];
 }
 
-async function listAllComments(limit = 10) {
-  const r = await query(
-    `SELECT cm.*, u.name AS user_name FROM comments cm
-     LEFT JOIN users u ON u.id = cm.author_id
-     ORDER BY cm.created_at DESC LIMIT $1`,
-    [limit]
-  );
+async function listAllComments(limit = 10, userId = null) {
+  const r = userId
+    ? await query(
+        `SELECT cm.*, u.name AS user_name FROM comments cm
+         LEFT JOIN users u ON u.id = cm.author_id
+         WHERE cm.author_id = $2
+         ORDER BY cm.created_at DESC LIMIT $1`,
+        [limit, userId]
+      )
+    : await query(
+        `SELECT cm.*, u.name AS user_name FROM comments cm
+         LEFT JOIN users u ON u.id = cm.author_id
+         ORDER BY cm.created_at DESC LIMIT $1`,
+        [limit]
+      );
   return r.rows.map(mapComment);
 }
 
