@@ -39,7 +39,8 @@
 
   const currentUserId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
   const currentUserRole = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.role : 'Staff';
-  const canAssign = (currentUserRole === 'Admin' || currentUserRole === 'Manager' || task.ownerId === currentUserId);
+  const isAssigned = (task.assigneeIds || []).includes(currentUserId);
+  const canAssign = (currentUserRole === 'Admin' || currentUserRole === 'Manager' || task.ownerId === currentUserId || isAssigned);
 %>
 
 <div class="pnew-page">
