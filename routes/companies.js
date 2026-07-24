@@ -134,7 +134,8 @@ router.get('/companies/:id/contacts/new', async (req, res, next) => {
 router.post('/companies/:id/contacts', async (req, res, next) => {
   try {
     const { firstName, lastName, title, phone, email, status, notes } = req.body;
-    await crm.createContact({ firstName, lastName, companyId: req.params.id, title, phone, email, status, notes });
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || null;
+    await crm.createContact({ fullName, companyId: req.params.id, title, phone, email, status, notes });
     res.redirect(`/companies/${req.params.id}`);
   } catch (err) {
     try {
