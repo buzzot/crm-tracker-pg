@@ -30,8 +30,8 @@ router.get('/', async (req, res, next) => {
     // Sales only sees what they own; Admin/Manager see everything (for pipeline/stats).
     const scoped = (records) => (role === 'Sales' ? crm.scopeToOwner(records, email) : records);
     const companies = scoped(allCompanies);
-    // Dashboard activity feed is always scoped to the current user only
-    const activities = allActivities.filter(a => a.ownerId === user.id);
+    // Activities already filtered by listActivities(user) based on role
+    const activities = scoped(allActivities);
     const board = fullBoard.map((b) => ({ ...b, deals: scoped(b.deals) }))
       .map((b) => ({ ...b, total: b.deals.reduce((sum, d) => sum + (d.amount || 0), 0) }));
 
