@@ -5,6 +5,7 @@ const bcrypt   = require('bcrypt');
 const crm      = require('../services/crm');
 const db       = require('../config/db');
 const { sendInviteEmail } = require('../services/email');
+const { createOnboardingTasks } = require('../services/onboarding');
 
 // GET /admin — users list
 router.get('/', async (req, res, next) => {
@@ -45,8 +46,17 @@ router.post('/users/new', async (req, res, next) => {
         flash: { type: 'error', message: 'Name, email and password are required.' },
       });
     }
+    const { assignOnboarding } = req.body;
     const passwordHash = await bcrypt.hash(password, 10);
-    await crm.createUser({ email, name, role, title, phone, passwordHash, mustChangePassword: true });
+    const newUser = await crm.createUser({ email, name, role, title, phone, passwordHash, mustChangePassword: true });
+
+    // Create onboarding tasks if requested
+    if (assignOnboarding === '1' && newUser && newUser.id) {
+      const adminId = req.session.user?.id;
+      createOnboardingTasks(crm, adminId, newUser.id).catch(err => {
+        console.error('[onboarding] Failed to create tasks for', email, err.message);
+      });
+    }
 
     // Send invitation email (non-blocking — don't fail user creation if email fails)
     sendInviteEmail({ to: email, name, tempPassword: password }).catch(err => {

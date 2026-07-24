@@ -123,6 +123,35 @@
       </div>
     </div>
 
+    <!-- Onboarding tasks (new user only) -->
+    <% if (!isEdit) { %>
+    <div class="pnew-card mb-3">
+      <div class="pnew-card-header-row" style="margin-bottom:0.75rem;">
+        <div class="pnew-card-header-text">
+          <span class="pnew-card-icon"><i class="bi bi-journal-check"></i></span>
+          <h2 class="pnew-card-title">Onboarding Tasks</h2>
+        </div>
+        <label class="aue-switch">
+          <input type="checkbox" name="assignOnboarding" value="1" id="onboardingCheck" checked>
+          <span class="aue-switch-track"></span>
+        </label>
+      </div>
+      <p class="pnew-card-sub mb-2">Assign 10 guided tasks that walk the user through the CRM — dashboard, pipeline, companies, projects, tasks, activities, and permissions.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.4rem;" id="onboardingTaskList">
+        <span class="onb-chip">👋 Change password</span>
+        <span class="onb-chip">🏠 Dashboard</span>
+        <span class="onb-chip">🏢 Add a company</span>
+        <span class="onb-chip">👤 Add a contact</span>
+        <span class="onb-chip">💰 Create a deal</span>
+        <span class="onb-chip">📁 Start a project</span>
+        <span class="onb-chip">✅ Manage tasks</span>
+        <span class="onb-chip">📞 Log an activity</span>
+        <span class="onb-chip">🔍 Roles &amp; permissions</span>
+        <span class="onb-chip">📦 Product catalog</span>
+      </div>
+    </div>
+    <% } %>
+
     <!-- Status (edit only) -->
     <% if (isEdit) { %>
     <div class="pnew-card mb-3">
@@ -258,6 +287,18 @@ onRoleChange(document.getElementById('roleSelect').value);
   font-size: 0.95rem; padding: 0.2rem;
 }
 .aue-pwd-eye:hover { color: var(--crm-fg); }
+
+/* Onboarding task chips */
+.onb-chip {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--crm-muted);
+  border: 1px solid var(--crm-border);
+  font-size: 0.72rem;
+  color: var(--crm-muted-fg);
+  white-space: nowrap;
+}
 
 /* Toggle switch */
 .aue-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
