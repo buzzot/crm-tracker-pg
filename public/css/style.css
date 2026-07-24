@@ -161,6 +161,24 @@ body {
   color: var(--crm-accent);
 }
 
+/* Task count badge on nav */
+.nav-task-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  margin-left: 5px;
+  border-radius: 999px;
+  background: var(--crm-accent);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+}
+
 .user-chip {
   display: inline-flex;
   align-items: center;

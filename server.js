@@ -16,6 +16,7 @@ if (isProd && (!sessionSecret || sessionSecret === 'change-this-to-a-long-random
 }
 
 const { requireAuth, requireAdmin, requirePasswordChange } = require('./middleware/auth');
+const crm = require('./services/crm');
 const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const pipelineRoutes = require('./routes/pipeline');
@@ -85,6 +86,23 @@ app.use(webhookRoutes);
 // Media proxy — requires login, serves private Supabase Storage files
 app.use(requireAuth);
 app.use(requirePasswordChange);
+
+// Inject open-task count into every view (shows badge on Tasks nav item)
+app.use(async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (user) {
+      const tasks = await crm.listTasks({ user });
+      res.locals.openTaskCount = tasks.filter(t => t.status !== 'Completed').length;
+    } else {
+      res.locals.openTaskCount = 0;
+    }
+  } catch (_) {
+    res.locals.openTaskCount = 0;
+  }
+  next();
+});
+
 app.use(mediaRoutes);
 app.use(profileRoutes);
 
