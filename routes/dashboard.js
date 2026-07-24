@@ -24,7 +24,7 @@ router.get('/', async (req, res, next) => {
       crm.listActivities(user),
       crm.listProjects(user),
       crm.listProjectActivities(user),
-      crm.listAllComments(10, user.id)
+      crm.listAllComments(10, role === 'Staff' ? user.id : null)
     ]);
 
     // Sales only sees what they own; Admin/Manager see everything (for pipeline/stats).
