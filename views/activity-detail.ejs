@@ -282,7 +282,7 @@
           <div class="pnew-summary-row"><span>Company</span><span><%= (activity.companyNames || []).join(', ') %></span></div>
         <% } %>
         <div class="pnew-summary-row"><span>Type</span><span><%= activity.type || '—' %></span></div>
-        <div class="pnew-summary-row"><span>Created</span><span><%= activity.date || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Created</span><span><%= activity.createdAt ? new Date(activity.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—' %></span></div>
         <div class="pnew-summary-row"><span>Status</span><span><%= activity.result || '—' %></span></div>
         <div class="pnew-summary-row"><span>Status date</span><span><%= activity.statusDate || '—' %></span></div>
         <% if (activity.dueDate) { %>
