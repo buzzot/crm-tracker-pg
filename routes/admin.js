@@ -4,6 +4,7 @@ const router   = express.Router();
 const bcrypt   = require('bcrypt');
 const crm      = require('../services/crm');
 const db       = require('../config/db');
+const { sendInviteEmail } = require('../services/email');
 
 // GET /admin — users list
 router.get('/', async (req, res, next) => {
@@ -45,8 +46,14 @@ router.post('/users/new', async (req, res, next) => {
       });
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    await crm.createUser({ email, name, role, title, phone, passwordHash });
-    req.session.flash = { type: 'success', message: `User "${name}" created.` };
+    await crm.createUser({ email, name, role, title, phone, passwordHash, mustChangePassword: true });
+
+    // Send invitation email (non-blocking — don't fail user creation if email fails)
+    sendInviteEmail({ to: email, name, tempPassword: password }).catch(err => {
+      console.error('[email] Failed to send invite to', email, err.message);
+    });
+
+    req.session.flash = { type: 'success', message: `User "${name}" created. Invitation email sent to ${email}.` };
     res.redirect('/admin');
   } catch (err) { next(err); }
 });
