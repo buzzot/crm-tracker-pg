@@ -34,7 +34,7 @@ router.post('/companies', async (req, res, next) => {
     const company = await crm.createCompany({
       name, industry, status, web, billingAddress, notes,
       ownerId: user ? user.id : null,
-      createdBy: user ? user.id : null,
+      createdById: user ? user.id : null,
     });
     res.redirect(`/companies/${company.id}`);
   } catch (err) {
@@ -65,7 +65,7 @@ router.get('/companies/:id/edit', async (req, res, next) => {
 router.post('/companies/:id', async (req, res, next) => {
   try {
     const { name, industry, status, web, billingAddress, notes } = req.body;
-    await crm.updateCompany(req.params.id, { name, industry, status, web, billingAddress, notes });
+    await crm.updateCompany(req.params.id, { name, industry, status, web, billingAddress, notes }, req.session.user?.id);
     res.redirect(`/companies/${req.params.id}`);
   } catch (err) {
     try {

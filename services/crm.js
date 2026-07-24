@@ -267,34 +267,37 @@ async function listCompanies(user) {
 
 async function getCompany(id) {
   const r = await query(
-    `SELECT c.*, u.name AS owner_name, g.name AS group_name
+    `SELECT c.*, u.name AS owner_name, g.name AS group_name,
+            uc.name AS created_by_name, uu.name AS updated_by_name
      FROM companies c
-     LEFT JOIN users u ON u.id = c.owner_id
-     LEFT JOIN groups g ON g.id = c.group_id
+     LEFT JOIN users u  ON u.id  = c.owner_id
+     LEFT JOIN groups g ON g.id  = c.group_id
+     LEFT JOIN users uc ON uc.id = c.created_by
+     LEFT JOIN users uu ON uu.id = c.updated_by
      WHERE c.id = $1`,
     [id]
   );
   return r.rows[0] ? mapCompany(r.rows[0]) : null;
 }
 
-async function createCompany({ name, industry, status, website, notes, billingAddress, ownerId, groupId }) {
+async function createCompany({ name, industry, status, website, notes, billingAddress, ownerId, groupId, createdById }) {
   const r = await query(
-    `INSERT INTO companies (name, industry, status, website, notes, billing_address, owner_id, group_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [name, industry, status, website, notes, billingAddress, ownerId, groupId]
+    `INSERT INTO companies (name, industry, status, website, notes, billing_address, owner_id, group_id, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [name, industry, status, website, notes, billingAddress, ownerId, groupId, createdById || null]
   );
   return getCompany(r.rows[0].id);
 }
 
-async function updateCompany(id, fields) {
+async function updateCompany(id, fields, updatedById) {
   const { name, industry, status, website, notes, billingAddress, groupId } = fields;
   await query(
     `UPDATE companies SET
        name=COALESCE($2,name), industry=$3, status=$4, website=$5,
        notes=$6, billing_address=$7, group_id=COALESCE($8,group_id),
-       updated_at=NOW()
+       updated_by=$9, updated_at=NOW()
      WHERE id=$1`,
-    [id, name, industry, status, website, notes, billingAddress, groupId]
+    [id, name, industry, status, website, notes, billingAddress, groupId, updatedById || null]
   );
   return getCompany(id);
 }
@@ -330,7 +333,10 @@ function mapCompany(row) {
     activityIds: [],
     dealIds: [],
     projectIds: [],
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    createdByName: row.created_by_name || null,
+    updatedAt: row.updated_at,
+    updatedByName: row.updated_by_name || null,
   };
 }
 

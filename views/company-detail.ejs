@@ -28,6 +28,23 @@
 
     <div class="pnew-main">
 
+      <% if (company.createdAt || (company.updatedAt && company.updatedByName)) { %>
+      <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1rem;">
+        <% if (company.createdAt) { %>
+          <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
+            Created<% if (company.createdByName) { %> by <strong><%= company.createdByName %></strong><% } %>
+            &nbsp;·&nbsp;<%= new Date(company.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
+          </span>
+        <% } %>
+        <% if (company.updatedAt && company.updatedByName) { %>
+          <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
+            Last edited by <strong><%= company.updatedByName %></strong>
+            &nbsp;·&nbsp;<%= new Date(company.updatedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
+          </span>
+        <% } %>
+      </div>
+      <% } %>
+
       <!-- Company Info -->
       <div class="pnew-summary-card">
         <div class="pnew-summary-title">Company info</div>
