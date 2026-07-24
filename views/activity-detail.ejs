@@ -48,8 +48,12 @@
       </p>
     </div>
     <div class="d-flex gap-2 align-items-center">
-      <a href="/activities/<%= activity.id %>" class="pnew-btn-cancel">Cancel</a>
-      <button type="button" class="pnew-btn-save" onclick="document.getElementById('activityForm').submit()"><i class="bi bi-check-lg"></i> Save changes</button>
+      <% if (editMode) { %>
+        <a href="/activities/<%= activity.id %>" class="pnew-btn-cancel">Cancel</a>
+        <button type="button" class="pnew-btn-save" onclick="document.getElementById('activityForm').submit()"><i class="bi bi-check-lg"></i> Save changes</button>
+      <% } else { %>
+        <a href="/activities/<%= activity.id %>?edit=1" class="pnew-btn-save"><i class="bi bi-pencil-square"></i> Edit</a>
+      <% } %>
     </div>
   </div>
 
@@ -61,10 +65,68 @@
 
     <div class="pnew-main">
 
-      <!-- Edit form -->
+      <!-- Details card: read-only view OR edit form -->
       <div class="pnew-card">
-        <h2 class="pnew-card-title">Details</h2>
-        <p class="pnew-card-sub">Edit and save changes to this activity.</p>
+        <% if (!editMode) { %>
+          <!-- Read-only view -->
+          <% if (activity.details) { %>
+            <div style="font-size:0.9rem; line-height:1.7; white-space:pre-wrap; color:var(--crm-fg);"><%= activity.details %></div>
+          <% } else { %>
+            <p class="pnew-card-sub mb-0">No details recorded.</p>
+          <% } %>
+
+          <% if (activity.attendeeIds && activity.attendeeIds.length) { %>
+            <div style="margin-top:1rem;">
+              <div class="pnew-field-label mb-1"><i class="bi bi-people"></i> Attendees</div>
+              <div class="d-flex flex-wrap gap-2">
+                <% activity.attendeeIds.forEach(id => {
+                     const p = persons.find(pp => pp.id === id); %>
+                  <span style="display:inline-flex; align-items:center; gap:0.4rem; background:var(--crm-muted); border:1px solid var(--crm-border); border-radius:999px; padding:0.2rem 0.65rem; font-size:0.8rem;">
+                    <span style="width:20px;height:20px;border-radius:50%;background:var(--crm-accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;"><%= ((p && p.fullName) || '?').trim().charAt(0).toUpperCase() %></span>
+                    <%= p ? p.fullName : id %>
+                  </span>
+                <% }) %>
+              </div>
+            </div>
+          <% } %>
+
+          <% if (activity.projectIds && activity.projectIds.length) { %>
+            <div style="margin-top:1rem;">
+              <div class="pnew-field-label mb-1"><i class="bi bi-kanban"></i> Related projects</div>
+              <div class="d-flex flex-wrap gap-2">
+                <% activity.projectIds.forEach(id => {
+                     const pr = projects.find(pp => pp.id === id); %>
+                  <a href="/projects/<%= id %>" style="display:inline-flex;align-items:center;gap:0.3rem;background:var(--crm-muted);border:1px solid var(--crm-border);border-radius:999px;padding:0.2rem 0.65rem;font-size:0.8rem;text-decoration:none;color:var(--crm-accent);">
+                    <i class="bi bi-folder2-open" style="font-size:0.7rem;"></i><%= pr ? pr.name : id %>
+                  </a>
+                <% }) %>
+              </div>
+            </div>
+          <% } %>
+
+          <% if (activity.files && activity.files.length) { %>
+            <div style="margin-top:1rem;">
+              <div class="pnew-field-label mb-1"><i class="bi bi-paperclip"></i> Attachments</div>
+              <div class="act-file-list">
+                <% activity.files.forEach(file => {
+                  const ext = (file.filename || '').split('.').pop().toLowerCase();
+                  const iconMap = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel', png: 'bi-file-earmark-image', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image' };
+                  const icon = iconMap[ext] || 'bi-file-earmark';
+                %>
+                  <a href="<%= file.url %>" target="_blank" rel="noopener" class="act-file-row">
+                    <i class="bi <%= icon %> act-file-icon"></i>
+                    <span class="act-file-name"><%= file.filename %></span>
+                    <i class="bi bi-box-arrow-up-right act-file-open"></i>
+                  </a>
+                <% }) %>
+              </div>
+            </div>
+          <% } %>
+
+        <% } else { %>
+          <!-- Edit form -->
+          <h2 class="pnew-card-title">Details</h2>
+          <p class="pnew-card-sub">Edit and save changes to this activity.</p>
 
         <form id="activityForm" action="/activities/<%= activity.id %>" method="POST">
 
@@ -195,6 +257,7 @@
           <button type="submit" class="act-drop-submit d-none" id="activityDropSubmit"><i class="bi bi-upload me-1"></i><span id="activityDropSubmitLabel">Upload</span></button>
         </form>
 
+        <% } %> <!-- end editMode -->
       </div>
 
       <!-- Comments — below the form -->

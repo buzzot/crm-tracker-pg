@@ -56,6 +56,7 @@ router.get('/activities/:id', async (req, res, next) => {
       projects,
       typeChoices: crm.schema.tables.activities.typeChoices,
       resultChoices: crm.schema.tables.activities.resultChoices,
+      editMode: req.query.edit === '1',
       error: null
     });
   } catch (err) {
@@ -92,6 +93,7 @@ router.post('/activities/:id', async (req, res, next) => {
         projects,
         typeChoices: crm.schema.tables.activities.typeChoices,
         resultChoices: crm.schema.tables.activities.resultChoices,
+        editMode: true,
         error: err.message
       });
     } catch (err2) {
