@@ -659,37 +659,40 @@ async function listProjects(user) {
 async function getProject(id) {
   const r = await query(
     `SELECT p.*, c.name AS company_name, u.name AS owner_name, g.name AS group_name,
+            uc.name AS created_by_name, uu.name AS updated_by_name,
             COALESCE(
               json_agg(DISTINCT jsonb_build_object('id', pr.id, 'name', pr.name))
               FILTER (WHERE pr.id IS NOT NULL), '[]'
             ) AS products_linked
      FROM projects p
-     LEFT JOIN companies c ON c.id = p.company_id
-     LEFT JOIN users u ON u.id = p.owner_id
-     LEFT JOIN groups g ON g.id = p.group_id
+     LEFT JOIN companies c  ON c.id  = p.company_id
+     LEFT JOIN users u      ON u.id  = p.owner_id
+     LEFT JOIN groups g     ON g.id  = p.group_id
+     LEFT JOIN users uc     ON uc.id = p.created_by
+     LEFT JOIN users uu     ON uu.id = p.updated_by
      LEFT JOIN product_projects pp ON pp.project_id = p.id
-     LEFT JOIN products pr ON pr.id = pp.product_id
+     LEFT JOIN products pr  ON pr.id = pp.product_id
      WHERE p.id=$1
-     GROUP BY p.id, c.name, u.name, g.name`,
+     GROUP BY p.id, c.name, u.name, g.name, uc.name, uu.name`,
     [id]
   );
   return r.rows[0] ? mapProject(r.rows[0]) : null;
 }
 
-async function createProject({ name, status, details, companyId, dealId, ownerId, groupId }) {
+async function createProject({ name, status, details, companyId, dealId, ownerId, groupId, createdById }) {
   const r = await query(
-    `INSERT INTO projects (name, status, details, company_id, deal_id, owner_id, group_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-    [name, status, details, companyId, dealId, ownerId, groupId]
+    `INSERT INTO projects (name, status, details, company_id, deal_id, owner_id, group_id, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+    [name, status, details, companyId, dealId, ownerId, groupId, createdById || null]
   );
   return getProject(r.rows[0].id);
 }
 
-async function updateProject(id, { name, status, details, companyId }) {
+async function updateProject(id, { name, status, details, companyId }, updatedById) {
   await query(
     `UPDATE projects SET name=COALESCE($2,name), status=$3, details=$4,
-       company_id=COALESCE($5,company_id), updated_at=NOW() WHERE id=$1`,
-    [id, name, status, details, companyId]
+       company_id=COALESCE($5,company_id), updated_by=$6, updated_at=NOW() WHERE id=$1`,
+    [id, name, status, details, companyId, updatedById || null]
   );
   return getProject(id);
 }
@@ -728,7 +731,9 @@ function mapProject(row) {
     products,
     attachments: [],
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    createdByName: row.created_by_name || null,
+    updatedAt: row.updated_at,
+    updatedByName: row.updated_by_name || null,
   };
 }
 

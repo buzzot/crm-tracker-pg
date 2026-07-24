@@ -44,7 +44,7 @@ router.post('/projects', upload.array('attachments', 10), async (req, res, next)
     let productIds = req.body.productIds;
     if (!productIds) productIds = [];
     if (!Array.isArray(productIds)) productIds = [productIds];
-    const project = await crm.createProject({ name, companyId: companyId || null, productIds, status, category, description, startDate, endDate });
+    const project = await crm.createProject({ name, companyId: companyId || null, productIds, status, category, description, startDate, endDate, createdById: req.session.user?.id });
     if (req.files && req.files.length) {
       await crm.addProjectAttachments(project.id, req.files);
     }
@@ -132,7 +132,7 @@ router.post('/projects/:id/edit', async (req, res, next) => {
       description,
       startDate,
       endDate
-    });
+    }, req.session.user?.id);
     res.redirect(`/projects/${req.params.id}`);
   } catch (err) {
     try {

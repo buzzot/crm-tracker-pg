@@ -52,6 +52,20 @@
       <p class="pnew-hero-sub">
         <%= project.category || 'No category set' %><% if (project.companies.length) { %> &middot; <%= project.companies.map(c => c.name).join(', ') %><% } %>
       </p>
+      <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-top:0.35rem;">
+        <% if (project.createdAt) { %>
+          <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
+            Created<% if (project.createdByName) { %> by <strong><%= project.createdByName %></strong><% } %>
+            &nbsp;·&nbsp;<%= new Date(project.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
+          </span>
+        <% } %>
+        <% if (project.updatedAt && project.updatedByName) { %>
+          <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
+            Last edited by <strong><%= project.updatedByName %></strong>
+            &nbsp;·&nbsp;<%= new Date(project.updatedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
+          </span>
+        <% } %>
+      </div>
     </div>
     <a href="/projects/<%= project.id %>/edit" class="pnew-btn-save"><i class="bi bi-pencil-square"></i> Edit project</a>
   </div>
