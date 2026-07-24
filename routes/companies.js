@@ -27,7 +27,7 @@ router.get('/companies/new', (req, res) => {
   });
 });
 
-router.post('/companies', async (req, res, next) => {
+router.post('/companies', upload.array('attachments', 20), async (req, res, next) => {
   try {
     const { name, industry, status, web, billingAddress, notes } = req.body;
     const user = req.session.user;
@@ -36,6 +36,9 @@ router.post('/companies', async (req, res, next) => {
       ownerId: user ? user.id : null,
       createdById: user ? user.id : null,
     });
+    if (req.files && req.files.length) {
+      await crm.addCompanyAttachments(company.id, req.files, user?.id);
+    }
     res.redirect(`/companies/${company.id}`);
   } catch (err) {
     res.status(400).render('company-new', {
@@ -45,6 +48,15 @@ router.post('/companies', async (req, res, next) => {
       error: err.message, values: req.body
     });
   }
+});
+
+router.post('/companies/:id/attachments', upload.array('attachments', 20), async (req, res, next) => {
+  try {
+    if (req.files && req.files.length) {
+      await crm.addCompanyAttachments(req.params.id, req.files, req.session.user?.id);
+    }
+    res.redirect(`/companies/${req.params.id}`);
+  } catch (err) { next(err); }
 });
 
 // ─── Edit ─────────────────────────────────────────────────────────────────────

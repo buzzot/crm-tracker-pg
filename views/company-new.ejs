@@ -9,7 +9,7 @@
     <div class="alert alert-danger mb-3"><%= error %></div>
   <% } %>
 
-  <form action="/companies" method="POST">
+  <form action="/companies" method="POST" enctype="multipart/form-data">
     <div class="pnew-grid">
 
       <div class="pnew-main">
@@ -68,6 +68,35 @@
             <label class="pnew-field-label"><i class="bi bi-sticky"></i> Notes</label>
             <textarea name="notes" class="pnew-input pnew-textarea" rows="3" placeholder="Internal context about this company…"><%= values.notes || '' %></textarea>
           </div>
+        </div>
+
+        <div class="pnew-card">
+          <h2 class="pnew-card-title">Documents</h2>
+          <p class="pnew-card-sub">Attach contracts, agreements, or any relevant files.</p>
+          <div class="pnew-dropzone" id="coDropzone">
+            <i class="bi bi-upload" style="font-size:1.5rem; color:var(--crm-muted-fg);"></i>
+            <p style="margin:0.5rem 0 0.25rem; font-weight:600;">Drop files here or <label for="coFiles" style="color:var(--crm-accent); cursor:pointer; text-decoration:underline;">browse</label></p>
+            <p style="margin:0; font-size:0.78rem; color:var(--crm-muted-fg);">PDF, images, documents — up to 25 MB</p>
+            <input type="file" name="attachments" id="coFiles" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt" style="display:none;" onchange="coUpdateFileList(this)">
+          </div>
+          <ul id="coFileList" style="margin:0.5rem 0 0; padding-left:1.25rem; font-size:0.82rem; color:var(--crm-muted-fg);"></ul>
+          <script>
+            const coDropzone = document.getElementById('coDropzone');
+            coDropzone.addEventListener('dragover', e => { e.preventDefault(); coDropzone.classList.add('dragover'); });
+            coDropzone.addEventListener('dragleave', () => coDropzone.classList.remove('dragover'));
+            coDropzone.addEventListener('drop', e => {
+              e.preventDefault(); coDropzone.classList.remove('dragover');
+              const input = document.getElementById('coFiles');
+              const dt = new DataTransfer();
+              [...(input.files||[]), ...e.dataTransfer.files].forEach(f => dt.items.add(f));
+              input.files = dt.files;
+              coUpdateFileList(input);
+            });
+            function coUpdateFileList(input) {
+              const ul = document.getElementById('coFileList');
+              ul.innerHTML = [...input.files].map(f => `<li>${f.name} <span style="color:var(--crm-muted-fg);">(${(f.size/1024).toFixed(0)} KB)</span></li>`).join('');
+            }
+          </script>
         </div>
 
         <div class="d-flex gap-2">

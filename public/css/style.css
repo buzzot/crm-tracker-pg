@@ -2927,6 +2927,19 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: #e0556f;
 }
 
+.pnew-dropzone {
+  border: 2px dashed var(--crm-accent);
+  border-radius: var(--crm-radius);
+  background: color-mix(in oklch, var(--crm-accent) 5%, transparent);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.pnew-dropzone.dragover {
+  background: color-mix(in oklch, var(--crm-accent) 12%, transparent);
+}
+
 .pnew-footer-bar {
   position: sticky;
   bottom: 0;

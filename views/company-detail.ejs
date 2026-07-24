@@ -87,6 +87,24 @@
         </div>
       </div>
 
+      <!-- Documents -->
+      <% if (attachments && attachments.length) { %>
+      <div class="pnew-card">
+        <h2 class="pnew-card-title">Documents</h2>
+        <div class="pnew-file-list">
+          <% attachments.forEach(f => { %>
+            <div class="pnew-file-row">
+              <i class="bi bi-file-earmark-text"></i>
+              <a href="<%= f.url %>" target="_blank" rel="noopener" class="pnew-file-name" style="text-decoration:none;"><%= f.filename %></a>
+              <% if (f.sizeBytes) { %>
+                <span class="pnew-file-size"><%= (f.sizeBytes / 1024).toFixed(0) %> KB</span>
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+      <% } %>
+
     </div>
 
     <div class="pnew-aside">

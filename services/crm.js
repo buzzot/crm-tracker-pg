@@ -1171,13 +1171,14 @@ async function handleInboundEmail({ recipient, sender, subject, bodyText }) {
 async function getCompanyDetail(id, user) {
   const company = await getCompany(id);
   if (!company) return { company: null };
-  const [contacts, activities, deals, projects] = await Promise.all([
+  const [contacts, activities, deals, projects, attachments] = await Promise.all([
     query('SELECT ct.*, c.name AS company_name FROM contacts ct LEFT JOIN companies c ON c.id=ct.company_id WHERE ct.company_id=$1 ORDER BY ct.full_name', [id]).then(r => r.rows.map(mapContact)),
     query(`SELECT * FROM activities WHERE company_id=$1 ORDER BY COALESCE(status_date,date) DESC`, [id]).then(r => r.rows.map(mapActivity)),
     query('SELECT * FROM deals WHERE company_id=$1 ORDER BY updated_at DESC', [id]).then(r => r.rows.map(mapDeal)),
-    query('SELECT * FROM projects WHERE company_id=$1 ORDER BY updated_at DESC', [id]).then(r => r.rows.map(mapProject))
+    query('SELECT * FROM projects WHERE company_id=$1 ORDER BY updated_at DESC', [id]).then(r => r.rows.map(mapProject)),
+    listAttachments('company', id)
   ]);
-  return { company, contacts, activities, deals, projects };
+  return { company, contacts, activities, deals, projects, attachments };
 }
 
 // ─── Contact detail ──────────────────────────────────────────────────────────
@@ -1265,6 +1266,10 @@ async function _uploadFiles(entityType, entityId, files, uploadedById = null) {
   return inserted;
 }
 
+async function addCompanyAttachments(companyId, files, uploadedById) {
+  return _uploadFiles('company', companyId, files, uploadedById);
+}
+
 async function addActivityAttachments(activityId, files, uploadedById) {
   return _uploadFiles('activity', activityId, files, uploadedById);
 }
@@ -1341,6 +1346,7 @@ module.exports = {
   listActivityComments,
   addActivityComment,
   addActivityAttachments,
+  addCompanyAttachments,
   // Deals
   listDeals,
   getDeal,
