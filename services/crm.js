@@ -802,10 +802,12 @@ async function listTasks({ projectId, user } = {}) {
       OR EXISTS (SELECT 1 FROM task_assignees ta2 WHERE ta2.task_id=t.id AND ta2.user_id=$${params.push(user.id)})
     )`);
   } else if (user && user.role === 'Manager') {
-    // Managers see tasks in their groups' projects
+    // Managers see tasks they own, are assigned to, are auditing, or are in their groups' projects
     const groupIds = user.groupIds || [];
     conditions.push(`(
       t.owner_id=$${params.push(user.id)}
+      OR t.auditor_id=$${params.push(user.id)}
+      OR EXISTS (SELECT 1 FROM task_assignees ta2 WHERE ta2.task_id=t.id AND ta2.user_id=$${params.push(user.id)})
       OR EXISTS (SELECT 1 FROM projects gp WHERE gp.id=t.project_id AND gp.group_id=ANY($${params.push(groupIds)}::uuid[]))
     )`);
   }
