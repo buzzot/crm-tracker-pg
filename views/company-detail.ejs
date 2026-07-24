@@ -18,18 +18,7 @@
       <span id="co-logo-placeholder" style="display:none;"></span>
       <h1 class="pnew-hero"><%= company.name %></h1>
       <p class="pnew-hero-sub"><%= company.industry || 'No industry set' %></p>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <a href="/companies/<%= company.id %>/edit" class="pnew-btn-save"><i class="bi bi-pencil-square"></i> Edit</a>
-    </div>
-  </div>
-
-  <div class="pnew-grid">
-
-    <div class="pnew-main">
-
-      <% if (company.createdAt || (company.updatedAt && company.updatedByName)) { %>
-      <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1rem;">
+      <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-top:0.25rem;">
         <% if (company.createdAt) { %>
           <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
             Created<% if (company.createdByName) { %> by <strong><%= company.createdByName %></strong><% } %>
@@ -43,7 +32,15 @@
           </span>
         <% } %>
       </div>
-      <% } %>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="/companies/<%= company.id %>/edit" class="pnew-btn-save"><i class="bi bi-pencil-square"></i> Edit</a>
+    </div>
+  </div>
+
+  <div class="pnew-grid">
+
+    <div class="pnew-main">
 
       <!-- Company Info -->
       <div class="pnew-summary-card">
