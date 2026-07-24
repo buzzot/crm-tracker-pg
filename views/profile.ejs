@@ -89,6 +89,16 @@
     </div>
 
     <div class="mb-3">
+      <label class="pnew-field-label">Email</label>
+      <div class="pnew-input" style="background:var(--crm-muted); color:var(--crm-muted-fg); cursor:default; user-select:text;">
+        <%= u.email %>
+      </div>
+      <div style="font-size:0.72rem; color:var(--crm-muted-fg); margin-top:0.25rem;">
+        <i class="bi bi-lock" style="font-size:0.65rem;"></i> Contact your admin to change your email.
+      </div>
+    </div>
+
+    <div class="mb-3">
       <label class="pnew-field-label">Phone</label>
       <input type="text" name="phone" class="pnew-input" value="<%= u.phone || '' %>" placeholder="+1 (555) 000-0000">
     </div>
