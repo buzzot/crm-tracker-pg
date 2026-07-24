@@ -290,14 +290,14 @@ async function createCompany({ name, industry, status, website, notes, billingAd
 }
 
 async function updateCompany(id, fields, updatedById) {
-  const { name, industry, status, website, notes, billingAddress, groupId } = fields;
+  const { name, industry, status, website, web, notes, billingAddress, groupId } = fields;
   await query(
     `UPDATE companies SET
        name=COALESCE($2,name), industry=$3, status=$4, website=$5,
        notes=$6, billing_address=$7, group_id=COALESCE($8,group_id),
        updated_by=$9, updated_at=NOW()
      WHERE id=$1`,
-    [id, name, industry, status, website, notes, billingAddress, groupId, updatedById || null]
+    [id, name, industry, status, website || web || null, notes, billingAddress, groupId, updatedById || null]
   );
   return getCompany(id);
 }
