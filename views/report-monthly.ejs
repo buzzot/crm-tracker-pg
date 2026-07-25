@@ -175,6 +175,41 @@
     }
     .print-btn:hover { background: #2d3a6b; }
     @media print { .print-bar { display: none; } }
+
+    /* ── Filter bar ──────────────────────────────────────────────────── */
+    .filter-bar {
+      background: #f4f6fb;
+      border-bottom: 1px solid #dde1ea;
+      padding: 10px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 9pt;
+    }
+    .filter-bar label { font-weight: 600; color: #444; white-space: nowrap; }
+    .filter-bar select {
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 4px 8px;
+      font-size: 9pt;
+      color: #1a1a2e;
+      background: #fff;
+      cursor: pointer;
+    }
+    .filter-bar button {
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 5px 14px;
+      font-size: 9pt;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .filter-bar button:hover { background: #2d3a6b; }
+    .filter-sep { color: #ccc; }
+    @media print { .filter-bar { display: none; } }
   </style>
 </head>
 <body>
@@ -185,14 +220,43 @@
   <a class="print-btn" href="/" style="background:#444;">← Back</a>
 </div>
 
+<!-- Filter bar (screen only) -->
+<form class="filter-bar no-print" method="GET" action="/reports/monthly">
+  <label for="rf-user">👤 User:</label>
+  <select id="rf-user" name="userId">
+    <option value="">All Users</option>
+    <% users.forEach(u => { %>
+      <option value="<%= u.id %>" <%= filterUserId === u.id ? 'selected' : '' %>><%= u.name %><% if (u.title) { %> — <%= u.title %><% } %></option>
+    <% }) %>
+  </select>
+
+  <span class="filter-sep">|</span>
+
+  <label for="rf-days">📅 Period:</label>
+  <select id="rf-days" name="days">
+    <option value="7"  <%= filterDays === 7  ? 'selected' : '' %>>Last 7 days</option>
+    <option value="30" <%= filterDays === 30 ? 'selected' : '' %>>Last 30 days</option>
+    <option value="60" <%= filterDays === 60 ? 'selected' : '' %>>Last 60 days</option>
+    <option value="90" <%= filterDays === 90 ? 'selected' : '' %>>Last 90 days</option>
+  </select>
+
+  <button type="submit">Apply</button>
+  <% if (filterUserId || filterDays !== 30) { %>
+    <a href="/reports/monthly" style="font-size:8.5pt; color:#888; text-decoration:none;">✕ Clear filters</a>
+  <% } %>
+</form>
+
 <div class="page-wrap">
 
   <!-- ── COVER ──────────────────────────────────────────────────────── -->
   <div class="report-cover">
     <div class="cover-brand">Samyou CRM · Business Report</div>
     <div class="cover-title">Monthly Activity &amp; Performance Summary</div>
-    <div class="cover-period">Period: <%= reportPeriod %></div>
-    <div class="cover-meta">Generated: <%= generatedAt %> &nbsp;|&nbsp; All figures reflect last 30 days unless noted</div>
+    <div class="cover-period">
+      Period: <%= reportPeriod %>
+      <% if (selectedUser) { %>&nbsp;·&nbsp; <strong><%= selectedUser.name %></strong><% if (selectedUser.title) { %> (<%= selectedUser.title %>)<% } %><% } %>
+    </div>
+    <div class="cover-meta">Generated: <%= generatedAt %> &nbsp;|&nbsp; All figures reflect last <%= filterDays %> days unless noted<% if (selectedUser) { %> &nbsp;|&nbsp; Filtered by: <%= selectedUser.name %><% } %></div>
   </div>
 
 

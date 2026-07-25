@@ -3,11 +3,11 @@ const express = require('express');
 const router  = express.Router();
 const { query } = require('../config/db');
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function since30() {
+function sinceNDays(n) {
   const d = new Date();
-  d.setDate(d.getDate() - 30);
+  d.setDate(d.getDate() - n);
   return d.toISOString();
 }
 
@@ -25,10 +25,29 @@ function fmtMoney(n) {
 
 router.get('/reports/monthly', async (req, res, next) => {
   try {
-    const from = since30();
-    const today = new Date().toISOString().slice(0, 10);
-    const fromLabel = fmtDate(from);
-    const toLabel   = fmtDate(today);
+    // ── Filters ───────────────────────────────────────────────────────────────
+    const days      = parseInt(req.query.days, 10) || 30;
+    const filterUid = req.query.userId || '';          // '' = all users
+    const from      = sinceNDays(days);
+    const today     = new Date().toISOString().slice(0, 10);
+
+    // ── All users for dropdown ────────────────────────────────────────────────
+    const usersR = await query(
+      `SELECT id, name, title, role FROM users WHERE is_active = true ORDER BY name`
+    );
+    const users = usersR.rows;
+
+    // Resolve selected user name for report header
+    const selectedUser = filterUid
+      ? users.find(u => u.id === filterUid) || null
+      : null;
+
+    // Helper: add owner filter to a params array, return placeholder string
+    function ownerFilter(params, alias = '') {
+      if (!filterUid) return '';
+      const col = alias ? `${alias}.owner_id` : 'owner_id';
+      return ` AND ${col} = $${params.push(filterUid)}`;
+    }
 
     // ── 1. All active companies ───────────────────────────────────────────────
     const companiesR = await query(
@@ -36,19 +55,22 @@ router.get('/reports/monthly', async (req, res, next) => {
     );
     const allCompanies = companiesR.rows;
 
-    // ── 2. Companies created in last 30 days (new customers) ─────────────────
+    // ── 2. New companies in period ────────────────────────────────────────────
+    const ncParams = [from];
+    const ncOwner  = ownerFilter(ncParams, 'c');
     const newCompaniesR = await query(
       `SELECT c.id, c.name, c.industry, c.status, c.created_at,
               u.name AS created_by_name
        FROM companies c
-       LEFT JOIN users u ON u.id = c.created_by
-       WHERE c.created_at >= $1
+       LEFT JOIN users u ON u.id = c.owner_id
+       WHERE c.created_at >= $1${ncOwner}
        ORDER BY c.created_at DESC`,
-      [from]
+      ncParams
     );
     const newCompanies = newCompaniesR.rows;
 
-    // ── 3. New contacts in last 30 days ──────────────────────────────────────
+    // ── 3. New contacts in period ─────────────────────────────────────────────
+    // contacts may have owner_id but it's not guaranteed; filter by company owner as fallback
     const newContactsR = await query(
       `SELECT cn.id, cn.full_name, cn.title, cn.email, cn.created_at,
               c.name AS company_name
@@ -60,19 +82,21 @@ router.get('/reports/monthly', async (req, res, next) => {
     );
     const newContacts = newContactsR.rows;
 
-    // ── 4. Activities in last 30 days ─────────────────────────────────────────
+    // ── 4. Activities in period ───────────────────────────────────────────────
+    const actParams = [from];
+    const actOwner  = ownerFilter(actParams, 'a');
     const activitiesR = await query(
       `SELECT a.id, a.name, a.type, a.result, a.details, a.due_date, a.status_date,
-              a.created_at,
+              a.created_at, a.owner_id,
               u.name AS owner_name,
               STRING_AGG(DISTINCT c.name, ', ') AS company_names
        FROM activities a
        LEFT JOIN users u ON u.id = a.owner_id
        LEFT JOIN companies c ON c.id = a.company_id
-       WHERE a.created_at >= $1 OR a.status_date >= $1
+       WHERE (a.created_at >= $1 OR a.status_date >= $1)${actOwner}
        GROUP BY a.id, u.name, c.name
        ORDER BY COALESCE(a.status_date, a.created_at) DESC`,
-      [from]
+      actParams
     );
     const activities = activitiesR.rows;
 
@@ -83,27 +107,30 @@ router.get('/reports/monthly', async (req, res, next) => {
     );
 
     // ── 5. Deals / pipeline ───────────────────────────────────────────────────
+    const dealParams = [];
+    const dealOwner  = ownerFilter(dealParams, 'd');
+    const dealWhere  = dealOwner ? `WHERE 1=1${dealOwner}` : '';
     const dealsR = await query(
       `SELECT d.id, d.name, d.stage, d.amount,
-              d.created_at, d.updated_at,
+              d.created_at, d.updated_at, d.owner_id,
               c.name AS company_name,
               u.name AS owner_name
        FROM deals d
        LEFT JOIN companies c ON c.id = d.company_id
        LEFT JOIN users u ON u.id = d.owner_id
-       ORDER BY d.amount DESC NULLS LAST`
+       ${dealWhere}
+       ORDER BY d.amount DESC NULLS LAST`,
+      dealParams
     );
     const deals = dealsR.rows;
 
-    const openDeals   = deals.filter(d => !d.stage.startsWith('Closed'));
-    const wonDeals    = deals.filter(d => d.stage === 'Closed Won');
-    const lostDeals   = deals.filter(d => d.stage === 'Closed Lost');
-    const newDeals    = deals.filter(d => d.created_at >= from);
+    const openDeals      = deals.filter(d => d.stage && !d.stage.startsWith('Closed'));
+    const wonDeals       = deals.filter(d => d.stage === 'Closed Won');
+    const lostDeals      = deals.filter(d => d.stage === 'Closed Lost');
+    const newDeals       = deals.filter(d => d.created_at >= from);
+    const totalPipeline  = openDeals.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+    const totalWon       = wonDeals.reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
-    const totalPipeline = openDeals.reduce((s, d) => s + (Number(d.amount) || 0), 0);
-    const totalWon      = wonDeals.reduce((s, d) => s + (Number(d.amount) || 0), 0);
-
-    // Deals by stage for pipeline summary
     const stageMap = {};
     openDeals.forEach(d => {
       if (!stageMap[d.stage]) stageMap[d.stage] = { count: 0, amount: 0 };
@@ -112,16 +139,18 @@ router.get('/reports/monthly', async (req, res, next) => {
     });
 
     // ── 6. Tasks ──────────────────────────────────────────────────────────────
+    const taskParams = [from];
+    const taskOwner  = ownerFilter(taskParams, 't');
     const tasksR = await query(
-      `SELECT t.id, t.name, t.status, t.deadline, t.created_at,
+      `SELECT t.id, t.name, t.status, t.deadline, t.created_at, t.owner_id,
               u.name AS owner_name,
               p.name AS project_name
        FROM tasks t
        LEFT JOIN users u ON u.id = t.owner_id
        LEFT JOIN projects p ON p.id = t.project_id
-       WHERE t.created_at >= $1 OR t.updated_at >= $1
+       WHERE (t.created_at >= $1 OR t.updated_at >= $1)${taskOwner}
        ORDER BY t.deadline ASC NULLS LAST`,
-      [from]
+      taskParams
     );
     const tasks = tasksR.rows;
 
@@ -132,33 +161,29 @@ router.get('/reports/monthly', async (req, res, next) => {
     );
 
     // ── 7. Projects ───────────────────────────────────────────────────────────
+    const projParams = [from];
+    const projOwner  = ownerFilter(projParams, 'p');
     const projectsR = await query(
       `SELECT p.id, p.name, p.status,
-              p.created_at, p.updated_at,
+              p.created_at, p.updated_at, p.owner_id,
               c.name AS company_name,
               u.name AS owner_name
        FROM projects p
        LEFT JOIN companies c ON c.id = p.company_id
        LEFT JOIN users u ON u.id = p.owner_id
-       WHERE p.updated_at >= $1 OR p.created_at >= $1
+       WHERE (p.updated_at >= $1 OR p.created_at >= $1)${projOwner}
        ORDER BY p.updated_at DESC NULLS LAST`,
-      [from]
+      projParams
     );
     const projects = projectsR.rows;
 
-    // ── 8. Products ───────────────────────────────────────────────────────────
+    // ── 8. Products (always all — not user-scoped) ────────────────────────────
     const productsR = await query(
       `SELECT id, name, category, phase, horse_power, created_at FROM products ORDER BY category, name`
     );
     const products = productsR.rows;
 
-    // ── 9. Users / team ───────────────────────────────────────────────────────
-    const usersR = await query(
-      `SELECT id, name, title, role FROM users WHERE is_active = true ORDER BY name`
-    );
-    const users = usersR.rows;
-
-    // ── 10. Activity type breakdown ────────────────────────────────────────────
+    // ── 9. Activity type breakdown ─────────────────────────────────────────────
     const actTypeMap = {};
     activities.forEach(a => {
       const t = a.type || 'Other';
@@ -169,11 +194,12 @@ router.get('/reports/monthly', async (req, res, next) => {
     // ── Render ─────────────────────────────────────────────────────────────────
     res.render('report-monthly', {
       title: 'Monthly Business Report',
-      layout: false,   // no nav layout — print-clean page
-      reportPeriod: `${fromLabel} – ${toLabel}`,
+      layout: false,
+      reportPeriod: `${fmtDate(from)} – ${fmtDate(today)}`,
       generatedAt: new Date().toLocaleString('en-GB'),
-
-      // Section data
+      filterDays: days,
+      filterUserId: filterUid,
+      selectedUser,
       allCompanies,
       newCompanies,
       newContacts,
@@ -195,8 +221,6 @@ router.get('/reports/monthly', async (req, res, next) => {
       projects,
       products,
       users,
-
-      // helpers passed to template
       fmtDate,
       fmtMoney
     });
