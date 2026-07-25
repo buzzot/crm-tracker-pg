@@ -144,11 +144,11 @@
     function render(filter) {
       var list;
       if (filter === 'open') {
-        list = ALL.filter(function(a){ return !isCompleted(a) && a.date; })
+        list = ALL.filter(function(a){ return !isCompleted(a); })
           .sort(function(a,b){ return new Date(sortDate(b)) - new Date(sortDate(a)); })
           .slice(0, 15);
       } else if (filter === 'completed') {
-        list = ALL.filter(function(a){ return isCompleted(a) && a.date; })
+        list = ALL.filter(function(a){ return isCompleted(a); })
           .sort(function(a,b){ return new Date(sortDate(b)) - new Date(sortDate(a)); })
           .slice(0, 15);
       } else {
