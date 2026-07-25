@@ -1049,24 +1049,40 @@ function mapProduct(row) {
 
 async function listCommentsByEntity(entityType, entityId) {
   const r = await query(
-    `SELECT cm.*, u.name AS user_name
+    `SELECT cm.*, u.name AS user_name,
+       COALESCE(
+         json_agg(json_build_object(
+           'id', a.id,
+           'filename', a.filename,
+           'url', a.public_url,
+           'contentType', a.content_type,
+           'sizeBytes', a.size_bytes
+         )) FILTER (WHERE a.id IS NOT NULL),
+         '[]'::json
+       ) AS attachments
      FROM comments cm
      LEFT JOIN users u ON u.id = cm.author_id
+     LEFT JOIN attachments a ON a.entity_type = 'comment' AND a.entity_id = cm.id
      WHERE cm.entity_type=$1 AND cm.entity_id=$2
+     GROUP BY cm.id, u.name
      ORDER BY cm.created_at ASC`,
     [entityType, entityId]
   );
   return r.rows.map(mapComment);
 }
 
-async function addComment({ entityType, entityId, content, authorId, authorName, type, emailSubject, link }) {
+async function addComment({ entityType, entityId, content, authorId, authorName, type, emailSubject, link, files, uploadedById }) {
   if (!content || !content.trim()) throw new Error('Comment text is required.');
   const r = await query(
     `INSERT INTO comments (entity_type, entity_id, content, author_id, author_name, type, email_subject, link)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, created_at`,
     [entityType, entityId, content.trim(), authorId, authorName, type || 'comment', emailSubject, link]
   );
-  return r.rows[0];
+  const commentRow = r.rows[0];
+  if (files && files.length) {
+    await _uploadFiles('comment', commentRow.id, files, uploadedById || authorId);
+  }
+  return commentRow;
 }
 
 async function listAllComments(limit = 10, userId = null) {
@@ -1105,19 +1121,20 @@ function mapComment(row) {
     projectIds: row.entity_type === 'project' ? [row.entity_id] : [],
     dealIds: row.entity_type === 'deal' ? [row.entity_id] : [],
     contactIds: row.entity_type === 'contact' ? [row.entity_id] : [],
-    postedAt: row.created_at
+    postedAt: row.created_at,
+    attachments: Array.isArray(row.attachments) ? row.attachments : []
   };
 }
 
 // Shim functions matching old Airtable crm.js signatures used by routes
-async function addTaskComment({ taskId, author, comment, link, files, type, emailSubject }) {
-  return addComment({ entityType: 'task', entityId: taskId, content: comment, authorName: author, link, type, emailSubject });
+async function addTaskComment({ taskId, author, comment, link, files, type, emailSubject, authorId }) {
+  return addComment({ entityType: 'task', entityId: taskId, content: comment, authorName: author, link, type, emailSubject, files, uploadedById: authorId });
 }
-async function addActivityComment({ activityId, author, comment, link, files, type, emailSubject }) {
-  return addComment({ entityType: 'activity', entityId: activityId, content: comment, authorName: author, link, type, emailSubject });
+async function addActivityComment({ activityId, author, comment, link, files, type, emailSubject, authorId }) {
+  return addComment({ entityType: 'activity', entityId: activityId, content: comment, authorName: author, link, type, emailSubject, files, uploadedById: authorId });
 }
-async function addProjectComment({ projectId, author, comment, link, files, type, emailSubject }) {
-  return addComment({ entityType: 'project', entityId: projectId, content: comment, authorName: author, link, type, emailSubject });
+async function addProjectComment({ projectId, author, comment, link, files, type, emailSubject, authorId }) {
+  return addComment({ entityType: 'project', entityId: projectId, content: comment, authorName: author, link, type, emailSubject, files, uploadedById: authorId });
 }
 async function addDealComment({ dealId, author, comment, link }) {
   return addComment({ entityType: 'deal', entityId: dealId, content: comment, authorName: author, link });

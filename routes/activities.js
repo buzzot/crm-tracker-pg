@@ -106,7 +106,8 @@ router.post('/activities/:id/comments', upload.array('attachment', 5), async (re
   try {
     const { comment, link } = req.body;
     const author = (req.session.user && req.session.user.name) || 'Someone';
-    await crm.addActivityComment({ activityId: req.params.id, author, comment, link, files: req.files });
+    const authorId = req.session.user ? req.session.user.id : null;
+    await crm.addActivityComment({ activityId: req.params.id, author, authorId, comment, link, files: req.files });
     res.redirect(`/activities/${req.params.id}`);
   } catch (err) {
     try {

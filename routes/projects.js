@@ -177,7 +177,8 @@ router.post('/projects/:id/comments', upload.array('attachment', 5), async (req,
   try {
     const { comment, link } = req.body;
     const author = (req.session.user && req.session.user.name) || 'Someone';
-    await crm.addProjectComment({ projectId: req.params.id, author, comment, link, files: req.files });
+    const authorId = req.session.user ? req.session.user.id : null;
+    await crm.addProjectComment({ projectId: req.params.id, author, authorId, comment, link, files: req.files });
     res.redirect(`/projects/${req.params.id}`);
   } catch (err) {
     try {
