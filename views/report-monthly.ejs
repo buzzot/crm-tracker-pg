@@ -513,14 +513,14 @@
 
     <% if (products.length) { %>
     <table>
-      <thead><tr><th>Product</th><th>Category</th><th>Brand</th><th>Model</th></tr></thead>
+      <thead><tr><th>Product</th><th>Category</th><th>Phase</th><th>Horsepower</th></tr></thead>
       <tbody>
         <% products.slice(0, 15).forEach(p => { %>
         <tr>
           <td><strong><%= p.name %></strong></td>
           <td><%= p.category || '—' %></td>
-          <td><%= p.brand || '—' %></td>
-          <td><%= p.model || '—' %></td>
+          <td><%= p.phase || '—' %></td>
+          <td><%= p.horse_power || '—' %></td>
         </tr>
         <% }) %>
         <% if (products.length > 15) { %><tr><td colspan="4" style="color:#aaa; font-style:italic;">… and <%= products.length - 15 %> more</td></tr><% } %>

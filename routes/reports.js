@@ -148,7 +148,7 @@ router.get('/reports/monthly', async (req, res, next) => {
 
     // ── 8. Products ───────────────────────────────────────────────────────────
     const productsR = await query(
-      `SELECT id, name, category, model, brand, created_at FROM products ORDER BY category, name`
+      `SELECT id, name, category, phase, horse_power, created_at FROM products ORDER BY category, name`
     );
     const products = productsR.rows;
 
