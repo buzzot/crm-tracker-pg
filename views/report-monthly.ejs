@@ -468,7 +468,7 @@
     <% if (openDeals.length) { %>
     <hr class="divider">
     <table>
-      <thead><tr><th>Deal</th><th>Company</th><th>Stage</th><th>Value</th><th>Close Date</th><th>Owner</th></tr></thead>
+      <thead><tr><th>Deal</th><th>Company</th><th>Stage</th><th>Value</th><th>Owner</th><th>Updated</th></tr></thead>
       <tbody>
         <% openDeals.slice(0, 10).forEach(d => { %>
         <tr>
@@ -476,8 +476,8 @@
           <td><%= d.company_name || '—' %></td>
           <td><span class="badge badge-blue"><%= d.stage %></span></td>
           <td><%= fmtMoney(d.amount) %></td>
-          <td><%= fmtDate(d.close_date) %></td>
           <td><%= d.owner_name || '—' %></td>
+          <td><%= fmtDate(d.updated_at) %></td>
         </tr>
         <% }) %>
       </tbody>
@@ -662,7 +662,7 @@
 
     <% if (newDeals.length) { %>
     <table>
-      <thead><tr><th>New Deal</th><th>Company</th><th>Stage</th><th>Value</th><th>Owner</th><th>Created</th></tr></thead>
+      <thead><tr><th>New Deal</th><th>Company</th><th>Stage</th><th>Value</th><th>Owner</th></tr></thead>
       <tbody>
         <% newDeals.forEach(d => { %>
         <tr>
@@ -671,7 +671,6 @@
           <td><span class="badge badge-blue"><%= d.stage %></span></td>
           <td><%= fmtMoney(d.amount) %></td>
           <td><%= d.owner_name || '—' %></td>
-          <td><%= fmtDate(d.created_at) %></td>
         </tr>
         <% }) %>
       </tbody>

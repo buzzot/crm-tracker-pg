@@ -84,7 +84,7 @@ router.get('/reports/monthly', async (req, res, next) => {
 
     // ── 5. Deals / pipeline ───────────────────────────────────────────────────
     const dealsR = await query(
-      `SELECT d.id, d.name, d.stage, d.amount, d.probability, d.close_date,
+      `SELECT d.id, d.name, d.stage, d.amount,
               d.created_at, d.updated_at,
               c.name AS company_name,
               u.name AS owner_name
