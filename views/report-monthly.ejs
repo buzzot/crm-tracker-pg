@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> — Samyou CRM</title>
+  <style>
+    /* ── Reset & base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 10pt;
+      color: #1a1a2e;
+      background: #fff;
+      line-height: 1.5;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Page layout ───────────────────────────────────────────────── */
+    .page-wrap { max-width: 820px; margin: 0 auto; padding: 28px 32px; }
+
+    /* ── Cover / header ────────────────────────────────────────────── */
+    .report-cover {
+      border-bottom: 3px solid #1a1a2e;
+      padding-bottom: 18px;
+      margin-bottom: 28px;
+    }
+    .cover-brand { font-size: 11pt; color: #666; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+    .cover-title { font-size: 22pt; font-weight: 700; color: #1a1a2e; margin-top: 4px; }
+    .cover-period { font-size: 10pt; color: #555; margin-top: 4px; }
+    .cover-meta { font-size: 8.5pt; color: #999; margin-top: 6px; }
+
+    /* ── Section ───────────────────────────────────────────────────── */
+    .report-section { margin-bottom: 30px; page-break-inside: avoid; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-left: 4px solid #1a1a2e;
+      padding-left: 10px;
+      margin-bottom: 12px;
+    }
+    .section-num {
+      background: #1a1a2e;
+      color: #fff;
+      font-size: 8pt;
+      font-weight: 700;
+      border-radius: 4px;
+      padding: 2px 6px;
+      min-width: 22px;
+      text-align: center;
+    }
+    .section-title { font-size: 12pt; font-weight: 700; color: #1a1a2e; }
+    .section-sub { font-size: 8.5pt; color: #777; }
+
+    /* ── Stat row ──────────────────────────────────────────────────── */
+    .stat-row { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .stat-box {
+      background: #f4f6fb;
+      border-radius: 6px;
+      padding: 10px 14px;
+      min-width: 110px;
+      flex: 1;
+    }
+    .stat-val { font-size: 18pt; font-weight: 700; color: #1a1a2e; line-height: 1.1; }
+    .stat-lbl { font-size: 8pt; color: #666; margin-top: 2px; }
+    .stat-box.accent { background: #1a1a2e; }
+    .stat-box.accent .stat-val, .stat-box.accent .stat-lbl { color: #fff; }
+    .stat-box.green  { background: #edfaf3; }
+    .stat-box.green .stat-val { color: #15803d; }
+    .stat-box.red    { background: #fef2f2; }
+    .stat-box.red .stat-val  { color: #b91c1c; }
+    .stat-box.amber  { background: #fffbeb; }
+    .stat-box.amber .stat-val { color: #b45309; }
+
+    /* ── Table ──────────────────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 10px; }
+    thead th {
+      background: #f4f6fb;
+      text-align: left;
+      padding: 5px 8px;
+      font-weight: 700;
+      border-bottom: 1px solid #dde1ea;
+      color: #444;
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    tbody tr { border-bottom: 1px solid #eef0f5; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td { padding: 5px 8px; vertical-align: top; }
+    tbody tr:hover { background: #f9fafc; }
+
+    /* ── Badges ─────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 7.5pt;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-green  { background: #dcfce7; color: #15803d; }
+    .badge-red    { background: #fee2e2; color: #b91c1c; }
+    .badge-amber  { background: #fef3c7; color: #b45309; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .badge-gray   { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+
+    /* ── Progress bar ────────────────────────────────────────────────── */
+    .prog-wrap { margin-bottom: 8px; }
+    .prog-label { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 8pt; color: #444; }
+    .prog-track { height: 7px; background: #eef0f5; border-radius: 99px; overflow: hidden; }
+    .prog-fill  { height: 100%; background: #1a1a2e; border-radius: 99px; }
+
+    /* ── Empty state ─────────────────────────────────────────────────── */
+    .empty { color: #aaa; font-size: 8.5pt; font-style: italic; padding: 8px 0; }
+
+    /* ── Notes section ───────────────────────────────────────────────── */
+    .notes-box {
+      border: 1px solid #dde1ea;
+      border-radius: 6px;
+      padding: 10px 14px;
+      min-height: 60px;
+      color: #bbb;
+      font-size: 8.5pt;
+      font-style: italic;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────── */
+    .report-footer {
+      border-top: 1px solid #dde1ea;
+      padding-top: 10px;
+      margin-top: 30px;
+      font-size: 8pt;
+      color: #aaa;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ── Two-col layout ──────────────────────────────────────────────── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* ── Divider ─────────────────────────────────────────────────────── */
+    .divider { border: none; border-top: 1px solid #eef0f5; margin: 14px 0; }
+
+    /* ── Print tweaks ────────────────────────────────────────────────── */
+    @media print {
+      body { font-size: 9pt; }
+      .page-wrap { padding: 0; max-width: 100%; }
+      .report-section { page-break-inside: avoid; }
+      .no-print { display: none !important; }
+      .page-break { page-break-before: always; }
+    }
+
+    /* ── Screen-only print button ─────────────────────────────────────── */
+    .print-bar {
+      position: fixed;
+      top: 12px; right: 16px;
+      z-index: 999;
+      display: flex;
+      gap: 8px;
+    }
+    .print-btn {
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 7px 16px;
+      font-size: 9pt;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .print-btn:hover { background: #2d3a6b; }
+    @media print { .print-bar { display: none; } }
+  </style>
+</head>
+<body>
+
+<!-- Print button (screen only) -->
+<div class="print-bar no-print">
+  <button class="print-btn" onclick="window.print()">🖨 Save / Print PDF</button>
+  <a class="print-btn" href="/" style="background:#444;">← Back</a>
+</div>
+
+<div class="page-wrap">
+
+  <!-- ── COVER ──────────────────────────────────────────────────────── -->
+  <div class="report-cover">
+    <div class="cover-brand">Samyou CRM · Business Report</div>
+    <div class="cover-title">Monthly Activity &amp; Performance Summary</div>
+    <div class="cover-period">Period: <%= reportPeriod %></div>
+    <div class="cover-meta">Generated: <%= generatedAt %> &nbsp;|&nbsp; All figures reflect last 30 days unless noted</div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       1. CUSTOMER
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section">
+    <div class="section-header">
+      <span class="section-num">1</span>
+      <span class="section-title">Customer Overview</span>
+      <span class="section-sub">Active accounts &amp; portfolio status</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box accent">
+        <div class="stat-val"><%= allCompanies.length %></div>
+        <div class="stat-lbl">Total Companies</div>
+      </div>
+      <div class="stat-box green">
+        <div class="stat-val"><%= allCompanies.filter(c => (c.status||'').toLowerCase() === 'active').length %></div>
+        <div class="stat-lbl">Active</div>
+      </div>
+      <div class="stat-box amber">
+        <div class="stat-val"><%= allCompanies.filter(c => (c.status||'').toLowerCase() === 'prospect').length %></div>
+        <div class="stat-lbl">Prospects</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val"><%= users.length %></div>
+        <div class="stat-lbl">Team Members</div>
+      </div>
+    </div>
+
+    <% const byIndustry = {}; allCompanies.forEach(c => { const i = c.industry || 'Other'; byIndustry[i] = (byIndustry[i]||0)+1; }); const maxInd = Math.max(...Object.values(byIndustry), 1); %>
+    <% Object.entries(byIndustry).sort((a,b) => b[1]-a[1]).slice(0, 6).forEach(([ind, cnt]) => { %>
+    <div class="prog-wrap">
+      <div class="prog-label"><span><%= ind %></span><span><%= cnt %> co.</span></div>
+      <div class="prog-track"><div class="prog-fill" style="width:<%= Math.round(cnt/maxInd*100) %>%"></div></div>
+    </div>
+    <% }) %>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       2. KEY PERFORMANCES
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section">
+    <div class="section-header">
+      <span class="section-num">2</span>
+      <span class="section-title">Key Performances This Period</span>
+      <span class="section-sub">Completed activities &amp; tasks</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box green">
+        <div class="stat-val"><%= completedActivities.length %></div>
+        <div class="stat-lbl">Activities Completed</div>
+      </div>
+      <div class="stat-box green">
+        <div class="stat-val"><%= completedTasks.length %></div>
+        <div class="stat-lbl">Tasks Completed</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val"><%= activities.length %></div>
+        <div class="stat-lbl">Total Activities</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val"><%= tasks.length %></div>
+        <div class="stat-lbl">Tasks Active</div>
+      </div>
+    </div>
+
+    <% if (completedActivities.length) { %>
+    <table>
+      <thead><tr><th>Activity</th><th>Type</th><th>Company</th><th>Owner</th><th>Date</th></tr></thead>
+      <tbody>
+        <% completedActivities.slice(0, 10).forEach(a => { %>
+        <tr>
+          <td><%= a.name || '—' %></td>
+          <td><span class="badge badge-green"><%= a.type || '—' %></span></td>
+          <td><%= a.company_names || '—' %></td>
+          <td><%= a.owner_name || '—' %></td>
+          <td><%= fmtDate(a.status_date || a.created_at) %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } else { %><div class="empty">No completed activities in this period.</div><% } %>
+
+    <% if (completedTasks.length) { %>
+    <hr class="divider">
+    <table>
+      <thead><tr><th>Task</th><th>Project</th><th>Owner</th><th>Priority</th></tr></thead>
+      <tbody>
+        <% completedTasks.slice(0, 8).forEach(t => { %>
+        <tr>
+          <td><%= t.name %></td>
+          <td><%= t.project_name || '—' %></td>
+          <td><%= t.owner_name || '—' %></td>
+          <td><span class="badge <%= t.priority === 'High' ? 'badge-red' : t.priority === 'Medium' ? 'badge-amber' : 'badge-gray' %>"><%= t.priority || 'Normal' %></span></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       3. NEW CUSTOMER DEVELOPMENT
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section">
+    <div class="section-header">
+      <span class="section-num">3</span>
+      <span class="section-title">New Customer Development</span>
+      <span class="section-sub">Companies &amp; contacts added in period</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box green">
+        <div class="stat-val"><%= newCompanies.length %></div>
+        <div class="stat-lbl">New Companies</div>
+      </div>
+      <div class="stat-box green">
+        <div class="stat-val"><%= newContacts.length %></div>
+        <div class="stat-lbl">New Contacts</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val"><%= newDeals.length %></div>
+        <div class="stat-lbl">New Deals</div>
+      </div>
+    </div>
+
+    <% if (newCompanies.length) { %>
+    <table>
+      <thead><tr><th>Company</th><th>Industry</th><th>Status</th><th>Created by</th><th>Date</th></tr></thead>
+      <tbody>
+        <% newCompanies.forEach(c => { %>
+        <tr>
+          <td><strong><%= c.name %></strong></td>
+          <td><%= c.industry || '—' %></td>
+          <td><span class="badge <%= (c.status||'').toLowerCase() === 'active' ? 'badge-green' : 'badge-gray' %>"><%= c.status || '—' %></span></td>
+          <td><%= c.created_by_name || '—' %></td>
+          <td><%= fmtDate(c.created_at) %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } else { %><div class="empty">No new companies added in this period.</div><% } %>
+
+    <% if (newContacts.length) { %>
+    <hr class="divider">
+    <table>
+      <thead><tr><th>Contact</th><th>Title</th><th>Company</th><th>Email</th><th>Date</th></tr></thead>
+      <tbody>
+        <% newContacts.slice(0, 10).forEach(c => { %>
+        <tr>
+          <td><%= c.full_name || '—' %></td>
+          <td><%= c.title || '—' %></td>
+          <td><%= c.company_name || '—' %></td>
+          <td><%= c.email || '—' %></td>
+          <td><%= fmtDate(c.created_at) %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       4. RISK ANALYSIS
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section">
+    <div class="section-header">
+      <span class="section-num">4</span>
+      <span class="section-title">Risk Analysis</span>
+      <span class="section-sub">Overdue tasks, lost deals &amp; stalled pipeline</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box red">
+        <div class="stat-val"><%= overdueTasks.length %></div>
+        <div class="stat-lbl">Overdue Tasks</div>
+      </div>
+      <div class="stat-box red">
+        <div class="stat-val"><%= lostDeals.length %></div>
+        <div class="stat-lbl">Deals Lost</div>
+      </div>
+      <div class="stat-box amber">
+        <div class="stat-val"><%= openTasks.length %></div>
+        <div class="stat-lbl">Open Tasks</div>
+      </div>
+    </div>
+
+    <% if (overdueTasks.length) { %>
+    <table>
+      <thead><tr><th>Overdue Task</th><th>Project</th><th>Owner</th><th>Deadline</th><th>Priority</th></tr></thead>
+      <tbody>
+        <% overdueTasks.forEach(t => { %>
+        <tr>
+          <td><%= t.name %></td>
+          <td><%= t.project_name || '—' %></td>
+          <td><%= t.owner_name || '—' %></td>
+          <td style="color:#b91c1c; font-weight:600;"><%= fmtDate(t.deadline) %></td>
+          <td><span class="badge <%= t.priority === 'High' ? 'badge-red' : 'badge-amber' %>"><%= t.priority || 'Normal' %></span></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } else { %><div class="empty" style="color:#15803d;">✓ No overdue tasks.</div><% } %>
+
+    <% if (lostDeals.length) { %>
+    <hr class="divider">
+    <table>
+      <thead><tr><th>Lost Deal</th><th>Company</th><th>Value</th><th>Owner</th></tr></thead>
+      <tbody>
+        <% lostDeals.forEach(d => { %>
+        <tr>
+          <td><%= d.name %></td>
+          <td><%= d.company_name || '—' %></td>
+          <td><%= fmtMoney(d.amount) %></td>
+          <td><%= d.owner_name || '—' %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+
+    <div class="notes-box" style="margin-top:10px;">Risk notes / observations: ___________________________________________</div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       5. BUSINESS OPPORTUNITY EVALUATION
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section page-break">
+    <div class="section-header">
+      <span class="section-num">5</span>
+      <span class="section-title">Business Opportunity Evaluation</span>
+      <span class="section-sub">Pipeline stages &amp; active deals</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box accent">
+        <div class="stat-val"><%= fmtMoney(totalPipeline) %></div>
+        <div class="stat-lbl">Open Pipeline</div>
+      </div>
+      <div class="stat-box green">
+        <div class="stat-val"><%= fmtMoney(totalWon) %></div>
+        <div class="stat-lbl">Won (All Time)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val"><%= openDeals.length %></div>
+        <div class="stat-lbl">Open Deals</div>
+      </div>
+      <div class="stat-box green">
+        <div class="stat-val"><%= wonDeals.length %></div>
+        <div class="stat-lbl">Won Deals</div>
+      </div>
+    </div>
+
+    <% const stageKeys = Object.keys(stageMap); const maxStageAmt = Math.max(...stageKeys.map(s => stageMap[s].amount), 1); %>
+    <% stageKeys.sort((a,b) => stageMap[b].amount - stageMap[a].amount).forEach(stage => { const s = stageMap[stage]; %>
+    <div class="prog-wrap">
+      <div class="prog-label">
+        <span><%= stage %> (<%= s.count %> deal<%= s.count !== 1 ? 's' : '' %>)</span>
+        <span><%= fmtMoney(s.amount) %></span>
+      </div>
+      <div class="prog-track"><div class="prog-fill" style="width:<%= Math.round(s.amount/maxStageAmt*100) %>%"></div></div>
+    </div>
+    <% }) %>
+
+    <% if (openDeals.length) { %>
+    <hr class="divider">
+    <table>
+      <thead><tr><th>Deal</th><th>Company</th><th>Stage</th><th>Value</th><th>Close Date</th><th>Owner</th></tr></thead>
+      <tbody>
+        <% openDeals.slice(0, 10).forEach(d => { %>
+        <tr>
+          <td><%= d.name %></td>
+          <td><%= d.company_name || '—' %></td>
+          <td><span class="badge badge-blue"><%= d.stage %></span></td>
+          <td><%= fmtMoney(d.amount) %></td>
+          <td><%= fmtDate(d.close_date) %></td>
+          <td><%= d.owner_name || '—' %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } else { %><div class="empty">No open deals.</div><% } %>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       6. COMPANY PRODUCT LEARNING
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section">
+    <div class="section-header">
+      <span class="section-num">6</span>
+      <span class="section-title">Company Product Learning</span>
+      <span class="section-sub">Product catalog &amp; active projects by product</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-val"><%= products.length %></div>
+        <div class="stat-lbl">Total Products</div>
+      </div>
+      <% const prodCats = {}; products.forEach(p => { const c = p.category || 'Other'; prodCats[c] = (prodCats[c]||0)+1; }); %>
+      <div class="stat-box">
+        <div class="stat-val"><%= Object.keys(prodCats).length %></div>
+        <div class="stat-lbl">Categories</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val"><%= projects.length %></div>
+        <div class="stat-lbl">Active Projects</div>
+      </div>
+    </div>
+
+    <% if (products.length) { %>
+    <table>
+      <thead><tr><th>Product</th><th>Category</th><th>Brand</th><th>Model</th></tr></thead>
+      <tbody>
+        <% products.slice(0, 15).forEach(p => { %>
+        <tr>
+          <td><strong><%= p.name %></strong></td>
+          <td><%= p.category || '—' %></td>
+          <td><%= p.brand || '—' %></td>
+          <td><%= p.model || '—' %></td>
+        </tr>
+        <% }) %>
+        <% if (products.length > 15) { %><tr><td colspan="4" style="color:#aaa; font-style:italic;">… and <%= products.length - 15 %> more</td></tr><% } %>
+      </tbody>
+    </table>
+    <% } else { %><div class="empty">No products in catalog.</div><% } %>
+
+    <div class="notes-box" style="margin-top:10px;">Product knowledge gaps / learning notes: ___________________________</div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       7. INDUSTRY / MARKET TREND STUDY
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section">
+    <div class="section-header">
+      <span class="section-num">7</span>
+      <span class="section-title">Industry / Market Trend Study &amp; Info Gathering</span>
+      <span class="section-sub">Research activities &amp; external engagement</span>
+    </div>
+
+    <%
+      const researchTypes = ['Email', 'LinkedIn', 'Conference', 'Research', 'Webinar', 'Trade Show'];
+      const researchActs = activities.filter(a =>
+        researchTypes.some(t => (a.type||'').toLowerCase().includes(t.toLowerCase()))
+      );
+    %>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-val"><%= researchActs.length %></div>
+        <div class="stat-lbl">Research Activities</div>
+      </div>
+      <% researchTypes.forEach(rt => { const cnt = activities.filter(a => (a.type||'').toLowerCase().includes(rt.toLowerCase())).length; if (cnt > 0) { %>
+      <div class="stat-box">
+        <div class="stat-val"><%= cnt %></div>
+        <div class="stat-lbl"><%= rt %></div>
+      </div>
+      <% } }) %>
+    </div>
+
+    <% if (researchActs.length) { %>
+    <table>
+      <thead><tr><th>Activity</th><th>Type</th><th>Company</th><th>Owner</th><th>Date</th></tr></thead>
+      <tbody>
+        <% researchActs.slice(0, 8).forEach(a => { %>
+        <tr>
+          <td><%= a.name || '—' %></td>
+          <td><span class="badge badge-blue"><%= a.type %></span></td>
+          <td><%= a.company_names || '—' %></td>
+          <td><%= a.owner_name || '—' %></td>
+          <td><%= fmtDate(a.status_date || a.created_at) %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } else { %><div class="empty">No research-type activities recorded in this period.</div><% } %>
+
+    <div class="notes-box" style="margin-top:10px;">Market trends / insights observed: ___________________________________</div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       8. CROSS-DEPT. WORK / INTERNAL SALES OPS
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section page-break">
+    <div class="section-header">
+      <span class="section-num">8</span>
+      <span class="section-title">Cross-Dept. Work / Internal Sales Operations</span>
+      <span class="section-sub">Orders, production, finance, after-sales coordination</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-val"><%= projects.length %></div>
+        <div class="stat-lbl">Projects Active</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val"><%= projects.filter(p => (p.status||'').toLowerCase() === 'in progress').length %></div>
+        <div class="stat-lbl">In Progress</div>
+      </div>
+      <div class="stat-box green">
+        <div class="stat-val"><%= projects.filter(p => (p.status||'').toLowerCase() === 'completed').length %></div>
+        <div class="stat-lbl">Completed</div>
+      </div>
+    </div>
+
+    <% if (projects.length) { %>
+    <table>
+      <thead><tr><th>Project</th><th>Company</th><th>Category</th><th>Status</th><th>Owner</th><th>End Date</th></tr></thead>
+      <tbody>
+        <% projects.forEach(p => { %>
+        <tr>
+          <td><%= p.name %></td>
+          <td><%= p.company_name || '—' %></td>
+          <td><%= p.category || '—' %></td>
+          <td><span class="badge <%= (p.status||'').toLowerCase() === 'completed' ? 'badge-green' : (p.status||'').toLowerCase().includes('progress') ? 'badge-blue' : 'badge-gray' %>"><%= p.status || '—' %></span></td>
+          <td><%= p.owner_name || '—' %></td>
+          <td><%= fmtDate(p.end_date) %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } else { %><div class="empty">No projects active in this period.</div><% } %>
+
+    <div class="notes-box" style="margin-top:10px;">Internal coordination notes (orders / production / finance / after-sales): __________</div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       9. BUSINESS DEVELOPMENT / CLIENT ACQUISITION / LEAD GEN
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section">
+    <div class="section-header">
+      <span class="section-num">9</span>
+      <span class="section-title">Business Development / Client Acquisition / Lead Generation</span>
+      <span class="section-sub">New deals, outreach activities &amp; growth metrics</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box accent">
+        <div class="stat-val"><%= newDeals.length %></div>
+        <div class="stat-lbl">New Deals Created</div>
+      </div>
+      <div class="stat-box green">
+        <div class="stat-val"><%= newCompanies.length %></div>
+        <div class="stat-lbl">New Companies</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val"><%= newContacts.length %></div>
+        <div class="stat-lbl">New Contacts</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val"><%= activities.filter(a => ['Call','Meeting','Demo','Proposal'].some(t => (a.type||'').toLowerCase().includes(t.toLowerCase()))).length %></div>
+        <div class="stat-lbl">BD Activities</div>
+      </div>
+    </div>
+
+    <% if (newDeals.length) { %>
+    <table>
+      <thead><tr><th>New Deal</th><th>Company</th><th>Stage</th><th>Value</th><th>Owner</th><th>Created</th></tr></thead>
+      <tbody>
+        <% newDeals.forEach(d => { %>
+        <tr>
+          <td><%= d.name %></td>
+          <td><%= d.company_name || '—' %></td>
+          <td><span class="badge badge-blue"><%= d.stage %></span></td>
+          <td><%= fmtMoney(d.amount) %></td>
+          <td><%= d.owner_name || '—' %></td>
+          <td><%= fmtDate(d.created_at) %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } else { %><div class="empty">No new deals in this period.</div><% } %>
+
+    <div class="notes-box" style="margin-top:10px;">Lead generation initiatives / BD notes: ________________________________</div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       10. OTHERS: PROACTIVE EXPLORATION / IMPROVEMENT
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div class="report-section">
+    <div class="section-header">
+      <span class="section-num">10</span>
+      <span class="section-title">Others: Proactive Exploration / Improvement</span>
+      <span class="section-sub">Operational efficiency, risk mitigation, business support</span>
+    </div>
+
+    <div class="two-col">
+      <div>
+        <div style="font-size:8pt; font-weight:700; color:#444; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;">Activity Type Breakdown</div>
+        <% const actTypeEntries = Object.entries(actTypeMap).sort((a,b) => b[1]-a[1]); const maxAct = Math.max(...actTypeEntries.map(e => e[1]), 1); %>
+        <% actTypeEntries.forEach(([type, cnt]) => { %>
+        <div class="prog-wrap">
+          <div class="prog-label"><span><%= type %></span><span><%= cnt %></span></div>
+          <div class="prog-track"><div class="prog-fill" style="width:<%= Math.round(cnt/maxAct*100) %>%"></div></div>
+        </div>
+        <% }) %>
+        <% if (!actTypeEntries.length) { %><div class="empty">No activities logged.</div><% } %>
+      </div>
+      <div>
+        <div style="font-size:8pt; font-weight:700; color:#444; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;">Team Summary</div>
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>Title</th></tr></thead>
+          <tbody>
+            <% users.forEach(u => { %>
+            <tr>
+              <td><%= u.name %></td>
+              <td><span class="badge badge-gray"><%= u.role %></span></td>
+              <td><%= u.title || '—' %></td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="notes-box" style="margin-top:14px;">Improvement initiatives / operational notes / proactive actions taken:
+<br><br>
+_______________________________________________________________
+<br><br>
+_______________________________________________________________
+    </div>
+  </div>
+
+
+  <!-- ── FOOTER ──────────────────────────────────────────────────────── -->
+  <div class="report-footer">
+    <span>Samyou CRM — Confidential</span>
+    <span>Period: <%= reportPeriod %></span>
+    <span>Generated: <%= generatedAt %></span>
+  </div>
+
+</div><!-- /page-wrap -->
+</body>
+</html>

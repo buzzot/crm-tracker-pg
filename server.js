@@ -32,6 +32,7 @@ const adminRoutes = require('./routes/admin');
 const profileRoutes = require('./routes/profile');
 const webhookRoutes = require('./routes/webhooks');
 const mediaRoutes   = require('./routes/media');
+const reportsRoutes = require('./routes/reports');
 
 const app = express();
 
@@ -118,6 +119,7 @@ app.use(contactsRoutes);
 app.use(dealsRoutes);
 app.use(apiRoutes);
 app.use('/admin', requireAdmin, adminRoutes);
+app.use(reportsRoutes);
 
 app.use((req, res) => {
   res.status(404).render('error', { title: 'Not found', message: 'Page not found.' });
