@@ -42,6 +42,9 @@
         const rightFields = [];
         if (contact.company) leftFields.push({ icon: 'bi-building', label: 'Company', html: `<a href="/companies/${escapeHtml(contact.company.id)}" class="table-link">${escapeHtml(contact.company.name)}</a>` });
         if (contact.title) leftFields.push({ icon: 'bi-briefcase', label: 'Title', html: escapeHtml(contact.title) });
+        const statusColors = { 'Active': 'var(--crm-success)', 'Not Active': 'var(--crm-muted-fg)', 'Left': '#e53e3e' };
+        const statusColor = statusColors[contact.status] || 'var(--crm-muted-fg)';
+        leftFields.push({ icon: 'bi-circle-fill', label: 'Status', html: `<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${statusColor};display:inline-block;"></span>${escapeHtml(contact.status || 'Active')}</span>` });
         if (contact.fullName) rightFields.push({ icon: 'bi-person', label: 'Name', html: escapeHtml(contact.fullName) });
         if (contact.email) rightFields.push({ icon: 'bi-envelope', label: 'Email', html: `<a href="mailto:${escapeHtml(contact.email)}" class="table-link">${escapeHtml(contact.email)}</a>` });
         if (contact.phone) rightFields.push({ icon: 'bi-telephone', label: 'Phone', html: `<a href="tel:${escapeHtml(contact.phone)}" class="table-link">${escapeHtml(contact.phone)}</a>` });
@@ -110,7 +113,14 @@
             <label class="pnew-field-label"><i class="bi bi-telephone"></i> Phone</label>
             <input type="text" name="phone" class="pnew-input" placeholder="Add a phone number" value="<%= contact.phone || '' %>">
           </div>
-          <div></div>
+          <div>
+            <label class="pnew-field-label"><i class="bi bi-circle-fill"></i> Status</label>
+            <select name="status" class="pnew-input">
+              <% (typeof statusChoices !== 'undefined' ? statusChoices : ['Active','Not Active','Left']).forEach(s => { %>
+                <option value="<%= s %>" <%= (contact.status || 'Active') === s ? 'selected' : '' %>><%= s %></option>
+              <% }) %>
+            </select>
+          </div>
         </div>
 
         <label class="pnew-field-label"><i class="bi bi-card-text"></i> Notes</label>

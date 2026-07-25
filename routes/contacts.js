@@ -12,6 +12,7 @@ router.get('/contacts/:id', async (req, res, next) => {
     res.render('contact-detail', {
       title: contact.fullName || 'Contact',
       contact,
+      statusChoices: crm.schema.tables.contacts.statusChoices,
       error: null
     });
   } catch (err) {
@@ -21,8 +22,8 @@ router.get('/contacts/:id', async (req, res, next) => {
 
 router.post('/contacts/:id/details', async (req, res, next) => {
   try {
-    const { title, email, phone, notes, companyId } = req.body;
-    await crm.updateContact(req.params.id, { title, email, phone, notes, companyId: companyId || null });
+    const { title, email, phone, notes, status, companyId } = req.body;
+    await crm.updateContact(req.params.id, { title, email, phone, notes, status, companyId: companyId || null });
     res.redirect(`/contacts/${req.params.id}`);
   } catch (err) {
     try {
@@ -30,6 +31,7 @@ router.post('/contacts/:id/details', async (req, res, next) => {
       return res.status(400).render('contact-detail', {
         title: contact.fullName || 'Contact',
         contact,
+        statusChoices: crm.schema.tables.contacts.statusChoices,
         error: err.message
       });
     } catch (err2) {
@@ -51,6 +53,7 @@ router.post('/contacts/:id/comments', upload.array('attachment', 5), async (req,
       return res.status(400).render('contact-detail', {
         title: contact.fullName || 'Contact',
         contact,
+        statusChoices: crm.schema.tables.contacts.statusChoices,
         error: err.message
       });
     } catch (err2) {

@@ -365,20 +365,20 @@ async function getContact(id) {
   return r.rows[0] ? mapContact(r.rows[0]) : null;
 }
 
-async function createContact({ fullName, email, phone, title, companyId, ownerId, groupId }) {
+async function createContact({ fullName, email, phone, title, status, companyId, ownerId, groupId }) {
   const r = await query(
-    `INSERT INTO contacts (full_name, email, phone, title, company_id, owner_id, group_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-    [fullName, email, phone, title, companyId, ownerId, groupId]
+    `INSERT INTO contacts (full_name, email, phone, title, status, company_id, owner_id, group_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+    [fullName, email, phone, title, status || 'Active', companyId, ownerId, groupId]
   );
   return getContact(r.rows[0].id);
 }
 
-async function updateContact(id, { fullName, email, phone, title, notes, companyId }) {
+async function updateContact(id, { fullName, email, phone, title, notes, status, companyId }) {
   await query(
     `UPDATE contacts SET full_name=COALESCE($2,full_name), email=$3, phone=$4, title=$5,
-       notes=$6, company_id=COALESCE($7,company_id), updated_at=NOW() WHERE id=$1`,
-    [id, fullName, email, phone, title, notes ?? null, companyId]
+       notes=$6, status=$7, company_id=COALESCE($8,company_id), updated_at=NOW() WHERE id=$1`,
+    [id, fullName, email, phone, title, notes ?? null, status || null, companyId]
   );
   return getContact(id);
 }
@@ -393,7 +393,8 @@ function mapContact(row) {
     email: row.email || null,
     phone: row.phone || null,
     title: row.title || null,
-    notes: row.notes || null,   // contacts.notes column (added via migrate-contacts-notes.sql)
+    notes: row.notes || null,
+    status: row.status || 'Active',
     companyId: row.company_id || null,
     companyIds: row.company_id ? [row.company_id] : [],
     companyName: row.company_name || null,
@@ -1226,7 +1227,7 @@ const schema = {
       industryChoices: ['Technology', 'Manufacturing', 'Healthcare', 'Finance', 'Retail', 'Education', 'Other']
     },
     contacts: {
-      statusChoices: ['Active', 'Inactive']
+      statusChoices: ['Active', 'Not Active', 'Left']
     },
     activities: {
       typeChoices: ['Call', 'Email', 'LinkedIn', 'Meeting', 'Demo', 'Other'],

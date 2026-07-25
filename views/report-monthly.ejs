@@ -284,14 +284,14 @@
     <% if (completedTasks.length) { %>
     <hr class="divider">
     <table>
-      <thead><tr><th>Task</th><th>Project</th><th>Owner</th><th>Priority</th></tr></thead>
+      <thead><tr><th>Task</th><th>Project</th><th>Owner</th><th>Deadline</th></tr></thead>
       <tbody>
         <% completedTasks.slice(0, 8).forEach(t => { %>
         <tr>
           <td><%= t.name %></td>
           <td><%= t.project_name || '—' %></td>
           <td><%= t.owner_name || '—' %></td>
-          <td><span class="badge <%= t.priority === 'High' ? 'badge-red' : t.priority === 'Medium' ? 'badge-amber' : 'badge-gray' %>"><%= t.priority || 'Normal' %></span></td>
+          <td><%= fmtDate(t.deadline) %></td>
         </tr>
         <% }) %>
       </tbody>
@@ -389,7 +389,7 @@
 
     <% if (overdueTasks.length) { %>
     <table>
-      <thead><tr><th>Overdue Task</th><th>Project</th><th>Owner</th><th>Deadline</th><th>Priority</th></tr></thead>
+      <thead><tr><th>Overdue Task</th><th>Project</th><th>Owner</th><th>Deadline</th></tr></thead>
       <tbody>
         <% overdueTasks.forEach(t => { %>
         <tr>
@@ -397,7 +397,6 @@
           <td><%= t.project_name || '—' %></td>
           <td><%= t.owner_name || '—' %></td>
           <td style="color:#b91c1c; font-weight:600;"><%= fmtDate(t.deadline) %></td>
-          <td><span class="badge <%= t.priority === 'High' ? 'badge-red' : 'badge-amber' %>"><%= t.priority || 'Normal' %></span></td>
         </tr>
         <% }) %>
       </tbody>

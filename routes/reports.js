@@ -113,7 +113,7 @@ router.get('/reports/monthly', async (req, res, next) => {
 
     // ── 6. Tasks ──────────────────────────────────────────────────────────────
     const tasksR = await query(
-      `SELECT t.id, t.name, t.status, t.priority, t.deadline, t.created_at,
+      `SELECT t.id, t.name, t.status, t.deadline, t.created_at,
               u.name AS owner_name,
               p.name AS project_name
        FROM tasks t
