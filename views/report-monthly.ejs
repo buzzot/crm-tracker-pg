@@ -610,16 +610,15 @@
 
     <% if (projects.length) { %>
     <table>
-      <thead><tr><th>Project</th><th>Company</th><th>Category</th><th>Status</th><th>Owner</th><th>End Date</th></tr></thead>
+      <thead><tr><th>Project</th><th>Company</th><th>Status</th><th>Owner</th><th>Updated</th></tr></thead>
       <tbody>
         <% projects.forEach(p => { %>
         <tr>
           <td><%= p.name %></td>
           <td><%= p.company_name || '—' %></td>
-          <td><%= p.category || '—' %></td>
           <td><span class="badge <%= (p.status||'').toLowerCase() === 'completed' ? 'badge-green' : (p.status||'').toLowerCase().includes('progress') ? 'badge-blue' : 'badge-gray' %>"><%= p.status || '—' %></span></td>
           <td><%= p.owner_name || '—' %></td>
-          <td><%= fmtDate(p.end_date) %></td>
+          <td><%= fmtDate(p.updated_at) %></td>
         </tr>
         <% }) %>
       </tbody>
