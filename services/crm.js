@@ -1139,8 +1139,8 @@ async function addProjectComment({ projectId, author, comment, link, files, type
 async function addDealComment({ dealId, author, comment, link }) {
   return addComment({ entityType: 'deal', entityId: dealId, content: comment, authorName: author, link });
 }
-async function addContactComment({ contactId, author, comment, link }) {
-  return addComment({ entityType: 'contact', entityId: contactId, content: comment, authorName: author, link });
+async function addContactComment({ contactId, author, authorId, comment, link, files }) {
+  return addComment({ entityType: 'contact', entityId: contactId, content: comment, authorName: author, link, files, uploadedById: authorId });
 }
 async function listTaskComments(taskId) { return listCommentsByEntity('task', taskId); }
 async function listActivityComments(activityId) { return listCommentsByEntity('activity', activityId); }

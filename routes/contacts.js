@@ -1,6 +1,9 @@
 const express = require('express');
-const router = express.Router();
-const crm = require('../services/crm');
+const multer  = require('multer');
+const router  = express.Router();
+const crm     = require('../services/crm');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 router.get('/contacts/:id', async (req, res, next) => {
   try {
@@ -35,11 +38,12 @@ router.post('/contacts/:id/details', async (req, res, next) => {
   }
 });
 
-router.post('/contacts/:id/comments', async (req, res, next) => {
+router.post('/contacts/:id/comments', upload.array('attachment', 5), async (req, res, next) => {
   try {
-    const { comment, link } = req.body;
+    const { comment } = req.body;
     const author = (req.session.user && req.session.user.name) || 'Someone';
-    await crm.addContactComment({ contactId: req.params.id, author, comment, link });
+    const authorId = req.session.user ? req.session.user.id : null;
+    await crm.addContactComment({ contactId: req.params.id, author, authorId, comment, files: req.files });
     res.redirect(`/contacts/${req.params.id}`);
   } catch (err) {
     try {

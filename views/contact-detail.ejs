@@ -146,17 +146,19 @@
       <h2 class="pnew-card-title">Comments (<%= contact.comments.length %>)</h2>
       <p class="pnew-card-sub">Notes and updates shared about this contact.</p>
 
-      <form action="/contacts/<%= contact.id %>/comments" method="POST">
+      <form action="/contacts/<%= contact.id %>/comments" method="POST" enctype="multipart/form-data">
         <div class="note-compose-box">
           <div class="d-flex gap-2">
             <span class="note-avatar note-avatar-you"><%= youInitial %></span>
             <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a comment..." required></textarea>
           </div>
           <div class="note-compose-footer">
-            <div class="note-link-field">
-              <i class="bi bi-link-45deg"></i>
-              <input type="url" name="link" class="note-link-input-inline" placeholder="Optional link (e.g. to a file)">
-            </div>
+            <label class="note-link-field" style="cursor:pointer;" title="Attach file">
+              <i class="bi bi-paperclip"></i>
+              <span id="contactCommentFileLabel">Attach</span>
+              <input type="file" name="attachment" multiple style="display:none;" id="contactCommentFileInput"
+                     onchange="var n=this.files.length; document.getElementById('contactCommentFileLabel').textContent=n?n+' file'+(n>1?'s':''):'Attach';">
+            </label>
             <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
           </div>
         </div>
@@ -175,6 +177,13 @@
               <div class="note-text"><%= c.comment %></div>
               <% if (c.link) { %>
                 <a href="<%= c.link %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-link-45deg"></i><%= c.link %></a>
+              <% } %>
+              <% if (c.attachments && c.attachments.length) { %>
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                  <% c.attachments.forEach(file => { %>
+                    <a href="<%= file.url %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-paperclip"></i><%= file.filename %></a>
+                  <% }) %>
+                </div>
               <% } %>
             </div>
           </div>
