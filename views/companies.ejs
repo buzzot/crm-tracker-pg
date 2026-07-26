@@ -197,59 +197,74 @@
     border-radius: 0 !important;
   }
 
-  /* Compact table */
-  .companies-table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+  /* Compact fixed-layout table — one tight line per company */
+  .companies-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5pt;
+    table-layout: fixed;
+  }
+
+  /* Column widths */
+  .companies-table thead th:nth-child(1) { width: 34%; }  /* Company */
+  .companies-table thead th:nth-child(2) { width: 22%; }  /* Industry */
+  .companies-table thead th:nth-child(3) { width: 12%; }  /* Status */
+  .companies-table thead th:nth-child(4) { width: 32%; }  /* Website */
 
   .companies-table thead th {
     background: #1a1a2e !important;
     color: #fff !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-    padding: 4pt 8pt !important;
-    font-size: 7pt;
+    padding: 3.5pt 7pt !important;
+    font-size: 6.5pt;
     text-transform: uppercase;
-    letter-spacing: .05em;
+    letter-spacing: .06em;
     font-weight: 700;
     border: none !important;
   }
 
-  /* Alternating rows for contrast */
+  /* Alternating rows — strong enough to guide the eye */
   .companies-table tbody tr:nth-child(odd)  { background: #fff !important; }
-  .companies-table tbody tr:nth-child(even) { background: #f0f3f8 !important;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .companies-table tbody tr:nth-child(even) {
+    background: #e8ecf4 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .companies-table tbody tr:hover { background: inherit !important; }
   .companies-table tbody tr { border-bottom: none !important; cursor: default; page-break-inside: avoid; }
 
-  /* Tight single-line cells */
+  /* Single tight line per cell */
   .companies-table td {
-    padding: 3pt 8pt !important;
+    padding: 2.5pt 7pt !important;
     vertical-align: middle;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.3;
   }
 
-  /* Hide avatar entirely — saves space, name is enough */
-  .company-avatar { display: none !important; }
+  /* Company column: hide avatar, show name only */
+  .company-avatar    { display: none !important; }
   .company-name-cell { display: block !important; }
-  .company-name-block { display: block !important; }
-  .company-name { font-weight: 600; font-size: 8pt; }
+  .company-name-block{ display: block !important; }
+  .company-name      { font-weight: 700; font-size: 7.5pt; color: #1a1a2e; }
   .company-website-sub { display: none !important; }
 
-  /* Slim status badges */
-  .badge {
-    font-size: 6.5pt !important;
-    padding: 1pt 5pt !important;
-    border-radius: 3pt !important;
-    border: 0.5pt solid #ccc !important;
-  }
-  .status-dot { display: none !important; }
+  /* Industry */
+  .industry-tag { font-size: 7.5pt; background: none !important; padding: 0 !important; border: none !important; color: #333; }
+  .muted-cell   { color: #bbb; }
 
-  /* Trim website URL — strip https:// for brevity */
-  .table-link { font-size: 7.5pt; color: #333 !important; }
+  /* Status badge — text only, no dot, no box */
+  .badge        { font-size: 7pt !important; padding: 0 !important; border: none !important;
+                  background: none !important; font-weight: 700; }
+  .badge.company-status-Client  { color: #15803d !important; }
+  .badge.company-status-Lead    { color: #b45309 !important; }
+  .badge.company-status-Planned { color: #1d4ed8 !important; }
+  .status-dot   { display: none !important; }
+
+  /* Website — plain text, no icon */
+  .table-link { font-size: 7pt; color: #555 !important; text-decoration: none !important; }
   .table-link .bi-box-arrow-up-right { display: none !important; }
-
-  /* Industry tag */
-  .industry-tag { font-size: 7.5pt; }
 }
 </style>
