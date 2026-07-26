@@ -197,6 +197,19 @@
     border-radius: 0 !important;
   }
 
+  /* Force table back to proper table layout (overrides mobile stacked CSS) */
+  .companies-table,
+  .companies-table thead,
+  .companies-table tbody,
+  .companies-table tfoot  { display: table !important; width: 100% !important; }
+  .companies-table thead  { display: table-header-group !important; }
+  .companies-table tbody  { display: table-row-group !important; }
+  .companies-table tr     { display: table-row !important; }
+  .companies-table th,
+  .companies-table td     { display: table-cell !important; }
+  /* Hide data-label pseudo-headers injected by mobile CSS */
+  .companies-table td::before { display: none !important; content: none !important; }
+
   /* Compact fixed-layout table — one tight line per company */
   .companies-table {
     width: 100%;
