@@ -158,78 +158,98 @@
   nav, .navbar, .sidebar, header,
   .companies-page-header .btn-add-company,
   .btn-print-list,
-  .companies-toolbar { display: none !important; }
+  .companies-toolbar,
+  .companies-page-header { display: none !important; }
 
   /* Show print header */
   #print-header {
     display: block !important;
-    margin-bottom: 18pt;
+    margin-bottom: 10pt;
     font-family: 'Segoe UI', Arial, sans-serif;
   }
   .ph-brand {
-    font-size: 9pt;
+    font-size: 8pt;
     font-weight: 600;
     color: #666;
     text-transform: uppercase;
     letter-spacing: .06em;
   }
   .ph-title {
-    font-size: 18pt;
+    font-size: 16pt;
     font-weight: 700;
     color: #1a1a2e;
-    margin: 2pt 0 4pt;
+    margin: 2pt 0 3pt;
   }
-  .ph-meta { font-size: 8.5pt; color: #888; }
+  .ph-meta { font-size: 8pt; color: #888; }
   .ph-rule {
     border: none;
-    border-top: 2px solid #1a1a2e;
-    margin: 8pt 0 14pt;
+    border-top: 2pt solid #1a1a2e;
+    margin: 6pt 0 0;
   }
 
   /* Page setup */
-  body { font-size: 9pt; background: #fff !important; color: #1a1a2e !important; }
-  .companies-page-header h1 { font-size: 13pt; margin-bottom: 8pt; }
+  body { font-size: 8pt; background: #fff !important; color: #1a1a2e !important; }
 
-  /* Clean table */
+  /* Clean card */
   .companies-table-card {
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
   }
-  .companies-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
-  .companies-table thead th {
-    background: #f0f2f6 !important;
-    color: #333 !important;
-    border-bottom: 1.5pt solid #1a1a2e !important;
-    padding: 5pt 7pt !important;
-    font-size: 7.5pt;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-  }
-  .companies-table tbody tr { border-bottom: 0.5pt solid #dde1ea !important; cursor: default; }
-  .companies-table tbody tr:hover { background: transparent !important; }
-  .companies-table td { padding: 5pt 7pt !important; vertical-align: middle; }
 
-  /* Simplify avatar — just show initials plainly */
-  .company-avatar {
+  /* Compact table */
+  .companies-table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+
+  .companies-table thead th {
     background: #1a1a2e !important;
     color: #fff !important;
-    font-size: 7pt !important;
-    width: 20px !important;
-    height: 20px !important;
-    min-width: 20px !important;
-    border-radius: 4px !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 4pt 8pt !important;
+    font-size: 7pt;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    font-weight: 700;
+    border: none !important;
   }
-  .company-website-sub { display: none; }
 
-  /* Status badges */
-  .badge { border: 0.5pt solid #ccc !important; }
+  /* Alternating rows for contrast */
+  .companies-table tbody tr:nth-child(odd)  { background: #fff !important; }
+  .companies-table tbody tr:nth-child(even) { background: #f0f3f8 !important;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .companies-table tbody tr:hover { background: inherit !important; }
+  .companies-table tbody tr { border-bottom: none !important; cursor: default; page-break-inside: avoid; }
+
+  /* Tight single-line cells */
+  .companies-table td {
+    padding: 3pt 8pt !important;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Hide avatar entirely — saves space, name is enough */
+  .company-avatar { display: none !important; }
+  .company-name-cell { display: block !important; }
+  .company-name-block { display: block !important; }
+  .company-name { font-weight: 600; font-size: 8pt; }
+  .company-website-sub { display: none !important; }
+
+  /* Slim status badges */
+  .badge {
+    font-size: 6.5pt !important;
+    padding: 1pt 5pt !important;
+    border-radius: 3pt !important;
+    border: 0.5pt solid #ccc !important;
+  }
   .status-dot { display: none !important; }
 
-  /* Hide website column links decorations */
-  .table-link .bi-box-arrow-up-right { display: none; }
+  /* Trim website URL — strip https:// for brevity */
+  .table-link { font-size: 7.5pt; color: #333 !important; }
+  .table-link .bi-box-arrow-up-right { display: none !important; }
 
-  /* Page breaks */
-  .companies-table tbody tr { page-break-inside: avoid; }
+  /* Industry tag */
+  .industry-tag { font-size: 7.5pt; }
 }
 </style>
