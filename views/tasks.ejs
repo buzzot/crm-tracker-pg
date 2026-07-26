@@ -22,11 +22,25 @@
     return `background:${c.bg};color:${c.fg};`;
   }
 
-  // Filter
+  // Status filter
   const activeFilter = (typeof filter !== 'undefined' ? filter : 'active');
   let shown = tasks;
   if (activeFilter === 'active')    shown = tasks.filter(t => t.status !== 'Completed');
   if (activeFilter === 'completed') shown = tasks.filter(t => t.status === 'Completed');
+
+  // User filter (Admin only)
+  const activeUserId = (typeof filterUserId !== 'undefined' ? filterUserId : '');
+  if (activeUserId) {
+    shown = shown.filter(t =>
+      (t.ownerId && t.ownerId === activeUserId) ||
+      (t.assignees && t.assignees.some(a => a.id === activeUserId))
+    );
+  }
+
+  // Build tab URL helper — preserves userId when set
+  function tabUrl(status) {
+    return '/tasks?status=' + status + (activeUserId ? '&userId=' + encodeURIComponent(activeUserId) : '');
+  }
 %>
 
 <div class="pnew-page">
@@ -35,11 +49,28 @@
     <a href="/tasks/new" class="pnew-btn-save"><i class="bi bi-plus-lg me-1"></i>New Task</a>
   </div>
 
-  <!-- Filter tabs -->
-  <div class="task-filter-tabs mb-3">
-    <a href="/tasks?status=active"    class="task-filter-tab <%= activeFilter === 'active'    ? 'active' : '' %>">Active <span class="task-count"><%= tasks.filter(t => t.status !== 'Completed').length %></span></a>
-    <a href="/tasks?status=completed" class="task-filter-tab <%= activeFilter === 'completed' ? 'active' : '' %>">Completed <span class="task-count"><%= tasks.filter(t => t.status === 'Completed').length %></span></a>
-    <a href="/tasks?status=all"       class="task-filter-tab <%= activeFilter === 'all'       ? 'active' : '' %>">All <span class="task-count"><%= tasks.length %></span></a>
+  <!-- Filter bar: status tabs + optional user dropdown (Admin only) -->
+  <div class="task-filterbar mb-3">
+    <div class="task-filter-tabs">
+      <a href="<%= tabUrl('active') %>"    class="task-filter-tab <%= activeFilter === 'active'    ? 'active' : '' %>">Active <span class="task-count"><%= tasks.filter(t => t.status !== 'Completed').length %></span></a>
+      <a href="<%= tabUrl('completed') %>" class="task-filter-tab <%= activeFilter === 'completed' ? 'active' : '' %>">Completed <span class="task-count"><%= tasks.filter(t => t.status === 'Completed').length %></span></a>
+      <a href="<%= tabUrl('all') %>"       class="task-filter-tab <%= activeFilter === 'all'       ? 'active' : '' %>">All <span class="task-count"><%= tasks.length %></span></a>
+    </div>
+
+    <% if (typeof teamUsers !== 'undefined' && teamUsers.length) { %>
+    <form method="GET" action="/tasks" class="task-user-filter">
+      <input type="hidden" name="status" value="<%= activeFilter %>">
+      <select name="userId" onchange="this.form.submit()" class="task-user-select">
+        <option value="">All members</option>
+        <% teamUsers.forEach(u => { %>
+          <option value="<%= u.id %>" <%= activeUserId === u.id ? 'selected' : '' %>><%= u.name %><% if (u.title) { %> — <%= u.title %><% } %></option>
+        <% }) %>
+      </select>
+      <% if (activeUserId) { %>
+        <a href="/tasks?status=<%= activeFilter %>" class="task-clear-user" title="Clear filter">✕</a>
+      <% } %>
+    </form>
+    <% } %>
   </div>
 
   <% if (!shown.length) { %>
@@ -104,7 +135,16 @@
 </div>
 
 <style>
-.task-filter-tabs { display:flex; gap:0.25rem; border-bottom:1px solid var(--crm-border); }
+/* ── Filter bar ── */
+.task-filterbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--crm-border);
+}
+.task-filter-tabs { display:flex; gap:0.25rem; border-bottom: none; }
 .task-filter-tab {
   padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 500;
   color: var(--crm-muted-fg); text-decoration: none; border-bottom: 2px solid transparent;
@@ -151,6 +191,33 @@
   border: 1px solid var(--crm-bg);
 }
 .task-assignee-more { font-size:0.75rem; color:var(--crm-muted-fg); }
+
+/* ── User filter dropdown ── */
+.task-user-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.35rem;
+}
+.task-user-select {
+  border: 1px solid var(--crm-border);
+  border-radius: 7px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+  color: var(--crm-fg);
+  background: var(--crm-muted);
+  cursor: pointer;
+  outline: none;
+}
+.task-user-select:focus { border-color: var(--crm-accent); }
+.task-clear-user {
+  font-size: 0.75rem;
+  color: var(--crm-muted-fg);
+  text-decoration: none;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+.task-clear-user:hover { color: var(--crm-fg); background: var(--crm-muted); }
 
 .task-status-badge {
   display:inline-block; padding:0.2rem 0.55rem; border-radius:999px;

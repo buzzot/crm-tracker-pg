@@ -14,9 +14,22 @@
   companies.forEach(c => { if (c.status && statusCounts.hasOwnProperty(c.status)) statusCounts[c.status]++; });
 %>
 
+<!-- Print-only header (hidden on screen) -->
+<div id="print-header">
+  <div class="ph-brand">Samyou CRM</div>
+  <div class="ph-title">Company Directory</div>
+  <div class="ph-meta" id="phMeta">Generated: <span id="phDate"></span> &nbsp;|&nbsp; <span id="phCount"><%= companies.length %></span> companies</div>
+  <hr class="ph-rule">
+</div>
+
 <div class="companies-page-header">
   <h1 class="companies-page-title">Companies <span class="companies-page-count"><%= companies.length %></span></h1>
-  <a href="/companies/new" class="btn-add-company">Add Company</a>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <button onclick="window.print()" class="btn-print-list" title="Print company list">
+      <i class="bi bi-printer"></i> Print
+    </button>
+    <a href="/companies/new" class="btn-add-company">Add Company</a>
+  </div>
 </div>
 
 <div class="companies-toolbar">
@@ -106,4 +119,117 @@
 
     searchInput.addEventListener('input', applyFilters);
   })();
+
+  // Fill print header with current date + visible row count
+  document.getElementById('phDate').textContent =
+    new Date().toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+
+  window.addEventListener('beforeprint', function () {
+    const visible = [...document.querySelectorAll('#companiesTable tbody tr')]
+      .filter(r => r.style.display !== 'none').length;
+    document.getElementById('phCount').textContent = visible;
+  });
 </script>
+
+<style>
+/* ── Print button (screen only) ── */
+.btn-print-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  background: var(--crm-muted);
+  color: var(--crm-muted-fg);
+  font-size: 0.83rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.btn-print-list:hover { background: var(--crm-fg); color: #fff; border-color: var(--crm-fg); }
+
+/* ── Print-only header (hidden on screen) ── */
+#print-header { display: none; }
+
+/* ── Print styles ── */
+@media print {
+  /* Hide everything that shouldn't print */
+  nav, .navbar, .sidebar, header,
+  .companies-page-header .btn-add-company,
+  .btn-print-list,
+  .companies-toolbar { display: none !important; }
+
+  /* Show print header */
+  #print-header {
+    display: block !important;
+    margin-bottom: 18pt;
+    font-family: 'Segoe UI', Arial, sans-serif;
+  }
+  .ph-brand {
+    font-size: 9pt;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .ph-title {
+    font-size: 18pt;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin: 2pt 0 4pt;
+  }
+  .ph-meta { font-size: 8.5pt; color: #888; }
+  .ph-rule {
+    border: none;
+    border-top: 2px solid #1a1a2e;
+    margin: 8pt 0 14pt;
+  }
+
+  /* Page setup */
+  body { font-size: 9pt; background: #fff !important; color: #1a1a2e !important; }
+  .companies-page-header h1 { font-size: 13pt; margin-bottom: 8pt; }
+
+  /* Clean table */
+  .companies-table-card {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  .companies-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  .companies-table thead th {
+    background: #f0f2f6 !important;
+    color: #333 !important;
+    border-bottom: 1.5pt solid #1a1a2e !important;
+    padding: 5pt 7pt !important;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .companies-table tbody tr { border-bottom: 0.5pt solid #dde1ea !important; cursor: default; }
+  .companies-table tbody tr:hover { background: transparent !important; }
+  .companies-table td { padding: 5pt 7pt !important; vertical-align: middle; }
+
+  /* Simplify avatar — just show initials plainly */
+  .company-avatar {
+    background: #1a1a2e !important;
+    color: #fff !important;
+    font-size: 7pt !important;
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    border-radius: 4px !important;
+  }
+  .company-website-sub { display: none; }
+
+  /* Status badges */
+  .badge { border: 0.5pt solid #ccc !important; }
+  .status-dot { display: none !important; }
+
+  /* Hide website column links decorations */
+  .table-link .bi-box-arrow-up-right { display: none; }
+
+  /* Page breaks */
+  .companies-table tbody tr { page-break-inside: avoid; }
+}
+</style>

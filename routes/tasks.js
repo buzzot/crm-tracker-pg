@@ -10,15 +10,24 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 
 router.get('/tasks', async (req, res, next) => {
   try {
-    const user   = req.session.user;
-    const filter = req.query.status || 'active'; // 'active' | 'completed' | 'all'
-    const tasks  = await crm.listTasks({ user });
+    const user     = req.session.user;
+    const filter   = req.query.status || 'active'; // 'active' | 'completed' | 'all'
+    const userId   = req.query.userId || '';        // Admin-only user filter
+    const tasks    = await crm.listTasks({ user });
     const projects = await crm.listProjects(user);
+
+    // Only admins get the user dropdown
+    const teamUsers = (user && user.role === 'Admin')
+      ? await crm.listTeamUsers()
+      : [];
+
     res.render('tasks', {
       title: 'Tasks',
       tasks,
       projects,
       filter,
+      filterUserId: userId,
+      teamUsers,
       statusChoices: crm.schema.tables.tasks.statusChoices,
     });
   } catch (err) { next(err); }
