@@ -115,6 +115,11 @@
                     <% }) %>
                     <% if (task.assignees.length > 3) { %><span class="task-assignee-more">+<%= task.assignees.length - 3 %></span><% } %>
                   </div>
+                <% } else if (task.ownerName) { %>
+                  <div class="task-assignee-avatars">
+                    <span class="task-assignee-av" title="<%= task.ownerName %>" style="background:var(--crm-muted-fg);"><%= task.ownerName.charAt(0).toUpperCase() %></span>
+                    <span style="color:var(--crm-muted-fg); font-size:0.78rem;"><%= task.ownerName %></span>
+                  </div>
                 <% } else { %><span style="color:var(--crm-muted-fg);">—</span><% } %>
               </td>
               <td class="task-meta"><%= fmtDate(task.startDate || task.date) %></td>

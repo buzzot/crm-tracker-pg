@@ -123,6 +123,15 @@ router.post('/tasks/:id/auditor', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── Set owner ───────────────────────────────────────────────────────────────
+
+router.post('/tasks/:id/owner', async (req, res, next) => {
+  try {
+    await crm.setTaskOwner(req.params.id, req.body.ownerId || null);
+    res.redirect(`/tasks/${req.params.id}`);
+  } catch (err) { next(err); }
+});
+
 // ─── Assignees (by user IDs) ──────────────────────────────────────────────────
 
 router.post('/tasks/:id/assignees', async (req, res, next) => {

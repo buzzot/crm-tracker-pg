@@ -339,15 +339,41 @@
 
       <!-- Owner -->
       <div class="pnew-card">
-        <h2 class="pnew-card-title">Owner</h2>
-        <p class="pnew-card-sub">Created this task.</p>
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <h2 class="pnew-card-title">Owner</h2>
+            <p class="pnew-card-sub">Responsible for this task.</p>
+          </div>
+          <% if (canAssign) { %>
+            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#ownerPicker">
+              <i class="bi bi-pencil"></i>
+            </button>
+          <% } %>
+        </div>
+
         <% if (task.owners && task.owners.length) { %>
           <div class="d-flex align-items-center gap-2">
             <span class="task-people-av" style="width:28px;height:28px;font-size:0.75rem;"><%= (task.owners[0].name||'?').charAt(0).toUpperCase() %></span>
             <span style="font-size:0.875rem; font-weight:600;"><%= task.owners[0].name %></span>
           </div>
         <% } else { %>
-          <p class="pnew-card-sub mb-0">No owner.</p>
+          <p class="pnew-card-sub mb-0">No owner set.</p>
+        <% } %>
+
+        <% if (canAssign) { %>
+          <div class="collapse mt-3" id="ownerPicker">
+            <form action="/tasks/<%= task.id %>/owner" method="POST">
+              <select name="ownerId" class="form-select form-select-sm mb-2">
+                <option value="">— Remove owner —</option>
+                <% (task.teamUsers || []).forEach(u => { %>
+                  <option value="<%= u.id %>" <%= task.ownerId === u.id ? 'selected' : '' %>>
+                    <%= u.name %><% if (u.title) { %> · <%= u.title %><% } %>
+                  </option>
+                <% }) %>
+              </select>
+              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
+            </form>
+          </div>
         <% } %>
       </div>
 

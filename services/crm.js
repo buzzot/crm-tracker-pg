@@ -581,7 +581,7 @@ async function getDealDetail(id) {
     listCommentsByEntity('deal', id)
   ]);
   if (!deal) return { name: null };
-  return { ...deal, comments };
+  return { ...deal, comments, activities: deal.activities || [] };
 }
 
 async function createDeal({ name, stage, amount, companyId, contactId, ownerId, groupId }) {
@@ -914,6 +914,11 @@ async function completeTask(id) {
 
 async function setTaskAuditor(taskId, auditorId) {
   await query('UPDATE tasks SET auditor_id=$2, updated_at=NOW() WHERE id=$1', [taskId, auditorId || null]);
+  return getTask(taskId);
+}
+
+async function setTaskOwner(taskId, ownerId) {
+  await query('UPDATE tasks SET owner_id=$2, updated_at=NOW() WHERE id=$1', [taskId, ownerId || null]);
   return getTask(taskId);
 }
 
@@ -1405,6 +1410,7 @@ module.exports = {
   updateTaskDetails,
   completeTask,
   setTaskAuditor,
+  setTaskOwner,
   setTaskAssignees,
   linkTaskToProject,
   getTaskDeadlineHistory,
