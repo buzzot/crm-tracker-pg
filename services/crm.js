@@ -464,7 +464,7 @@ async function createActivity({ name, type, date, dueDate, details, companyId, o
   const r = await query(
     `INSERT INTO activities (name, type, date, due_date, details, company_id, owner_id, group_id)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [name, type, date, dueDate, details, companyId, ownerId, groupId]
+    [name, type || null, date || null, dueDate || null, details || null, companyId, ownerId, groupId]
   );
   return getActivity(r.rows[0].id);
 }
@@ -474,7 +474,7 @@ async function updateActivity(id, { name, type, dueDate, details, regarding, res
     await client.query(
       `UPDATE activities SET name=COALESCE($2,name), type=$3, due_date=$4, details=$5,
          regarding=$6, result=$7, status_date=NOW(), updated_at=NOW() WHERE id=$1`,
-      [id, name, type, dueDate, details, regarding, result]
+      [id, name, type || null, dueDate || null, details || null, regarding || null, result || null]
     );
     await client.query('DELETE FROM activity_contacts WHERE activity_id=$1', [id]);
     if (attendeeIds && attendeeIds.length) {
