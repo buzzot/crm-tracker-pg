@@ -44,17 +44,23 @@ function accessFilter(user, alias = '', entityType = null) {
 
   if (user.role === 'Manager') {
     const groupIds = user.groupIds || [];
+    const participantSubq = entityType === 'activity'
+      ? ` OR EXISTS (SELECT 1 FROM activity_participants ap2 WHERE ap2.activity_id = ${p}id AND ap2.user_id = $1)`
+      : '';
     return {
-      where: `(${p}owner_id = $1 OR ${p}group_id = ANY($2::uuid[]))`,
+      where: `(${p}owner_id = $1 OR ${p}group_id = ANY($2::uuid[])${participantSubq})`,
       params: [user.id, groupIds]
     };
   }
 
   // Staff — entity-specific rules
   if (entityType === 'activity') {
-    // Own activities only — no assignment-based access
+    // Own activities OR participant
     return {
-      where: `${p}owner_id = $1`,
+      where: `(${p}owner_id = $1 OR EXISTS (
+        SELECT 1 FROM activity_participants ap2
+        WHERE ap2.activity_id = ${p}id AND ap2.user_id = $1
+      ))`,
       params: [user.id]
     };
   }
