@@ -499,6 +499,10 @@ async function updateActivity(id, { name, type, dueDate, details, regarding, res
   return getActivity(id);
 }
 
+async function deleteActivity(id) {
+  await query('DELETE FROM activities WHERE id=$1', [id]);
+}
+
 function mapActivity(row) {
   const attendees = Array.isArray(row.attendees) ? row.attendees : [];
   const projectsLinked = Array.isArray(row.projects_linked) ? row.projects_linked : [];
@@ -1406,6 +1410,7 @@ module.exports = {
   getActivity,
   createActivity,
   updateActivity,
+  deleteActivity,
   getActivityDetail,
   listActivityParticipants,
   setActivityParticipants,

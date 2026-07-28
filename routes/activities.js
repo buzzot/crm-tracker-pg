@@ -133,6 +133,15 @@ router.post('/activities/:id', async (req, res, next) => {
   }
 });
 
+router.post('/activities/:id/delete', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (!user || user.role !== 'Admin') return res.status(403).render('error', { title: 'Forbidden', message: 'Only Admins can delete activities.' });
+    await crm.deleteActivity(req.params.id);
+    res.redirect('/activities');
+  } catch (err) { next(err); }
+});
+
 router.post('/activities/:id/comments', upload.array('attachment', 5), async (req, res, next) => {
   try {
     const { comment, link } = req.body;

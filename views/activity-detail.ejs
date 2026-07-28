@@ -293,6 +293,15 @@
           <button type="submit" class="act-drop-submit d-none" id="activityDropSubmit"><i class="bi bi-upload me-1"></i><span id="activityDropSubmitLabel">Upload</span></button>
         </form>
 
+        <% if (editMode && typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'Admin') { %>
+          <div style="margin-top:2rem; padding-top:1.25rem; border-top:1px solid var(--crm-border);">
+            <div style="font-size:0.75rem; color:var(--crm-muted-fg); margin-bottom:0.65rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Danger zone</div>
+            <form action="/activities/<%= activity.id %>/delete" method="POST" onsubmit="return confirm('Delete this activity permanently? This cannot be undone.')">
+              <button type="submit" class="act-delete-btn"><i class="bi bi-trash me-1"></i> Delete activity</button>
+            </form>
+          </div>
+        <% } %>
+
         <% } %> <!-- end editMode -->
       </div>
 
@@ -432,6 +441,17 @@
     </div>
   </div>
 </div>
+
+<style>
+.act-delete-btn {
+  display: inline-flex; align-items: center;
+  padding: 0.45rem 1rem; border-radius: 7px;
+  border: 1px solid #fca5a5; background: #fff5f5;
+  color: #b91c1c; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; transition: all 0.12s;
+}
+.act-delete-btn:hover { background: #fee2e2; border-color: #ef4444; }
+</style>
 
 <script>
   (function () {
