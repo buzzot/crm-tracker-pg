@@ -54,7 +54,7 @@
             <p class="pnew-help mt-1">Hold Ctrl / Cmd to select more than one.</p>
           </div>
 
-          <div class="mb-0">
+          <div class="mb-3">
             <label class="pnew-field-label" for="activityProjects"><i class="bi bi-kanban"></i> Related project(s)</label>
             <select name="projectIds" id="activityProjects" class="pnew-select" multiple size="4">
               <% projects.forEach(p => { %>
@@ -63,6 +63,18 @@
             </select>
             <p class="pnew-help mt-1">Hold Ctrl / Cmd to select more than one.</p>
           </div>
+
+          <% if (typeof teamUsers !== 'undefined' && teamUsers.length) { %>
+          <div class="mb-0">
+            <label class="pnew-field-label" for="activityParticipants"><i class="bi bi-people-fill"></i> Team participants <span class="text-muted fw-normal" style="font-size:0.75rem;">(notified by email when confirmed)</span></label>
+            <select name="participantIds" id="activityParticipants" class="pnew-select" multiple size="<%= Math.min(teamUsers.length, 5) %>">
+              <% teamUsers.forEach(u => { %>
+                <option value="<%= u.id %>"><%= u.name %><% if (u.title) { %> — <%= u.title %><% } %></option>
+              <% }) %>
+            </select>
+            <p class="pnew-help mt-1">Hold Ctrl / Cmd to select more than one.</p>
+          </div>
+          <% } %>
         </div>
 
         <div class="pnew-card">

@@ -469,7 +469,7 @@ async function createActivity({ name, type, date, dueDate, details, companyId, o
   return getActivity(r.rows[0].id);
 }
 
-async function updateActivity(id, { name, type, dueDate, details, regarding, result, attendeeIds, projectIds }) {
+async function updateActivity(id, { name, type, dueDate, details, regarding, result, attendeeIds, projectIds, participantIds }) {
   await transaction(async (client) => {
     await client.query(
       `UPDATE activities SET name=COALESCE($2,name), type=$3, due_date=$4, details=$5,
@@ -494,6 +494,7 @@ async function updateActivity(id, { name, type, dueDate, details, regarding, res
         );
       }
     }
+    await setActivityParticipants(id, participantIds || [], client);
   });
   return getActivity(id);
 }
@@ -524,14 +525,39 @@ function mapActivity(row) {
   };
 }
 
-// Alias for detail page (same as getActivity but returns comments too)
+async function listActivityParticipants(activityId) {
+  const r = await query(
+    `SELECT u.id, u.name, u.email, u.title
+     FROM activity_participants ap
+     JOIN users u ON u.id = ap.user_id
+     WHERE ap.activity_id = $1
+     ORDER BY u.name`,
+    [activityId]
+  );
+  return r.rows.map(u => ({ id: u.id, name: u.name, email: u.email, title: u.title }));
+}
+
+async function setActivityParticipants(activityId, userIds, client) {
+  const exec = client ? (q, p) => client.query(q, p) : query;
+  await exec('DELETE FROM activity_participants WHERE activity_id=$1', [activityId]);
+  for (const uid of (userIds || [])) {
+    await exec(
+      'INSERT INTO activity_participants (activity_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [activityId, uid]
+    );
+  }
+}
+
+// Alias for detail page (same as getActivity but returns comments, files, and participants)
 async function getActivityDetail(id) {
-  const [activity, comments] = await Promise.all([
+  const [activity, comments, files, participants] = await Promise.all([
     getActivity(id),
-    listCommentsByEntity('activity', id)
+    listCommentsByEntity('activity', id),
+    listAttachments('activity', id),
+    listActivityParticipants(id),
   ]);
   if (!activity) return { name: null };
-  return { ...activity, comments };
+  return { ...activity, comments, files, participants };
 }
 
 // ─── Deals ───────────────────────────────────────────────────────────────────
@@ -1006,12 +1032,17 @@ async function createProduct({ name, notes, category, phase, inputVoltage, board
 }
 
 async function getProductDetail(id) {
-  const [product, comments] = await Promise.all([
+  const [product, comments, datasheetFiles] = await Promise.all([
     getProduct(id),
-    listCommentsByEntity('product', id)
+    listCommentsByEntity('product', id),
+    listAttachments('product', id)
   ]);
   if (!product) return { name: null };
-  return { ...product, comments };
+  return { ...product, comments, datasheet: datasheetFiles };
+}
+
+async function deleteProductAttachment(attachmentId) {
+  await query('DELETE FROM attachments WHERE id=$1', [attachmentId]);
 }
 
 async function updateProduct(id, fields, updatedById) {
@@ -1250,8 +1281,8 @@ const schema = {
       typeChoices: ['Design', 'Development', 'Testing', 'Meeting', 'Review', 'Other']
     },
     products: {
-      categoryChoices: ['Hardware', 'Software', 'Service', 'Subscription', 'Other'],
-      phaseChoices: ['Concept', 'Development', 'Testing', 'Released', 'Discontinued']
+      categoryChoices: ['Controls', 'Drives', 'Residential AC', 'Commercial AC', 'Industrial Solutions', 'Special Products'],
+      phaseChoices: ['Single Phase', '3 Phase']
     }
   }
 };
@@ -1376,6 +1407,8 @@ module.exports = {
   createActivity,
   updateActivity,
   getActivityDetail,
+  listActivityParticipants,
+  setActivityParticipants,
   listActivityComments,
   addActivityComment,
   addActivityAttachments,
@@ -1415,6 +1448,7 @@ module.exports = {
   linkTaskToProject,
   getTaskDeadlineHistory,
   addTaskAttachments,
+  _uploadFiles,
   listTaskComments,
   addTaskComment,
   // Legacy project-activity aliases
@@ -1431,6 +1465,7 @@ module.exports = {
   createProduct,
   updateProduct,
   replaceProductImage,
+  deleteProductAttachment,
   // Comments
   listAllComments,
   addComment,

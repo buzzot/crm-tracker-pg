@@ -104,6 +104,20 @@
             </div>
           <% } %>
 
+          <% if (activity.participants && activity.participants.length) { %>
+            <div style="margin-top:1rem;">
+              <div class="pnew-field-label mb-1"><i class="bi bi-people-fill"></i> Team participants</div>
+              <div class="d-flex flex-wrap gap-2">
+                <% activity.participants.forEach(p => { %>
+                  <span style="display:inline-flex; align-items:center; gap:0.4rem; background:var(--crm-muted); border:1px solid var(--crm-border); border-radius:999px; padding:0.2rem 0.65rem; font-size:0.8rem;">
+                    <span style="width:20px;height:20px;border-radius:50%;background:oklch(0.55 0.18 250);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;"><%= (p.name||'?').trim().charAt(0).toUpperCase() %></span>
+                    <%= p.name %>
+                  </span>
+                <% }) %>
+              </div>
+            </div>
+          <% } %>
+
           <% if (activity.files && activity.files.length) { %>
             <div style="margin-top:1rem;">
               <div class="pnew-field-label mb-1"><i class="bi bi-paperclip"></i> Attachments</div>
@@ -189,6 +203,28 @@
               <% if (createContactHref) { %>
                 <a href="<%= createContactHref %>" class="chip-add-btn">Create contact</a>
               <% } %>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-people-fill"></i> Team participants <span class="text-muted fw-normal" style="font-size:0.75rem;">(get email when confirmed)</span></label>
+            <div class="chip-field" id="participantsChipField">
+              <% [].concat((activity.participants||[]).map(p=>p.id)).forEach(uid => {
+                   const tu = (typeof teamUsers !== 'undefined' ? teamUsers : []).find(u => u.id === uid); %>
+                <span class="chip" data-id="<%= uid %>">
+                  <span class="chip-avatar"><%= ((tu && tu.name) || '?').trim().charAt(0).toUpperCase() %></span>
+                  <%= tu ? tu.name : uid %>
+                  <input type="hidden" name="participantIds" value="<%= uid %>">
+                  <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
+                </span>
+              <% }) %>
+              <div class="chip-add-wrap">
+                <button type="button" class="chip-add-btn" data-target="participantsChipField" data-field="participantIds" data-avatar="1">Add team member</button>
+                <select class="chip-add-select d-none">
+                  <option value="">— Select —</option>
+                  <% (typeof teamUsers !== 'undefined' ? teamUsers : []).forEach(u => { %><option value="<%= u.id %>" data-name="<%= u.name %>"><%= u.name %><% if (u.title) { %> — <%= u.title %><% } %></option><% }) %>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -363,6 +399,35 @@
         </div>
         <p class="project-email-hint">CC this address when emailing clients — replies appear here automatically.</p>
       </div>
+
+      <% if (activity.participants && activity.participants.length) { %>
+        <div class="pnew-card">
+          <div class="pnew-card-header-row">
+            <h2 class="pnew-card-title"><i class="bi bi-people-fill me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Participants</h2>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <% activity.participants.forEach(p => { %>
+              <div style="display:flex;align-items:center;gap:0.55rem;">
+                <span style="width:28px;height:28px;border-radius:50%;background:var(--crm-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;flex-shrink:0;"><%= (p.name||'?').trim().charAt(0).toUpperCase() %></span>
+                <div style="min-width:0;">
+                  <div style="font-size:0.85rem;font-weight:600;color:var(--crm-fg);"><%= p.name %></div>
+                  <% if (p.title) { %><div style="font-size:0.72rem;color:var(--crm-muted-fg);"><%= p.title %></div><% } %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+      <% } %>
+
+      <% if (activity.ownerName) { %>
+        <div class="pnew-card" style="padding-top:0.9rem;padding-bottom:0.9rem;">
+          <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--crm-muted-fg);margin-bottom:0.55rem;">Created by</div>
+          <div style="display:flex;align-items:center;gap:0.55rem;">
+            <span style="width:30px;height:30px;border-radius:50%;background:var(--crm-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;flex-shrink:0;"><%= activity.ownerName.trim().charAt(0).toUpperCase() %></span>
+            <span style="font-size:0.88rem;font-weight:600;color:var(--crm-fg);"><%= activity.ownerName %></span>
+          </div>
+        </div>
+      <% } %>
 
     </div>
   </div>

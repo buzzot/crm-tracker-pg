@@ -83,7 +83,7 @@
               </select>
             </div>
             <div>
-              <label class="pnew-field-label"><i class="bi bi-lightning"></i> Phase</label>
+              <label class="pnew-field-label"><i class="bi bi-lightning-charge"></i> Electrical Phase</label>
               <select name="phase" class="pnew-select">
                 <option value="">— Select —</option>
                 <% phaseChoices.forEach(opt => { %>
@@ -174,20 +174,82 @@
       </div>
 
       <div class="pnew-card">
-        <h2 class="pnew-card-title">Datasheet</h2>
-        <% if (!product.datasheet || !product.datasheet.length) { %>
-          <p class="pnew-card-sub mb-0">No datasheet on file.</p>
-        <% } else { %>
-          <div class="pnew-file-list">
-            <% product.datasheet.forEach(file => { %>
-              <div class="pnew-file-row">
-                <i class="bi bi-file-earmark-text"></i>
-                <a href="<%= file.url %>" target="_blank" rel="noopener" class="pnew-file-name" style="text-decoration: none;"><%= file.filename || 'Specs' %></a>
-              </div>
-            <% }) %>
-          </div>
-        <% } %>
+        <div class="pnew-card-header-row">
+          <h2 class="pnew-card-title">Datasheet</h2>
+          <button type="button" class="pnew-btn-save" id="dsEditBtn"
+            onclick="document.getElementById('dsView').style.display='none'; document.getElementById('dsEdit').style.display='block'; this.style.display='none';">
+            <i class="bi bi-pencil-square"></i> Edit
+          </button>
+        </div>
+
+        <!-- View mode -->
+        <div id="dsView">
+          <% if (!product.datasheet || !product.datasheet.length) { %>
+            <p class="pnew-card-sub mb-0">No datasheet on file.</p>
+          <% } else { %>
+            <div class="pnew-file-list">
+              <% product.datasheet.forEach(file => { %>
+                <div class="pnew-file-row">
+                  <i class="bi bi-file-earmark-text"></i>
+                  <a href="<%= file.url %>" target="_blank" rel="noopener" class="pnew-file-name" style="text-decoration:none; flex:1;">
+                    <%= file.filename || 'Document' %>
+                  </a>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <!-- Edit mode -->
+        <div id="dsEdit" style="display:none;">
+          <!-- Existing files with delete -->
+          <% if (product.datasheet && product.datasheet.length) { %>
+            <div class="pnew-file-list mb-3">
+              <% product.datasheet.forEach(file => { %>
+                <div class="pnew-file-row" style="justify-content:space-between;">
+                  <div style="display:flex; align-items:center; gap:6px; min-width:0; flex:1;">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <a href="<%= file.url %>" target="_blank" rel="noopener" class="pnew-file-name"
+                       style="text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                      <%= file.filename || 'Document' %>
+                    </a>
+                  </div>
+                  <form action="/products/<%= product.id %>/datasheet/<%= file.id %>/delete" method="POST" style="flex-shrink:0;"
+                        onsubmit="return confirm('Delete this file?')">
+                    <button type="submit" class="ds-delete-btn" title="Delete file">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+
+          <!-- Upload new file(s) -->
+          <form action="/products/<%= product.id %>/datasheet" method="POST" enctype="multipart/form-data">
+            <label class="pnew-field-label"><i class="bi bi-plus-circle"></i> Add files</label>
+            <input type="file" name="datasheet" multiple class="pnew-input" style="padding:0.35rem;">
+            <div class="d-flex gap-2 mt-2">
+              <button type="submit" class="pnew-btn-save"><i class="bi bi-upload me-1"></i>Upload</button>
+              <button type="button" class="pnew-btn-cancel"
+                onclick="document.getElementById('dsEdit').style.display='none'; document.getElementById('dsView').style.display='block'; document.getElementById('dsEditBtn').style.display='inline-flex';">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
+
+      <style>
+        .ds-delete-btn {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 28px; height: 28px; border-radius: 6px;
+          border: 1px solid var(--crm-border); background: var(--crm-muted);
+          color: var(--crm-muted-fg); cursor: pointer; font-size: 0.8rem;
+          transition: all 0.12s;
+        }
+        .ds-delete-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+      </style>
 
       <div class="pnew-card">
         <h2 class="pnew-card-title">Related projects</h2>

@@ -53,6 +53,29 @@ router.post('/products/:id/details', async (req, res, next) => {
   }
 });
 
+// ─── Datasheet upload ─────────────────────────────────────────────────────────
+
+router.post('/products/:id/datasheet', upload.array('datasheet', 5), async (req, res, next) => {
+  try {
+    if (req.files && req.files.length) {
+      const user = req.session.user;
+      await crm._uploadFiles('product', req.params.id, req.files, user ? user.id : null);
+    }
+    res.redirect(`/products/${req.params.id}`);
+  } catch (err) { next(err); }
+});
+
+// ─── Datasheet delete ─────────────────────────────────────────────────────────
+
+router.post('/products/:id/datasheet/:attachmentId/delete', async (req, res, next) => {
+  try {
+    await crm.deleteProductAttachment(req.params.attachmentId);
+    res.redirect(`/products/${req.params.id}`);
+  } catch (err) { next(err); }
+});
+
+// ─── Image upload ─────────────────────────────────────────────────────────────
+
 router.post('/products/:id/image', upload.single('image'), async (req, res, next) => {
   try {
     if (req.file) {

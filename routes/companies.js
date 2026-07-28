@@ -231,14 +231,15 @@ router.get('/companies/:id/activities/new', async (req, res, next) => {
     const user = req.session.user;
     const company = await crm.getCompany(req.params.id);
     if (!company) return res.status(404).render('error', { title: 'Not found', message: 'Company not found.' });
-    const [contacts, projects] = await Promise.all([
+    const [contacts, projects, teamUsers] = await Promise.all([
       crm.listContacts(user),
       crm.listProjects(user),
+      crm.listTeamUsers(),
     ]);
     const persons = contacts.filter(c => c.companyIds.includes(req.params.id));
     const companyProjects = projects.filter(p => p.companyIds.includes(req.params.id));
     res.render('activity-new', {
-      title: 'New Activity', company, persons, projects: companyProjects,
+      title: 'New Activity', company, persons, projects: companyProjects, teamUsers,
       typeChoices: crm.schema.tables.activities.typeChoices,
       resultChoices: crm.schema.tables.activities.resultChoices,
       error: null, values: {}
@@ -253,17 +254,22 @@ router.post('/companies/:id/activities', async (req, res, next) => {
     if (!Array.isArray(attendeeIds)) attendeeIds = [attendeeIds];
     let projectIds = req.body.projectIds || [];
     if (!Array.isArray(projectIds)) projectIds = [projectIds];
-    await crm.createActivity({ name, companyId: req.params.id, type, dueDate, details, regarding, result, attendeeIds, projectIds });
+    let participantIds = req.body.participantIds || [];
+    if (!Array.isArray(participantIds)) participantIds = [participantIds];
+    const activity = await crm.createActivity({ name, companyId: req.params.id, type, dueDate, details, regarding, result, attendeeIds, projectIds });
+    if (participantIds.length) {
+      await crm.setActivityParticipants(activity.id, participantIds);
+    }
     res.redirect(`/companies/${req.params.id}`);
   } catch (err) {
     try {
       const user = req.session.user;
       const company = await crm.getCompany(req.params.id);
-      const [contacts, projects] = await Promise.all([crm.listContacts(user), crm.listProjects(user)]);
+      const [contacts, projects, teamUsers] = await Promise.all([crm.listContacts(user), crm.listProjects(user), crm.listTeamUsers()]);
       const persons = contacts.filter(c => c.companyIds.includes(req.params.id));
       const companyProjects = projects.filter(p => p.companyIds.includes(req.params.id));
       res.status(400).render('activity-new', {
-        title: 'New Activity', company, persons, projects: companyProjects,
+        title: 'New Activity', company, persons, projects: companyProjects, teamUsers,
         typeChoices: crm.schema.tables.activities.typeChoices,
         resultChoices: crm.schema.tables.activities.resultChoices,
         error: err.message, values: req.body

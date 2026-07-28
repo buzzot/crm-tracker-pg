@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const crm = require('../services/crm');
+const { sendActivityConfirmationEmails } = require('../services/email');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -10,10 +11,14 @@ const upload = multer({
 
 async function loadFormData(activity, user) {
   const companyId = (activity.companyIds || [])[0];
-  const [contacts, projects] = await Promise.all([crm.listContacts(user), crm.listProjects(user)]);
+  const [contacts, projects, teamUsers] = await Promise.all([
+    crm.listContacts(user),
+    crm.listProjects(user),
+    crm.listTeamUsers(),
+  ]);
   const persons = companyId ? contacts.filter((c) => c.companyIds.includes(companyId)) : contacts;
   const companyProjects = companyId ? projects.filter((p) => p.companyIds.includes(companyId)) : projects;
-  return { persons, projects: companyProjects };
+  return { persons, projects: companyProjects, teamUsers };
 }
 
 router.get('/activities', async (req, res, next) => {
@@ -47,13 +52,14 @@ router.get('/activities/:id', async (req, res, next) => {
     const user = req.session.user;
     const activity = await crm.getActivityDetail(req.params.id);
     if (!activity.name) return res.status(404).render('error', { title: 'Not found', message: 'Activity not found.' });
-    const { persons, projects } = await loadFormData(activity, user);
+    const { persons, projects, teamUsers } = await loadFormData(activity, user);
     activity.regardingInput = activity.regarding ? String(activity.regarding).slice(0, 16) : '';
     res.render('activity-detail', {
       title: activity.name,
       activity,
       persons,
       projects,
+      teamUsers,
       typeChoices: crm.schema.tables.activities.typeChoices,
       resultChoices: crm.schema.tables.activities.resultChoices,
       editMode: req.query.edit === '1',
@@ -73,24 +79,49 @@ router.post('/activities/:id', async (req, res, next) => {
     let projectIds = req.body.projectIds;
     if (!projectIds) projectIds = [];
     if (!Array.isArray(projectIds)) projectIds = [projectIds];
+    let participantIds = req.body.participantIds;
+    if (!participantIds) participantIds = [];
+    if (!Array.isArray(participantIds)) participantIds = [participantIds];
 
-    await crm.updateActivity(req.params.id, { name, type, dueDate, details, regarding, result, attendeeIds, projectIds });
+    // Fetch previous result to detect change to "Confirmed" / "Completed"
+    const prevActivity = await crm.getActivityDetail(req.params.id);
+    const prevResult = prevActivity.result || '';
+
+    await crm.updateActivity(req.params.id, { name, type, dueDate, details, regarding, result, attendeeIds, projectIds, participantIds });
+
+    // Send confirmation emails when result first becomes "Completed" (or "Confirmed" if you add it)
+    const CONFIRM_RESULTS = new Set(['Completed', 'Confirmed']);
+    if (CONFIRM_RESULTS.has(result) && !CONFIRM_RESULTS.has(prevResult) && participantIds.length) {
+      try {
+        const participants = await crm.listActivityParticipants(req.params.id);
+        if (participants.length) {
+          const updatedActivity = await crm.getActivityDetail(req.params.id);
+          await sendActivityConfirmationEmails({ activity: updatedActivity, participants });
+        }
+      } catch (emailErr) {
+        console.error('[activities] Email send error:', emailErr.message);
+        // Non-fatal — don't abort the save
+      }
+    }
+
     res.redirect(`/activities/${req.params.id}`);
   } catch (err) {
     try {
       const user = req.session.user;
       const activity = await crm.getActivityDetail(req.params.id);
-      const { persons, projects } = await loadFormData(activity, user);
+      const { persons, projects, teamUsers } = await loadFormData(activity, user);
       return res.status(400).render('activity-detail', {
         title: activity.name,
         activity: {
           ...activity,
           ...req.body,
           attendeeIds: [].concat(req.body.attendeeIds || activity.attendeeIds || []),
-          projectIds: [].concat(req.body.projectIds || activity.projectIds || [])
+          projectIds: [].concat(req.body.projectIds || activity.projectIds || []),
+          participants: activity.participants || [],
         },
         persons,
         projects,
+        teamUsers,
         typeChoices: crm.schema.tables.activities.typeChoices,
         resultChoices: crm.schema.tables.activities.resultChoices,
         editMode: true,
@@ -113,12 +144,13 @@ router.post('/activities/:id/comments', upload.array('attachment', 5), async (re
     try {
       const user = req.session.user;
       const activity = await crm.getActivityDetail(req.params.id);
-      const { persons, projects } = await loadFormData(activity, user);
+      const { persons, projects, teamUsers } = await loadFormData(activity, user);
       return res.status(400).render('activity-detail', {
         title: activity.name,
         activity,
         persons,
         projects,
+        teamUsers,
         typeChoices: crm.schema.tables.activities.typeChoices,
         resultChoices: crm.schema.tables.activities.resultChoices,
         error: err.message
