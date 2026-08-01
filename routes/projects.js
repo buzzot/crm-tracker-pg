@@ -164,6 +164,21 @@ router.post('/projects/:id/edit', async (req, res, next) => {
   }
 });
 
+router.post('/projects/:id/toggle-rd', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (!user || !['Admin', 'Head R&D Controllers', 'Head R&D VFD'].includes(user.role)) {
+      return res.status(403).send('Forbidden');
+    }
+    const project = await crm.getProject(req.params.id);
+    if (!project) return res.status(404).send('Not found');
+    await crm.setProjectRdIssue(req.params.id, !project.isRdIssue, user.id);
+    res.redirect(`/projects/${req.params.id}`);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/projects/:id/attachments', upload.array('attachments', 10), async (req, res, next) => {
   try {
     if (req.files && req.files.length) {

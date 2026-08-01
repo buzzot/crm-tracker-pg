@@ -45,9 +45,14 @@
 
   <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
     <div>
-      <% if (project.status) { %>
-        <div class="pnew-badge"><i class="bi bi-folder2-open"></i> <%= project.status %></div>
-      <% } %>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+        <% if (project.status) { %>
+          <div class="pnew-badge"><i class="bi bi-folder2-open"></i> <%= project.status %></div>
+        <% } %>
+        <% if (project.isRdIssue) { %>
+          <div class="pnew-badge" style="background:oklch(0.92 0.06 245); color:oklch(0.35 0.18 245); border-color:oklch(0.78 0.10 245);"><i class="bi bi-cpu-fill"></i> R&amp;D Issue</div>
+        <% } %>
+      </div>
       <h1 class="pnew-hero"><%= project.name %></h1>
       <p class="pnew-hero-sub">
         <%= project.category || 'No category set' %><% if (project.companies.length) { %> &middot; <%= project.companies.map(c => c.name).join(', ') %><% } %>
@@ -278,6 +283,31 @@
         </div>
       </div>
 
+      <% if (currentUser && ['Admin', 'Head R&D Controllers', 'Head R&D VFD'].includes(currentUser.role)) { %>
+      <div class="pnew-card rd-toggle-card <%= project.isRdIssue ? 'rd-toggle-card--on' : '' %>">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem;">
+          <div>
+            <h2 class="pnew-card-title" style="margin-bottom:0.2rem;"><i class="bi bi-cpu"></i> R&amp;D Issue</h2>
+            <p class="pnew-card-sub mb-0" style="font-size:0.75rem;">
+              When on, Engineering team can see this project if assigned to a task here.
+            </p>
+          </div>
+          <form action="/projects/<%= project.id %>/toggle-rd" method="POST" style="flex-shrink:0; margin-top:0.1rem;">
+            <button type="submit" class="rd-switch" title="<%= project.isRdIssue ? 'Disable R&D' : 'Enable R&D' %>">
+              <span class="rd-switch-track <%= project.isRdIssue ? 'rd-switch-track--on' : '' %>">
+                <span class="rd-switch-thumb"></span>
+              </span>
+            </button>
+          </form>
+        </div>
+        <% if (project.isRdIssue) { %>
+          <div class="rd-active-note">
+            <i class="bi bi-check-circle-fill"></i> Visible to R&amp;D engineers assigned here
+          </div>
+        <% } %>
+      </div>
+      <% } %>
+
       <div class="pnew-tip-card">
         <i class="bi bi-pencil-square"></i>
         <div class="pnew-tip-title">Need changes?</div>
@@ -286,3 +316,57 @@
     </div>
   </div>
 </div>
+
+<style>
+.rd-toggle-card {
+  border: 1.5px solid var(--crm-border);
+  transition: border-color 0.2s;
+}
+.rd-toggle-card--on {
+  border-color: oklch(0.60 0.18 245);
+  background: oklch(0.97 0.02 245);
+}
+.rd-switch {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.rd-switch-track {
+  display: flex;
+  align-items: center;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--crm-border);
+  position: relative;
+  transition: background 0.2s;
+  padding: 3px;
+}
+.rd-switch-track--on {
+  background: oklch(0.52 0.18 245);
+}
+.rd-switch-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  position: absolute;
+  left: 3px;
+  transition: left 0.2s;
+}
+.rd-switch-track--on .rd-switch-thumb {
+  left: 23px;
+}
+.rd-active-note {
+  margin-top: 0.65rem;
+  font-size: 0.72rem;
+  color: oklch(0.40 0.18 245);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+</style>

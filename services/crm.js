@@ -77,13 +77,21 @@ function accessFilter(user, alias = '', entityType = null) {
   if (entityType === 'company' || entityType === 'project' || entityType === 'deal') {
     // All users see Client companies regardless of ownership/assignment
     const clientSubq = entityType === 'company' ? ` OR ${p}status = 'Client'` : '';
+    // Engineering role can also see R&D projects they have an assigned task in
+    const rdEngSubq = (entityType === 'project' && user.role === 'Engineering')
+      ? ` OR (${p}is_rd_issue = TRUE AND EXISTS (
+          SELECT 1 FROM tasks t
+          JOIN task_assignees ta ON ta.task_id = t.id
+          WHERE t.project_id = ${p}id AND ta.user_id = $1
+        ))`
+      : '';
     return {
       where: `(${p}owner_id = $1 OR ${p}created_by = $1 OR EXISTS (
         SELECT 1 FROM user_assignments ua
         WHERE ua.entity_id = ${p}id
           AND ua.entity_type = $2
           AND ua.user_id = $1
-      )${clientSubq})`,
+      )${clientSubq}${rdEngSubq})`,
       params: [user.id, entityType]
     };
   }
@@ -776,6 +784,13 @@ async function updateProject(id, { name, status, category, description, companyI
     }
   });
   return getProject(id);
+}
+
+async function setProjectRdIssue(id, value, updatedById) {
+  await query(
+    'UPDATE projects SET is_rd_issue=$2, updated_by=$3, updated_at=NOW() WHERE id=$1',
+    [id, !!value, updatedById || null]
+  );
 }
 
 async function getProjectDetail(id) {
@@ -1519,6 +1534,7 @@ module.exports = {
   getProject,
   createProject,
   updateProject,
+  setProjectRdIssue,
   getProjectDetail,
   addProjectAttachments,
   listProjectComments,
