@@ -52,8 +52,10 @@ function accessFilter(user, alias = '', entityType = null) {
     const rdProjectSubq = (entityType === 'project' && isRdHead(user.role))
       ? ` OR ${p}is_rd_issue = TRUE`
       : '';
+    // All users see Client companies
+    const clientSubq = entityType === 'company' ? ` OR ${p}status = 'Client'` : '';
     return {
-      where: `(${p}owner_id = $1 OR ${p}group_id = ANY($2::uuid[])${participantSubq}${rdProjectSubq})`,
+      where: `(${p}owner_id = $1 OR ${p}group_id = ANY($2::uuid[])${participantSubq}${rdProjectSubq}${clientSubq})`,
       params: [user.id, groupIds]
     };
   }
@@ -73,13 +75,15 @@ function accessFilter(user, alias = '', entityType = null) {
   }
 
   if (entityType === 'company' || entityType === 'project' || entityType === 'deal') {
+    // All users see Client companies regardless of ownership/assignment
+    const clientSubq = entityType === 'company' ? ` OR ${p}status = 'Client'` : '';
     return {
       where: `(${p}owner_id = $1 OR ${p}created_by = $1 OR EXISTS (
         SELECT 1 FROM user_assignments ua
         WHERE ua.entity_id = ${p}id
           AND ua.entity_type = $2
           AND ua.user_id = $1
-      ))`,
+      )${clientSubq})`,
       params: [user.id, entityType]
     };
   }
@@ -1296,7 +1300,7 @@ async function getContactDetail(id) {
 const schema = {
   tables: {
     company: {
-      statusChoices: ['Active', 'Inactive', 'Prospect', 'Partner'],
+      statusChoices: ['Active', 'Inactive', 'Prospect', 'Partner', 'Client'],
       industryChoices: ['Technology', 'Manufacturing', 'Healthcare', 'Finance', 'Retail', 'Education', 'Other']
     },
     contacts: {
