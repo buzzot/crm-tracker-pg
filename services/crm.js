@@ -750,13 +750,31 @@ async function createProject({ name, status, details, companyId, dealId, ownerId
   return getProject(r.rows[0].id);
 }
 
-async function updateProject(id, { name, status, details, companyId, isRdIssue }, updatedById) {
-  await query(
-    `UPDATE projects SET name=COALESCE($2,name), status=$3, details=$4,
-       company_id=COALESCE($5,company_id), is_rd_issue=COALESCE($7,is_rd_issue),
-       updated_by=$6, updated_at=NOW() WHERE id=$1`,
-    [id, name, status, details, companyId, updatedById || null, isRdIssue !== undefined ? isRdIssue : null]
-  );
+async function updateProject(id, { name, status, category, description, companyId, startDate, endDate, productIds, isRdIssue }, updatedById) {
+  await transaction(async (client) => {
+    await client.query(
+      `UPDATE projects SET
+         name=COALESCE($2,name), status=$3, category=$4, details=$5,
+         company_id=COALESCE($6,company_id),
+         start_date=$7, end_date=$8,
+         is_rd_issue=COALESCE($9,is_rd_issue),
+         updated_by=$10, updated_at=NOW()
+       WHERE id=$1`,
+      [id, name, status, category || null, description || null, companyId,
+       startDate || null, endDate || null,
+       isRdIssue !== undefined ? isRdIssue : null,
+       updatedById || null]
+    );
+    if (Array.isArray(productIds)) {
+      await client.query('DELETE FROM product_projects WHERE project_id=$1', [id]);
+      for (const pid of productIds) {
+        await client.query(
+          'INSERT INTO product_projects (product_id, project_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+          [pid, id]
+        );
+      }
+    }
+  });
   return getProject(id);
 }
 
