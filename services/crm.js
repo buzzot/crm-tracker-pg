@@ -42,20 +42,27 @@ function accessFilter(user, alias = '', entityType = null) {
 
   const p = alias ? alias + '.' : '';
 
-  if (user.role === 'Manager') {
+  // R&D Heads behave like Managers for general data access
+  if (user.role === 'Manager' || isRdHead(user.role)) {
     const groupIds = user.groupIds || [];
     const participantSubq = entityType === 'activity'
       ? ` OR EXISTS (SELECT 1 FROM activity_participants ap2 WHERE ap2.activity_id = ${p}id AND ap2.user_id = $1)`
       : '';
+    // R&D Heads also see R&D projects explicitly
+    const rdProjectSubq = (entityType === 'project' && isRdHead(user.role))
+      ? ` OR ${p}is_rd_issue = TRUE`
+      : '';
     return {
-      where: `(${p}owner_id = $1 OR ${p}group_id = ANY($2::uuid[])${participantSubq})`,
+      where: `(${p}owner_id = $1 OR ${p}group_id = ANY($2::uuid[])${participantSubq}${rdProjectSubq})`,
       params: [user.id, groupIds]
     };
   }
 
-  // Staff — entity-specific rules
+  // Engineering (R&D Staff) — same as Staff
+  const effectiveRole = user.role === 'Engineering' ? 'Staff' : user.role;
+
+  // Staff / Engineering — entity-specific rules
   if (entityType === 'activity') {
-    // Own activities OR participant
     return {
       where: `(${p}owner_id = $1 OR EXISTS (
         SELECT 1 FROM activity_participants ap2
@@ -66,7 +73,6 @@ function accessFilter(user, alias = '', entityType = null) {
   }
 
   if (entityType === 'company' || entityType === 'project' || entityType === 'deal') {
-    // Created (owner_id or created_by) OR explicitly assigned
     return {
       where: `(${p}owner_id = $1 OR ${p}created_by = $1 OR EXISTS (
         SELECT 1 FROM user_assignments ua
@@ -89,12 +95,21 @@ function accessFilter(user, alias = '', entityType = null) {
 
 // Role → allowed titles mapping (for UI dropdowns)
 const ROLE_TITLES = {
-  Admin:   ['CEO', 'President', 'VP Sales', 'VP Operations', 'Director of Sales', 'Director'],
-  Manager: ['Sales Manager', 'Account Manager', 'Project Manager', 'Regional Manager', 'Team Lead'],
-  Staff:   ['Sales Rep', 'Account Executive', 'Business Development Rep', 'Sales Associate', 'Coordinator'],
+  Admin:                  ['CEO', 'President', 'VP Sales', 'VP Operations', 'Director of Sales', 'Director'],
+  Manager:                ['Sales Manager', 'Account Manager', 'Project Manager', 'Regional Manager', 'Team Lead'],
+  Staff:                  ['Sales Rep', 'Account Executive', 'Business Development Rep', 'Sales Associate', 'Coordinator'],
+  'Head R&D Controllers': ['Head of R&D (Controllers)', 'R&D Manager'],
+  'Head R&D VFD':         ['Head of R&D (VFD)', 'R&D Manager'],
+  Engineering:            ['Engineer', 'R&D Engineer', 'Test Engineer', 'Field Engineer'],
 };
 const ALL_ROLES   = Object.keys(ROLE_TITLES);
 const ALL_TITLES  = Object.values(ROLE_TITLES).flat();
+
+// R&D role helpers
+const RD_ROLES      = new Set(['Head R&D Controllers', 'Head R&D VFD', 'Engineering']);
+const RD_HEAD_ROLES = new Set(['Head R&D Controllers', 'Head R&D VFD']);
+function isRdRole(role) { return RD_ROLES.has(role); }
+function isRdHead(role) { return RD_HEAD_ROLES.has(role); }
 
 function mapUser(row) {
   return {
@@ -731,11 +746,12 @@ async function createProject({ name, status, details, companyId, dealId, ownerId
   return getProject(r.rows[0].id);
 }
 
-async function updateProject(id, { name, status, details, companyId }, updatedById) {
+async function updateProject(id, { name, status, details, companyId, isRdIssue }, updatedById) {
   await query(
     `UPDATE projects SET name=COALESCE($2,name), status=$3, details=$4,
-       company_id=COALESCE($5,company_id), updated_by=$6, updated_at=NOW() WHERE id=$1`,
-    [id, name, status, details, companyId, updatedById || null]
+       company_id=COALESCE($5,company_id), is_rd_issue=COALESCE($7,is_rd_issue),
+       updated_by=$6, updated_at=NOW() WHERE id=$1`,
+    [id, name, status, details, companyId, updatedById || null, isRdIssue !== undefined ? isRdIssue : null]
   );
   return getProject(id);
 }
@@ -772,6 +788,7 @@ function mapProject(row) {
     groupId: row.group_id || null,
     groupName: row.group_name || null,
     products,
+    isRdIssue: row.is_rd_issue || false,
     attachments: [],
     createdAt: row.created_at,
     createdByName: row.created_by_name || null,
@@ -831,8 +848,8 @@ async function listTasks({ projectId, user } = {}) {
   if (projectId) {
     conditions.push(`t.project_id=$${params.push(projectId)}`);
   }
-  if (user && user.role === 'Staff') {
-    // Staff see tasks they own OR are assigned to OR are auditing
+  if (user && (user.role === 'Staff' || user.role === 'Engineering')) {
+    // Staff / Engineering see tasks they own OR are assigned to OR are auditing
     conditions.push(`(
       t.owner_id=$${params.push(user.id)}
       OR t.auditor_id=$${params.push(user.id)}
@@ -845,6 +862,16 @@ async function listTasks({ projectId, user } = {}) {
       t.owner_id=$${params.push(user.id)}
       OR t.auditor_id=$${params.push(user.id)}
       OR EXISTS (SELECT 1 FROM task_assignees ta2 WHERE ta2.task_id=t.id AND ta2.user_id=$${params.push(user.id)})
+      OR EXISTS (SELECT 1 FROM projects gp WHERE gp.id=t.project_id AND gp.group_id=ANY($${params.push(groupIds)}::uuid[]))
+    )`);
+  } else if (user && isRdHead(user.role)) {
+    // R&D Heads see all tasks in R&D projects + tasks they own/are assigned to
+    const groupIds = user.groupIds || [];
+    conditions.push(`(
+      t.owner_id=$${params.push(user.id)}
+      OR t.auditor_id=$${params.push(user.id)}
+      OR EXISTS (SELECT 1 FROM task_assignees ta2 WHERE ta2.task_id=t.id AND ta2.user_id=$${params.push(user.id)})
+      OR EXISTS (SELECT 1 FROM projects rp WHERE rp.id=t.project_id AND rp.is_rd_issue=TRUE)
       OR EXISTS (SELECT 1 FROM projects gp WHERE gp.id=t.project_id AND gp.group_id=ANY($${params.push(groupIds)}::uuid[]))
     )`);
   }
@@ -1306,6 +1333,31 @@ function scopeToOwner(records, email) {
 
 // ─── listProjectActivities alias (tasks route uses this name) ────────────────
 async function listProjectActivities(user) { return listTasks({ user }); }
+
+// R&D open issues: tasks from projects marked as R&D issues, filtered by role
+async function listRdIssues(user) {
+  const params = [];
+  let userCondition = '';
+
+  if (user && user.role === 'Engineering') {
+    // Engineers only see tasks they're assigned to or own
+    userCondition = `AND (
+      t.owner_id=$${params.push(user.id)}
+      OR EXISTS (SELECT 1 FROM task_assignees ta2 WHERE ta2.task_id=t.id AND ta2.user_id=$${params.push(user.id)})
+    )`;
+  }
+  // R&D Heads and Admins see all R&D tasks (no extra filter)
+
+  const r = await query(
+    `${TASK_SELECT}
+     JOIN projects rdp ON rdp.id = t.project_id AND rdp.is_rd_issue = TRUE
+     WHERE t.status != 'Completed' ${userCondition}
+     GROUP BY t.id, p.name, p.id, u.name, au2.name
+     ORDER BY t.deadline ASC NULLS LAST, t.created_at DESC`,
+    params
+  );
+  return r.rows.map(mapTask);
+}
 async function getProjectActivity(id) { return getTask(id); }
 async function createProjectActivity(args) { return createTask(args); }
 async function addProjectActivityRecord(args) { return addTaskLog(args); }
@@ -1380,6 +1432,10 @@ module.exports = {
   ROLE_TITLES,
   ALL_ROLES,
   ALL_TITLES,
+  RD_ROLES,
+  RD_HEAD_ROLES,
+  isRdRole,
+  isRdHead,
   getUserById,
   getUserByEmail,
   getUserGroupIds,
@@ -1464,6 +1520,7 @@ module.exports = {
   addTaskComment,
   // Legacy project-activity aliases
   listProjectActivities,
+  listRdIssues,
   getProjectActivity,
   createProjectActivity,
   listProjectActivityRecords,

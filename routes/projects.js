@@ -109,7 +109,8 @@ router.get('/projects/:id/edit', async (req, res, next) => {
         description: project.description,
         startDate: project.startDate,
         endDate: project.endDate,
-        productIds: project.products.map((p) => p.id)
+        productIds: project.products.map((p) => p.id),
+        isRdIssue: project.isRdIssue || false,
       }
     });
   } catch (err) {
@@ -120,6 +121,7 @@ router.get('/projects/:id/edit', async (req, res, next) => {
 router.post('/projects/:id/edit', async (req, res, next) => {
   try {
     const { name, companyId, status, category, description, startDate, endDate } = req.body;
+    const isRdIssue = req.body.isRdIssue === '1';
     let productIds = req.body.productIds;
     if (!productIds) productIds = [];
     if (!Array.isArray(productIds)) productIds = [productIds];
@@ -131,7 +133,8 @@ router.post('/projects/:id/edit', async (req, res, next) => {
       category,
       description,
       startDate,
-      endDate
+      endDate,
+      isRdIssue,
     }, req.session.user?.id);
     res.redirect(`/projects/${req.params.id}`);
   } catch (err) {

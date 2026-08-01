@@ -24,7 +24,9 @@
       <div class="collapse navbar-collapse" id="navMenu">
         <ul class="navbar-nav me-auto app-nav-pills" id="appNavPills">
           <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-speedometer2"></i><span class="nav-label">Dashboard</span></a></li>
+          <% if (!currentUser || !['Head R&D Controllers','Head R&D VFD','Engineering'].includes(currentUser.role)) { %>
           <li class="nav-item"><a class="nav-link" href="/pipeline"><i class="bi bi-funnel"></i><span class="nav-label">Pipeline</span></a></li>
+          <% } %>
           <li class="nav-item"><a class="nav-link" href="/activities"><i class="bi bi-activity"></i><span class="nav-label">Activity</span></a></li>
           <li class="nav-item"><a class="nav-link" href="/companies"><i class="bi bi-building"></i><span class="nav-label">Companies</span></a></li>
           <li class="nav-item"><a class="nav-link" href="/projects"><i class="bi bi-folder2-open"></i><span class="nav-label">Projects</span></a></li>

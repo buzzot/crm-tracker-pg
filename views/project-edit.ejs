@@ -46,6 +46,16 @@
           <h2 class="pnew-card-title">Classification</h2>
           <p class="pnew-card-sub">Where it sits in your pipeline.</p>
 
+          <% if (typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Head R&D Controllers' || currentUser.role === 'Head R&D VFD')) { %>
+          <div style="margin-bottom:1rem; padding:0.75rem 1rem; background: <%= values.isRdIssue ? 'oklch(0.93 0.06 245 / 0.4)' : 'var(--crm-muted)' %>; border-radius:8px; border:1px solid <%= values.isRdIssue ? 'oklch(0.70 0.14 245)' : 'var(--crm-border)' %>; display:flex; align-items:center; gap:0.75rem;">
+            <input type="checkbox" name="isRdIssue" id="isRdIssueChk" value="1" <%= values.isRdIssue ? 'checked' : '' %> style="width:18px; height:18px; cursor:pointer; accent-color:var(--crm-accent);">
+            <label for="isRdIssueChk" style="cursor:pointer; font-weight:600; font-size:0.88rem; color:var(--crm-fg); margin:0;">
+              <i class="bi bi-cpu me-1" style="color:var(--crm-accent);"></i> Mark as R&D Issue
+            </label>
+            <span style="font-size:0.75rem; color:var(--crm-muted-fg);">— appears on the R&D team dashboard</span>
+          </div>
+          <% } %>
+
           <div class="pnew-classification-row">
             <div>
               <label class="pnew-field-label"><i class="bi bi-activity"></i> Status</label>

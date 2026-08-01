@@ -1,3 +1,117 @@
+<% if (typeof isRdUser !== 'undefined' && isRdUser) { %>
+<%
+  // ── R&D Dashboard ──────────────────────────────────────────────────────────
+  function rdFmtDate(d) {
+    if (!d) return '—';
+    const dt = new Date(d + 'T00:00:00');
+    if (isNaN(dt)) return d;
+    return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  const rdToday = new Date(); rdToday.setHours(0,0,0,0);
+  function rdIsOverdue(t) { return t.deadline && new Date(t.deadline + 'T00:00:00') < rdToday && t.status !== 'Completed'; }
+  const statusColors = {
+    'To Do':       { bg:'#eef0f3', fg:'#5b6172' },
+    'In Progress': { bg:'#e7eefc', fg:'#2b5fb8' },
+    'Completed':   { bg:'#dff5e3', fg:'#1c7a3c' },
+    'Overdue':     { bg:'#fbe5e7', fg:'#c23b4a' },
+  };
+%>
+
+<div class="mb-4">
+  <div class="text-muted small"><%= new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) %> &middot; R&D Team</div>
+  <h1 class="display-headline mb-0">Open <em>issues</em></h1>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="pnew-card p-0" style="overflow:hidden;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem 1.25rem; border-bottom:1px solid var(--crm-border);">
+        <span class="dashboard-card-title">Active R&D Issues <span style="font-size:0.78rem; font-weight:500; color:var(--crm-muted-fg); margin-left:0.5rem;"><%= rdIssues.length %> open</span></span>
+        <a href="/tasks" class="btn-view-all" style="font-size:0.78rem;">View all tasks <i class="bi bi-arrow-up-right"></i></a>
+      </div>
+      <% if (!rdIssues.length) { %>
+        <div style="padding:2.5rem; text-align:center; color:var(--crm-muted-fg);">
+          <i class="bi bi-check2-circle" style="font-size:2rem; display:block; margin-bottom:0.5rem;"></i>
+          No open R&D issues right now.
+        </div>
+      <% } else { %>
+        <table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
+          <thead>
+            <tr style="background:var(--crm-muted);">
+              <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Issue / Task</th>
+              <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Project</th>
+              <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Deadline</th>
+              <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% rdIssues.forEach(t => { %>
+              <%
+                const overdue = rdIsOverdue(t);
+                const sKey = overdue ? 'Overdue' : (t.status || 'To Do');
+                const sc = statusColors[sKey] || statusColors['To Do'];
+              %>
+              <tr onclick="location.href='/tasks/<%= t.id %>'" style="cursor:pointer; border-bottom:1px solid var(--crm-border);" onmouseover="this.style.background='var(--crm-muted)'" onmouseout="this.style.background=''">
+                <td style="padding:0.7rem 1rem;">
+                  <div style="font-weight:600; color:var(--crm-fg);"><%= t.name %></div>
+                  <% if (t.assignees && t.assignees.length) { %>
+                    <div style="font-size:0.72rem; color:var(--crm-muted-fg); margin-top:0.15rem;">
+                      <i class="bi bi-person"></i> <%= t.assignees.map(a => a.name).join(', ') %>
+                    </div>
+                  <% } %>
+                </td>
+                <td style="padding:0.7rem 1rem; font-size:0.82rem; color:var(--crm-muted-fg);">
+                  <% if (t.projectName) { %><i class="bi bi-folder2" style="opacity:0.5;"></i> <%= t.projectName %><% } else { %>—<% } %>
+                </td>
+                <td style="padding:0.7rem 1rem; font-size:0.82rem; <%= overdue ? 'color:oklch(0.5 0.2 20); font-weight:600;' : 'color:var(--crm-muted-fg);' %>">
+                  <%= rdFmtDate(t.deadline) %>
+                </td>
+                <td style="padding:0.7rem 1rem;">
+                  <span style="display:inline-block; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:700; background:<%= sc.bg %>; color:<%= sc.fg %>;"><%= sKey %></span>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="dashboard-card-title">Recent comments</span>
+        <span class="live-dot ms-2"><span class="dot"></span>Live</span>
+      </div>
+      <div class="card-body p-0">
+        <% if (!recentComments.length) { %>
+          <div class="dash-cmt-empty">No comments yet.</div>
+        <% } %>
+        <% recentComments.forEach(c => { %>
+          <div class="dash-cmt-row">
+            <div class="dash-cmt-avatar"><%= (c.author || '?').trim().charAt(0).toUpperCase() %></div>
+            <div class="dash-cmt-body">
+              <div class="dash-cmt-header">
+                <span class="dash-cmt-author"><%= c.author || 'Unknown' %></span>
+                <span class="dash-cmt-time"><%= c.timeAgo %></span>
+              </div>
+              <div class="dash-cmt-preview"><%= (c.comment || '').slice(0, 90) %><%= (c.comment || '').length > 90 ? '…' : '' %></div>
+              <% if (c.contextLink) { %>
+                <a href="<%= c.contextLink %>" class="dash-cmt-context">
+                  <i class="bi bi-<%= c.contextType === 'task' ? 'diagram-3' : 'folder2' %>"></i>
+                  <%= c.contextLabel %>
+                </a>
+              <% } %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<% } else { %>
+
 <div class="mb-4">
   <div class="text-muted small"><%= new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) %> &middot; Welcome back</div>
   <h1 class="display-headline mb-0">Your <em>pipeline</em> today</h1>
@@ -245,3 +359,5 @@
 
   </div>
 </div>
+
+<% } %>

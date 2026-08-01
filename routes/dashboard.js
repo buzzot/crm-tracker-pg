@@ -18,6 +18,45 @@ router.get('/', async (req, res, next) => {
   try {
     const user = req.session.user;
     const { role, email } = user;
+    const isRdUser = crm.isRdRole(role);
+
+    // ── R&D dashboard ─────────────────────────────────────────────────────────
+    if (isRdUser) {
+      const [rdIssues, projects, rawComments] = await Promise.all([
+        crm.listRdIssues(user),
+        crm.listProjects(user),
+        crm.listAllComments(10, null),
+      ]);
+      const projectById = new Map(projects.map((p) => [p.id, p]));
+      const taskById = new Map(rdIssues.map((t) => [t.id, t]));
+      const recentComments = rawComments.map((c) => {
+        let contextLabel = null, contextLink = null, contextType = null;
+        if (c.taskIds && c.taskIds[0]) {
+          const t = taskById.get(c.taskIds[0]);
+          contextLabel = t ? t.name : 'Task';
+          contextLink = `/tasks/${c.taskIds[0]}`;
+          contextType = 'task';
+        } else if (c.projectIds && c.projectIds[0]) {
+          const p = projectById.get(c.projectIds[0]);
+          contextLabel = p ? p.name : 'Project';
+          contextLink = `/projects/${c.projectIds[0]}`;
+          contextType = 'project';
+        }
+        return { ...c, contextLabel, contextLink, contextType, timeAgo: timeAgo(c.postedAt) };
+      });
+      return res.render('dashboard', {
+        title: 'Dashboard',
+        isRdUser: true,
+        rdIssues,
+        recentComments,
+        // Unused by R&D template but avoids undefined errors if referenced
+        stats: { companyCount: 0, openDealCount: 0, openPipelineTotal: 0, wonTotal: 0 },
+        board: [],
+        allActivities: [],
+      });
+    }
+
+    // ── Sales / Admin dashboard ───────────────────────────────────────────────
     const [{ board: fullBoard }, allCompanies, allActivities, projects, tasks, rawComments] = await Promise.all([
       crm.getPipelineBoard(user),
       crm.listCompanies(user),
@@ -27,10 +66,8 @@ router.get('/', async (req, res, next) => {
       crm.listAllComments(10, role === 'Staff' ? user.id : null)
     ]);
 
-    // Sales only sees what they own; Admin/Manager see everything (for pipeline/stats).
     const scoped = (records) => (role === 'Sales' ? crm.scopeToOwner(records, email) : records);
     const companies = scoped(allCompanies);
-    // Activities already filtered by listActivities(user) based on role
     const activities = scoped(allActivities);
     const board = fullBoard.map((b) => ({ ...b, deals: scoped(b.deals) }))
       .map((b) => ({ ...b, total: b.deals.reduce((sum, d) => sum + (d.amount || 0), 0) }));
@@ -45,14 +82,12 @@ router.get('/', async (req, res, next) => {
     const activityById = new Map(activities.map((a) => [a.id, a]));
     const taskById = new Map(tasks.map((t) => [t.id, t]));
 
-    const allMappedActivities = activities
-      .map((a) => ({
-        ...a,
-        companyNames: a.companyIds.map((id) => companyById.get(id)?.name).filter(Boolean),
-        projectNames: a.projectIds.map((id) => projectById.get(id)?.name).filter(Boolean)
-      }));
+    const allMappedActivities = activities.map((a) => ({
+      ...a,
+      companyNames: a.companyIds.map((id) => companyById.get(id)?.name).filter(Boolean),
+      projectNames: a.projectIds.map((id) => projectById.get(id)?.name).filter(Boolean)
+    }));
 
-    // Enrich comments with context label + link
     const recentComments = rawComments.map((c) => {
       let contextLabel = null, contextLink = null, contextType = null;
       if (c.activityIds && c.activityIds[0]) {
@@ -80,12 +115,9 @@ router.get('/', async (req, res, next) => {
 
     res.render('dashboard', {
       title: 'Dashboard',
-      stats: {
-        companyCount: companies.length,
-        openDealCount,
-        openPipelineTotal,
-        wonTotal
-      },
+      isRdUser: false,
+      rdIssues: [],
+      stats: { companyCount: companies.length, openDealCount, openPipelineTotal, wonTotal },
       board,
       allActivities: allMappedActivities,
       recentComments
