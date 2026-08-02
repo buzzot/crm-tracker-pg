@@ -590,6 +590,33 @@ async function setActivityParticipants(activityId, userIds, client) {
   }
 }
 
+// Link a project to an activity (idempotent)
+async function addActivityProject(activityId, projectId) {
+  await query(
+    'INSERT INTO activity_projects (activity_id, project_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+    [activityId, projectId]
+  );
+}
+
+// List activities linked to a project (for "created from" display on project detail)
+async function listProjectLinkedActivities(projectId) {
+  const r = await query(
+    `SELECT a.id, a.name, a.type, a.result, a.date
+     FROM activity_projects ap
+     JOIN activities a ON a.id = ap.activity_id
+     WHERE ap.project_id = $1
+     ORDER BY a.date DESC NULLS LAST`,
+    [projectId]
+  );
+  return r.rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    type: row.type || null,
+    result: row.result || null,
+    date: toDateStr(row.date),
+  }));
+}
+
 // Alias for detail page (same as getActivity but returns comments, files, and participants)
 async function getActivityDetail(id) {
   const [activity, comments, files, participants] = await Promise.all([
@@ -841,13 +868,14 @@ async function setProjectRdIssue(id, value, updatedById) {
 }
 
 async function getProjectDetail(id) {
-  const [project, tasks, comments, attachments, assignees, teamUsers] = await Promise.all([
+  const [project, tasks, comments, attachments, assignees, teamUsers, linkedActivities] = await Promise.all([
     getProject(id),
     listTasks({ projectId: id }),
     listCommentsByEntity('project', id),
     listAttachments('project', id),
     listProjectAssignees(id),
-    listTeamUsers()
+    listTeamUsers(),
+    listProjectLinkedActivities(id),
   ]);
   if (!project) return { name: null };
   return {
@@ -858,7 +886,8 @@ async function getProjectDetail(id) {
     attachments,
     assignees,
     assigneeIds: assignees.map(a => a.id),
-    teamUsers
+    teamUsers,
+    linkedActivities,
   };
 }
 
@@ -1576,6 +1605,8 @@ module.exports = {
   getActivityDetail,
   listActivityParticipants,
   setActivityParticipants,
+  addActivityProject,
+  listProjectLinkedActivities,
   listActivityComments,
   addActivityComment,
   addActivityAttachments,

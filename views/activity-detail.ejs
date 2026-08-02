@@ -410,23 +410,87 @@
         <p class="project-email-hint">CC this address when emailing clients — replies appear here automatically.</p>
       </div>
 
-      <% if (activity.participants && activity.participants.length) { %>
-        <div class="pnew-card">
-          <div class="pnew-card-header-row">
-            <h2 class="pnew-card-title"><i class="bi bi-people-fill me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Participants</h2>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+      <%
+        // Users who can manage sharing/projects
+        const _canManage = currentUser && ['Admin','Manager','Head R&D Controllers','Head R&D VFD'].includes(currentUser.role);
+        // Users NOT yet shared with (exclude participants and self)
+        const _sharedIds = new Set((activity.participants||[]).map(p => p.id));
+        const _notShared = (teamUsers||[]).filter(u => !_sharedIds.has(u.id));
+      %>
+
+      <!-- Shared with / Participants card -->
+      <div class="pnew-card">
+        <div class="pnew-card-header-row">
+          <h2 class="pnew-card-title"><i class="bi bi-share me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Shared with</h2>
+        </div>
+        <% if (activity.participants && activity.participants.length) { %>
+          <div style="display:flex;flex-direction:column;gap:0.45rem;margin-bottom:0.75rem;">
             <% activity.participants.forEach(p => { %>
               <div style="display:flex;align-items:center;gap:0.55rem;">
                 <span style="width:28px;height:28px;border-radius:50%;background:var(--crm-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;flex-shrink:0;"><%= (p.name||'?').trim().charAt(0).toUpperCase() %></span>
-                <div style="min-width:0;">
+                <div style="flex:1;min-width:0;">
                   <div style="font-size:0.85rem;font-weight:600;color:var(--crm-fg);"><%= p.name %></div>
                   <% if (p.title) { %><div style="font-size:0.72rem;color:var(--crm-muted-fg);"><%= p.title %></div><% } %>
                 </div>
+                <% if (_canManage) { %>
+                  <form action="/activities/<%= activity.id %>/share/remove" method="POST" style="margin:0;">
+                    <input type="hidden" name="removeId" value="<%= p.id %>">
+                    <button type="submit" title="Remove" style="background:none;border:none;padding:0;cursor:pointer;color:var(--crm-muted-fg);font-size:0.85rem;line-height:1;" onclick="return confirm('Remove <%= p.name %> from shared access?')"><i class="bi bi-x-lg"></i></button>
+                  </form>
+                <% } %>
               </div>
             <% }) %>
           </div>
+        <% } else { %>
+          <p style="font-size:0.82rem;color:var(--crm-muted-fg);margin-bottom:0.75rem;">No one else has access yet.</p>
+        <% } %>
+        <% if (_canManage && _notShared.length) { %>
+          <details class="act-picker-details">
+            <summary class="act-picker-summary"><i class="bi bi-person-plus me-1"></i> Share with someone</summary>
+            <form action="/activities/<%= activity.id %>/share" method="POST" style="margin-top:0.6rem;">
+              <div class="act-picker-list">
+                <% _notShared.forEach(u => { %>
+                  <label class="act-picker-row">
+                    <input type="checkbox" name="shareWithIds" value="<%= u.id %>">
+                    <span style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.18 250);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0;"><%= (u.name||'?').trim().charAt(0).toUpperCase() %></span>
+                    <span style="flex:1;min-width:0;">
+                      <span style="font-size:0.83rem;font-weight:600;"><%= u.name %></span>
+                      <% if (u.title) { %><span style="font-size:0.72rem;color:var(--crm-muted-fg);margin-left:0.3rem;"><%= u.title %></span><% } %>
+                    </span>
+                  </label>
+                <% }) %>
+              </div>
+              <button type="submit" class="act-picker-btn">Share</button>
+            </form>
+          </details>
+        <% } %>
+      </div>
+
+      <!-- Create project from this activity -->
+      <% if (_canManage) { %>
+      <div class="pnew-card">
+        <div class="pnew-card-header-row">
+          <h2 class="pnew-card-title"><i class="bi bi-kanban me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Create project</h2>
         </div>
+        <p style="font-size:0.8rem;color:var(--crm-muted-fg);margin-bottom:0.75rem;">Turn this activity into a tracked project and assign it to someone.</p>
+        <form action="/activities/<%= activity.id %>/projects/new" method="POST">
+          <div style="margin-bottom:0.5rem;">
+            <label style="font-size:0.75rem;font-weight:600;color:var(--crm-muted-fg);display:block;margin-bottom:0.25rem;">Project name</label>
+            <input type="text" name="projectName" required placeholder="<%= activity.name %>" value="<%= activity.name %>"
+              style="width:100%;padding:0.35rem 0.6rem;border:1px solid var(--crm-border);border-radius:7px;font-size:0.85rem;background:var(--crm-surface);color:var(--crm-fg);">
+          </div>
+          <div style="margin-bottom:0.75rem;">
+            <label style="font-size:0.75rem;font-weight:600;color:var(--crm-muted-fg);display:block;margin-bottom:0.25rem;">Assign to</label>
+            <select name="assigneeId" style="width:100%;padding:0.35rem 0.6rem;border:1px solid var(--crm-border);border-radius:7px;font-size:0.85rem;background:var(--crm-surface);color:var(--crm-fg);">
+              <option value="">— no one —</option>
+              <% (teamUsers||[]).forEach(u => { %>
+                <option value="<%= u.id %>"><%= u.name %><%= u.title ? ' · ' + u.title : '' %></option>
+              <% }) %>
+            </select>
+          </div>
+          <button type="submit" style="width:100%;padding:0.45rem 0;border:none;border-radius:7px;background:var(--crm-accent);color:#fff;font-size:0.85rem;font-weight:600;cursor:pointer;">Create project</button>
+        </form>
+      </div>
       <% } %>
 
       <% if (activity.ownerName) { %>
@@ -452,6 +516,30 @@
   cursor: pointer; transition: all 0.12s;
 }
 .act-delete-btn:hover { background: #fee2e2; border-color: #ef4444; }
+.act-picker-details { margin: 0; }
+.act-picker-summary {
+  font-size: 0.82rem; font-weight: 600; color: var(--crm-accent);
+  cursor: pointer; list-style: none; padding: 0.3rem 0;
+}
+.act-picker-summary::-webkit-details-marker { display: none; }
+.act-picker-list {
+  max-height: 180px; overflow-y: auto;
+  border: 1px solid var(--crm-border); border-radius: 7px;
+  padding: 0.3rem 0; background: var(--crm-surface);
+}
+.act-picker-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 0.6rem; cursor: pointer;
+  transition: background 0.1s;
+}
+.act-picker-row:hover { background: var(--crm-muted); }
+.act-picker-row input[type="checkbox"] { flex-shrink: 0; }
+.act-picker-btn {
+  margin-top: 0.5rem; width: 100%; padding: 0.35rem 0;
+  border: none; border-radius: 7px;
+  background: var(--crm-accent); color: #fff;
+  font-size: 0.83rem; font-weight: 600; cursor: pointer;
+}
 </style>
 
 <script>

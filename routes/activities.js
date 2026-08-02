@@ -170,6 +170,64 @@ router.post('/activities/:id/comments', upload.array('attachment', 5), async (re
   }
 });
 
+// Share activity with team users (adds them as participants so they can see it)
+router.post('/activities/:id/share', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (!user || !['Admin', 'Manager', 'Head R&D Controllers', 'Head R&D VFD'].includes(user.role)) {
+      return res.status(403).send('Forbidden');
+    }
+    // Merge new shareWithIds into existing participants (don't wipe existing ones)
+    const existing = await crm.listActivityParticipants(req.params.id);
+    const existingIds = existing.map(p => p.id);
+    let shareWith = req.body.shareWithIds || [];
+    if (!Array.isArray(shareWith)) shareWith = [shareWith];
+    const merged = [...new Set([...existingIds, ...shareWith])];
+    await crm.setActivityParticipants(req.params.id, merged);
+    res.redirect(`/activities/${req.params.id}`);
+  } catch (err) { next(err); }
+});
+
+// Remove a participant from sharing
+router.post('/activities/:id/share/remove', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (!user || !['Admin', 'Manager', 'Head R&D Controllers', 'Head R&D VFD'].includes(user.role)) {
+      return res.status(403).send('Forbidden');
+    }
+    const existing = await crm.listActivityParticipants(req.params.id);
+    const filtered = existing.map(p => p.id).filter(id => id !== req.body.removeId);
+    await crm.setActivityParticipants(req.params.id, filtered);
+    res.redirect(`/activities/${req.params.id}`);
+  } catch (err) { next(err); }
+});
+
+// Create a new project from this activity
+router.post('/activities/:id/projects/new', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    const { projectName, assigneeId } = req.body;
+    if (!projectName || !projectName.trim()) {
+      return res.redirect(`/activities/${req.params.id}`);
+    }
+    // Fetch activity to inherit company
+    const activity = await crm.getActivity(req.params.id);
+    const project = await crm.createProject({
+      name: projectName.trim(),
+      companyId: activity ? activity.companyId : null,
+      ownerId: assigneeId || null,
+      createdById: user ? user.id : null,
+    });
+    // Link project back to this activity
+    await crm.addActivityProject(req.params.id, project.id);
+    // If assignee specified, also add to project_assignees
+    if (assigneeId) {
+      await crm.setProjectAssignees(project.id, [assigneeId]);
+    }
+    res.redirect(`/projects/${project.id}`);
+  } catch (err) { next(err); }
+});
+
 router.post('/activities/:id/files', upload.any(), async (req, res, next) => {
   try {
     const files = req.files || [];

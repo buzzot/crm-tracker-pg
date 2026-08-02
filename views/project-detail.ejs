@@ -448,6 +448,22 @@
         </div>
       </div>
 
+      <% if (project.linkedActivities && project.linkedActivities.length) { %>
+        <div class="pnew-card">
+          <div class="pnew-card-header-row">
+            <h2 class="pnew-card-title"><i class="bi bi-clock-history me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Source activities</h2>
+          </div>
+          <div class="pnew-product-list">
+            <% project.linkedActivities.forEach(act => { %>
+              <a href="/activities/<%= act.id %>" class="pnew-product-row" style="text-decoration:none;">
+                <span class="pnew-product-name"><%= act.name || '(untitled)' %></span>
+                <span class="pnew-product-sub"><%= act.type || '' %><% if (act.result) { %><% if (act.type) { %> · <% } %><%= act.result %><% } %></span>
+              </a>
+            <% }) %>
+          </div>
+        </div>
+      <% } %>
+
       <div class="pnew-tip-card">
         <i class="bi bi-pencil-square"></i>
         <div class="pnew-tip-title">Need changes?</div>
