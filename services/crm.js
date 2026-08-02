@@ -794,13 +794,14 @@ async function setProjectRdIssue(id, value, updatedById) {
 }
 
 async function getProjectDetail(id) {
-  const [project, tasks, comments] = await Promise.all([
+  const [project, tasks, comments, attachments] = await Promise.all([
     getProject(id),
     listTasks({ projectId: id }),
-    listCommentsByEntity('project', id)
+    listCommentsByEntity('project', id),
+    listAttachments('project', id)
   ]);
   if (!project) return { name: null };
-  return { ...project, tasks, subtasks: tasks, comments };
+  return { ...project, tasks, subtasks: tasks, comments, attachments };
 }
 
 function mapProject(row) {
