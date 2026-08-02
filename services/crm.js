@@ -557,6 +557,7 @@ function mapActivity(row) {
     companyIds: row.company_id ? [row.company_id] : (row.company_id_val ? [row.company_id_val] : []),
     companyNames: row.company_name_val ? [row.company_name_val] : [],
     attendeeIds: attendees.filter(a => a.id).map(a => a.id),
+    attendees: attendees.filter(a => a.id).map(a => ({ id: a.id, name: a.name || null })),
     projectIds: projectsLinked.filter(p => p.id).map(p => p.id),
     projectNames: projectsLinked.filter(p => p.name).map(p => p.name),
     ownerId: row.owner_id || null,

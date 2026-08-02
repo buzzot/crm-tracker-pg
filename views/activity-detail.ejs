@@ -75,15 +75,15 @@
             <p class="pnew-card-sub mb-0">No details recorded.</p>
           <% } %>
 
-          <% if (activity.attendeeIds && activity.attendeeIds.length) { %>
+          <% if (activity.attendees && activity.attendees.length) { %>
             <div style="margin-top:1rem;">
               <div class="pnew-field-label mb-1"><i class="bi bi-people"></i> Attendees</div>
               <div class="d-flex flex-wrap gap-2">
-                <% activity.attendeeIds.forEach(id => {
-                     const p = persons.find(pp => pp.id === id); %>
+                <% activity.attendees.forEach(att => {
+                     const displayName = att.name || 'Unknown contact'; %>
                   <span style="display:inline-flex; align-items:center; gap:0.4rem; background:var(--crm-muted); border:1px solid var(--crm-border); border-radius:999px; padding:0.2rem 0.65rem; font-size:0.8rem;">
-                    <span style="width:20px;height:20px;border-radius:50%;background:var(--crm-accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;"><%= ((p && p.fullName) || '?').trim().charAt(0).toUpperCase() %></span>
-                    <%= p ? p.fullName : id %>
+                    <span style="width:20px;height:20px;border-radius:50%;background:var(--crm-accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;"><%= displayName.trim().charAt(0).toUpperCase() %></span>
+                    <%= displayName %>
                   </span>
                 <% }) %>
               </div>
@@ -180,12 +180,13 @@
           <div class="mb-3">
             <label class="pnew-field-label"><i class="bi bi-people"></i> Attendees</label>
             <div class="chip-field" id="attendeesChipField">
-              <% [].concat(activity.attendeeIds||[]).forEach(id => {
-                   const p = persons.find(pp => pp.id === id); %>
-                <span class="chip" data-id="<%= id %>">
-                  <span class="chip-avatar"><%= ((p && p.fullName) || '?').trim().charAt(0).toUpperCase() %></span>
-                  <%= p ? p.fullName : id %>
-                  <input type="hidden" name="attendeeIds" value="<%= id %>">
+              <% [].concat(activity.attendees||[]).forEach(att => {
+                   const p = persons.find(pp => pp.id === att.id);
+                   const displayName = (p && p.fullName) || att.name || 'Unknown contact'; %>
+                <span class="chip" data-id="<%= att.id %>">
+                  <span class="chip-avatar"><%= displayName.trim().charAt(0).toUpperCase() %></span>
+                  <%= displayName %>
+                  <input type="hidden" name="attendeeIds" value="<%= att.id %>">
                   <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
                 </span>
               <% }) %>
