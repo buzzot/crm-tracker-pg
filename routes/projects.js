@@ -164,6 +164,41 @@ router.post('/projects/:id/edit', async (req, res, next) => {
   }
 });
 
+router.post('/projects/:id/owner', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (!user || !['Admin', 'Manager', 'Head R&D Controllers', 'Head R&D VFD'].includes(user.role)) {
+      return res.status(403).send('Forbidden');
+    }
+    await crm.setProjectOwner(req.params.id, req.body.ownerId || null, user.id);
+    res.redirect(`/projects/${req.params.id}`);
+  } catch (err) { next(err); }
+});
+
+router.post('/projects/:id/auditor', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (!user || !['Admin', 'Manager', 'Head R&D Controllers', 'Head R&D VFD'].includes(user.role)) {
+      return res.status(403).send('Forbidden');
+    }
+    await crm.setProjectAuditor(req.params.id, req.body.auditorId || null, user.id);
+    res.redirect(`/projects/${req.params.id}`);
+  } catch (err) { next(err); }
+});
+
+router.post('/projects/:id/assignees', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (!user || !['Admin', 'Manager', 'Head R&D Controllers', 'Head R&D VFD'].includes(user.role)) {
+      return res.status(403).send('Forbidden');
+    }
+    let userIds = req.body.userIds || [];
+    if (!Array.isArray(userIds)) userIds = [userIds];
+    await crm.setProjectAssignees(req.params.id, userIds);
+    res.redirect(`/projects/${req.params.id}`);
+  } catch (err) { next(err); }
+});
+
 router.post('/projects/:id/toggle-rd', async (req, res, next) => {
   try {
     const user = req.session.user;

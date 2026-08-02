@@ -77,6 +77,10 @@ function accessFilter(user, alias = '', entityType = null) {
   if (entityType === 'company' || entityType === 'project' || entityType === 'deal') {
     // All users see Client companies regardless of ownership/assignment
     const clientSubq = entityType === 'company' ? ` OR ${p}status = 'Client'` : '';
+    // Project assignees get access
+    const projAssigneeSubq = entityType === 'project'
+      ? ` OR EXISTS (SELECT 1 FROM project_assignees pa WHERE pa.project_id = ${p}id AND pa.user_id = $1)`
+      : '';
     // Engineering role can also see R&D projects they have an assigned task in
     const rdEngSubq = (entityType === 'project' && user.role === 'Engineering')
       ? ` OR (${p}is_rd_issue = TRUE AND EXISTS (
@@ -91,7 +95,7 @@ function accessFilter(user, alias = '', entityType = null) {
         WHERE ua.entity_id = ${p}id
           AND ua.entity_type = $2
           AND ua.user_id = $1
-      )${clientSubq}${rdEngSubq})`,
+      )${projAssigneeSubq}${clientSubq}${rdEngSubq})`,
       params: [user.id, entityType]
     };
   }
@@ -730,6 +734,7 @@ async function getProject(id) {
   const r = await query(
     `SELECT p.*, c.name AS company_name, u.name AS owner_name, g.name AS group_name,
             uc.name AS created_by_name, uu.name AS updated_by_name,
+            ua.name AS auditor_name,
             COALESCE(
               json_agg(DISTINCT jsonb_build_object('id', pr.id, 'name', pr.name))
               FILTER (WHERE pr.id IS NOT NULL), '[]'
@@ -740,13 +745,52 @@ async function getProject(id) {
      LEFT JOIN groups g     ON g.id  = p.group_id
      LEFT JOIN users uc     ON uc.id = p.created_by
      LEFT JOIN users uu     ON uu.id = p.updated_by
+     LEFT JOIN users ua     ON ua.id = p.auditor_id
      LEFT JOIN product_projects pp ON pp.project_id = p.id
      LEFT JOIN products pr  ON pr.id = pp.product_id
      WHERE p.id=$1
-     GROUP BY p.id, c.name, u.name, g.name, uc.name, uu.name`,
+     GROUP BY p.id, c.name, u.name, g.name, uc.name, uu.name, ua.name`,
     [id]
   );
   return r.rows[0] ? mapProject(r.rows[0]) : null;
+}
+
+async function listProjectAssignees(projectId) {
+  const r = await query(
+    `SELECT u.id, u.name, u.title, u.role
+     FROM project_assignees pa
+     JOIN users u ON u.id = pa.user_id
+     WHERE pa.project_id = $1
+     ORDER BY u.name`,
+    [projectId]
+  );
+  return r.rows.map(row => ({ id: row.id, name: row.name, title: row.title, role: row.role }));
+}
+
+async function setProjectOwner(id, ownerId, updatedById) {
+  await query(
+    'UPDATE projects SET owner_id=$2, updated_by=$3, updated_at=NOW() WHERE id=$1',
+    [id, ownerId || null, updatedById || null]
+  );
+}
+
+async function setProjectAuditor(id, auditorId, updatedById) {
+  await query(
+    'UPDATE projects SET auditor_id=$2, updated_by=$3, updated_at=NOW() WHERE id=$1',
+    [id, auditorId || null, updatedById || null]
+  );
+}
+
+async function setProjectAssignees(projectId, userIds) {
+  await transaction(async (client) => {
+    await client.query('DELETE FROM project_assignees WHERE project_id=$1', [projectId]);
+    for (const uid of (userIds || [])) {
+      await client.query(
+        'INSERT INTO project_assignees (project_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+        [projectId, uid]
+      );
+    }
+  });
 }
 
 async function createProject({ name, status, details, companyId, dealId, ownerId, groupId, createdById }) {
@@ -794,14 +838,25 @@ async function setProjectRdIssue(id, value, updatedById) {
 }
 
 async function getProjectDetail(id) {
-  const [project, tasks, comments, attachments] = await Promise.all([
+  const [project, tasks, comments, attachments, assignees, teamUsers] = await Promise.all([
     getProject(id),
     listTasks({ projectId: id }),
     listCommentsByEntity('project', id),
-    listAttachments('project', id)
+    listAttachments('project', id),
+    listProjectAssignees(id),
+    listTeamUsers()
   ]);
   if (!project) return { name: null };
-  return { ...project, tasks, subtasks: tasks, comments, attachments };
+  return {
+    ...project,
+    tasks,
+    subtasks: tasks,
+    comments,
+    attachments,
+    assignees,
+    assigneeIds: assignees.map(a => a.id),
+    teamUsers
+  };
 }
 
 function mapProject(row) {
@@ -823,11 +878,15 @@ function mapProject(row) {
     deals: [],
     ownerId: row.owner_id || null,
     ownerName: row.owner_name || null,
+    auditorId: row.auditor_id || null,
+    auditorName: row.auditor_name || null,
     groupId: row.group_id || null,
     groupName: row.group_name || null,
     products,
     isRdIssue: row.is_rd_issue || false,
     attachments: [],
+    assignees: [],
+    assigneeIds: [],
     createdAt: row.created_at,
     createdByName: row.created_by_name || null,
     updatedAt: row.updated_at,
@@ -1536,6 +1595,10 @@ module.exports = {
   createProject,
   updateProject,
   setProjectRdIssue,
+  setProjectOwner,
+  setProjectAuditor,
+  setProjectAssignees,
+  listProjectAssignees,
   getProjectDetail,
   addProjectAttachments,
   listProjectComments,

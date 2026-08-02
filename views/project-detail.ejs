@@ -271,6 +271,130 @@
       </div>
       <% } %>
 
+      <%
+        const _canManage = currentUser && ['Admin', 'Manager', 'Head R&D Controllers', 'Head R&D VFD'].includes(currentUser.role);
+      %>
+
+      <!-- Owner -->
+      <div class="pnew-card">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <h2 class="pnew-card-title">Owner</h2>
+            <p class="pnew-card-sub">Responsible for this project.</p>
+          </div>
+          <% if (_canManage) { %>
+            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#projOwnerPicker">
+              <i class="bi bi-pencil"></i>
+            </button>
+          <% } %>
+        </div>
+        <% if (project.ownerId) { %>
+          <div class="d-flex align-items-center gap-2">
+            <span class="task-people-av" style="width:28px;height:28px;font-size:0.75rem;"><%= (project.ownerName||'?').charAt(0).toUpperCase() %></span>
+            <span style="font-size:0.875rem;font-weight:600;"><%= project.ownerName %></span>
+          </div>
+        <% } else { %>
+          <p class="pnew-card-sub mb-0">No owner set.</p>
+        <% } %>
+        <% if (_canManage) { %>
+          <div class="collapse mt-3" id="projOwnerPicker">
+            <form action="/projects/<%= project.id %>/owner" method="POST">
+              <select name="ownerId" class="form-select form-select-sm mb-2">
+                <option value="">— Remove owner —</option>
+                <% (project.teamUsers || []).forEach(u => { %>
+                  <option value="<%= u.id %>" <%= project.ownerId === u.id ? 'selected' : '' %>>
+                    <%= u.name %><% if (u.title) { %> · <%= u.title %><% } %>
+                  </option>
+                <% }) %>
+              </select>
+              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Auditor -->
+      <div class="pnew-card">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <h2 class="pnew-card-title">Auditor</h2>
+            <p class="pnew-card-sub">Manager overseeing this project.</p>
+          </div>
+          <% if (_canManage) { %>
+            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#projAuditorPicker">
+              <i class="bi bi-pencil"></i>
+            </button>
+          <% } %>
+        </div>
+        <% if (project.auditorName) { %>
+          <div class="d-flex align-items-center gap-2">
+            <span class="task-people-av" style="width:28px;height:28px;font-size:0.75rem;background:oklch(0.55 0.18 250);"><%= project.auditorName.charAt(0).toUpperCase() %></span>
+            <span style="font-size:0.875rem;font-weight:600;"><%= project.auditorName %></span>
+          </div>
+        <% } else { %>
+          <p class="pnew-card-sub mb-0">No auditor set.</p>
+        <% } %>
+        <% if (_canManage) { %>
+          <div class="collapse mt-3" id="projAuditorPicker">
+            <form action="/projects/<%= project.id %>/auditor" method="POST">
+              <select name="auditorId" class="form-select form-select-sm mb-2">
+                <option value="">— Remove auditor —</option>
+                <% (project.teamUsers || []).filter(u => ['Admin','Manager','Head R&D Controllers','Head R&D VFD'].includes(u.role)).forEach(u => { %>
+                  <option value="<%= u.id %>" <%= project.auditorId === u.id ? 'selected' : '' %>>
+                    <%= u.name %><% if (u.title) { %> · <%= u.title %><% } %>
+                  </option>
+                <% }) %>
+              </select>
+              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Assigned to -->
+      <div class="pnew-card">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <h2 class="pnew-card-title">Assigned to</h2>
+            <p class="pnew-card-sub">Everyone working on this project.</p>
+          </div>
+          <% if (_canManage) { %>
+            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#projAssigneePicker">
+              <i class="bi bi-person-plus"></i> Edit
+            </button>
+          <% } %>
+        </div>
+        <% if (project.assignees && project.assignees.length) { %>
+          <div class="d-flex flex-column gap-1">
+            <% project.assignees.forEach(a => { %>
+              <div class="d-flex align-items-center gap-2">
+                <span class="task-people-av" style="width:26px;height:26px;font-size:0.72rem;"><%= (a.name||'?').charAt(0).toUpperCase() %></span>
+                <span style="font-size:0.85rem;"><%= a.name %></span>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <p class="pnew-card-sub mb-0">No one assigned yet.</p>
+        <% } %>
+        <% if (_canManage) { %>
+          <div class="collapse mt-3" id="projAssigneePicker">
+            <form action="/projects/<%= project.id %>/assignees" method="POST">
+              <div class="d-flex flex-column gap-1 mb-3" style="max-height:180px;overflow-y:auto;">
+                <% (project.teamUsers || []).forEach(u => { %>
+                  <label class="task-people-check">
+                    <input type="checkbox" name="userIds" value="<%= u.id %>"
+                      <%= (project.assigneeIds || []).includes(u.id) ? 'checked' : '' %>>
+                    <span class="task-people-av" style="width:24px;height:24px;font-size:0.7rem;"><%= (u.name||'?').charAt(0).toUpperCase() %></span>
+                    <span style="font-size:0.85rem;"><%= u.name %><% if (u.title) { %> <span style="opacity:0.5;">· <%= u.title %></span><% } %></span>
+                  </label>
+                <% }) %>
+              </div>
+              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+
       <div class="pnew-card">
         <h2 class="pnew-card-title">Related tasks</h2>
         <p class="pnew-card-sub"><%= project.subtasks.length %> total</p>
