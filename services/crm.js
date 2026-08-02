@@ -1513,7 +1513,7 @@ async function listRdIssues(user) {
     `${TASK_SELECT}
      JOIN projects rdp ON rdp.id = t.project_id AND rdp.is_rd_issue = TRUE
      WHERE t.status != 'Completed' ${userCondition}
-     GROUP BY t.id, p.name, p.id, u.name, au2.name
+     GROUP BY t.id, p.name, p.id, u.name, au2.name, ab.name
      ORDER BY t.deadline ASC NULLS LAST, t.created_at DESC`,
     params
   );
