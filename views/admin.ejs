@@ -13,8 +13,9 @@
       <h1 class="au-title">Team</h1>
       <p class="au-sub"><%= activeCount %> active<% if (inactiveCount) { %> · <span style="color:var(--crm-muted-fg)"><%= inactiveCount %> inactive</span><% } %></p>
     </div>
-    <div style="display:flex; gap:8px; align-items:center;">
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <a href="/reports/monthly" target="_blank" class="pnew-btn-cancel" style="display:inline-flex; align-items:center; gap:6px;"><i class="bi bi-file-earmark-bar-graph"></i>Monthly Report</a>
+      <a href="/admin/archived-tasks" class="pnew-btn-cancel" style="display:inline-flex; align-items:center; gap:6px;"><i class="bi bi-archive"></i>Archived Tasks</a>
       <a href="/admin/users/new" class="pnew-btn-save"><i class="bi bi-person-plus-fill me-1"></i>Add Member</a>
     </div>
   </div>

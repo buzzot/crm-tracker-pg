@@ -935,12 +935,14 @@ const TASK_SELECT = `
     p.name  AS project_name, p.id AS project_id_val,
     u.name  AS owner_name,
     au2.name AS auditor_name,
+    ab.name  AS archived_by_name,
     COALESCE(json_agg(DISTINCT jsonb_build_object('id', ta.user_id, 'name', asgn.name))
       FILTER (WHERE ta.user_id IS NOT NULL), '[]') AS assignees
   FROM tasks t
   LEFT JOIN projects p  ON p.id  = t.project_id
   LEFT JOIN users u     ON u.id  = t.owner_id
   LEFT JOIN users au2   ON au2.id = t.auditor_id
+  LEFT JOIN users ab    ON ab.id  = t.archived_by
   LEFT JOIN task_assignees ta ON ta.task_id = t.id
   LEFT JOIN users asgn ON asgn.id = ta.user_id`;
 
@@ -966,6 +968,10 @@ function mapTask(row) {
     assignees,
     assigneeIds:  assignees.map(a => a.id),
     completedAt:  row.completed_at || null,
+    isArchived:   row.is_archived || false,
+    archivedAt:   row.archived_at || null,
+    archivedById: row.archived_by || null,
+    archivedByName: row.archived_by_name || null,
     createdAt:    row.created_at,
     updatedAt:    row.updated_at,
   };
@@ -1004,9 +1010,11 @@ async function listTasks({ projectId, user } = {}) {
       OR EXISTS (SELECT 1 FROM projects gp WHERE gp.id=t.project_id AND gp.group_id=ANY($${params.push(groupIds)}::uuid[]))
     )`);
   }
-  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  // Always hide archived tasks from normal lists
+  conditions.push('(t.is_archived = FALSE OR t.is_archived IS NULL)');
+  const where = 'WHERE ' + conditions.join(' AND ');
   const r = await query(
-    `${TASK_SELECT} ${where} GROUP BY t.id, p.name, p.id, u.name, au2.name ORDER BY t.created_at DESC`,
+    `${TASK_SELECT} ${where} GROUP BY t.id, p.name, p.id, u.name, au2.name, ab.name ORDER BY t.created_at DESC`,
     params
   );
   return r.rows.map(mapTask);
@@ -1014,10 +1022,34 @@ async function listTasks({ projectId, user } = {}) {
 
 async function getTask(id) {
   const r = await query(
-    `${TASK_SELECT} WHERE t.id=$1 GROUP BY t.id, p.name, p.id, u.name, au2.name`,
+    `${TASK_SELECT} WHERE t.id=$1 GROUP BY t.id, p.name, p.id, u.name, au2.name, ab.name`,
     [id]
   );
   return r.rows[0] ? mapTask(r.rows[0]) : null;
+}
+
+async function archiveTask(id, archivedById) {
+  await query(
+    `UPDATE tasks SET is_archived=TRUE, archived_at=NOW(), archived_by=$2, updated_at=NOW() WHERE id=$1`,
+    [id, archivedById || null]
+  );
+}
+
+async function unarchiveTask(id) {
+  await query(
+    `UPDATE tasks SET is_archived=FALSE, archived_at=NULL, archived_by=NULL, updated_at=NOW() WHERE id=$1`,
+    [id]
+  );
+}
+
+async function listArchivedTasks() {
+  const r = await query(
+    `${TASK_SELECT} WHERE t.is_archived=TRUE
+     GROUP BY t.id, p.name, p.id, u.name, au2.name, ab.name
+     ORDER BY t.archived_at DESC NULLS LAST`,
+    []
+  );
+  return r.rows.map(mapTask);
 }
 
 async function getTaskDeadlineHistory(taskId) {
@@ -1641,6 +1673,9 @@ module.exports = {
   // Tasks
   listTasks,
   getTask,
+  archiveTask,
+  unarchiveTask,
+  listArchivedTasks,
   createTask,
   getTaskDetail,
   updateTaskDetails,

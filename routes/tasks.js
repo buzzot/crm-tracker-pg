@@ -80,8 +80,13 @@ router.post('/tasks/new', async (req, res, next) => {
 
 router.get('/tasks/:id', async (req, res, next) => {
   try {
+    const user = req.session.user;
     const task = await crm.getTaskDetail(req.params.id);
     if (!task || !task.name) return res.status(404).render('error', { title: 'Not found', message: 'Task not found.' });
+    // Archived tasks: only Admins may view; everyone else gets 404
+    if (task.isArchived && (!user || user.role !== 'Admin')) {
+      return res.status(404).render('error', { title: 'Not found', message: 'Task not found.' });
+    }
     res.render('task-detail', {
       title: task.name,
       task,
@@ -207,6 +212,28 @@ router.post('/tasks/:id/complete', async (req, res, next) => {
   try {
     await crm.completeTask(req.params.id);
     res.redirect(`/tasks/${req.params.id}`);
+  } catch (err) { next(err); }
+});
+
+// ─── Archive task (Admin only) ────────────────────────────────────────────────
+
+router.post('/tasks/:id/archive', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (!user || user.role !== 'Admin') return res.status(403).render('error', { title: 'Forbidden', message: 'Only Admins can archive tasks.' });
+    await crm.archiveTask(req.params.id, user.id);
+    res.redirect('/admin/archived-tasks');
+  } catch (err) { next(err); }
+});
+
+// ─── Unarchive task (Admin only) ─────────────────────────────────────────────
+
+router.post('/tasks/:id/unarchive', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    if (!user || user.role !== 'Admin') return res.status(403).render('error', { title: 'Forbidden', message: 'Only Admins can restore tasks.' });
+    await crm.unarchiveTask(req.params.id);
+    res.redirect('/admin/archived-tasks');
   } catch (err) { next(err); }
 });
 

@@ -22,6 +22,14 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /admin/archived-tasks
+router.get('/archived-tasks', async (req, res, next) => {
+  try {
+    const tasks = await crm.listArchivedTasks();
+    res.render('admin-archived-tasks', { title: 'Admin · Archived Tasks', tasks });
+  } catch (err) { next(err); }
+});
+
 // GET /admin/users/new
 router.get('/users/new', (req, res) => {
   res.render('admin-user-edit', {

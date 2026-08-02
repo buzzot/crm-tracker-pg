@@ -1,0 +1,134 @@
+<%
+  function fmtDate(d) {
+    if (!d) return '—';
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+%>
+
+<div class="pnew-page">
+
+  <div class="au-header">
+    <div>
+      <a href="/admin" style="font-size:0.82rem;color:var(--crm-accent);text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem;margin-bottom:0.5rem;"><i class="bi bi-arrow-left"></i> Admin</a>
+      <h1 class="au-title" style="display:flex;align-items:center;gap:0.5rem;">
+        <i class="bi bi-archive" style="color:var(--crm-muted-fg);font-size:1.2rem;"></i> Archived Tasks
+      </h1>
+      <p class="au-sub"><%= tasks.length %> task<%= tasks.length === 1 ? '' : 's' %> archived</p>
+    </div>
+  </div>
+
+  <% if (!tasks.length) { %>
+    <div style="text-align:center;padding:3rem 1rem;color:var(--crm-muted-fg);">
+      <i class="bi bi-archive" style="font-size:2.5rem;opacity:0.35;display:block;margin-bottom:0.75rem;"></i>
+      <div style="font-size:1rem;font-weight:600;">No archived tasks</div>
+      <p style="font-size:0.85rem;margin-top:0.4rem;">Tasks archived from task detail pages will appear here.</p>
+    </div>
+  <% } else { %>
+    <div class="arch-table-wrap">
+      <table class="arch-table">
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Project</th>
+            <th>Status</th>
+            <th>Archived by</th>
+            <th>Archived on</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% tasks.forEach(t => { %>
+            <tr>
+              <td>
+                <a href="/tasks/<%= t.id %>" class="arch-task-link"><%= t.name || '(untitled)' %></a>
+                <% if (t.ownerName) { %>
+                  <div class="arch-task-owner">Owner: <%= t.ownerName %></div>
+                <% } %>
+              </td>
+              <td>
+                <% if (t.projectId && t.projectName) { %>
+                  <a href="/projects/<%= t.projectId %>" style="color:var(--crm-accent);text-decoration:none;font-size:0.83rem;"><%= t.projectName %></a>
+                <% } else { %>
+                  <span style="color:var(--crm-muted-fg);font-size:0.83rem;">—</span>
+                <% } %>
+              </td>
+              <td><span class="arch-status-chip"><%= t.status || '—' %></span></td>
+              <td style="font-size:0.83rem;color:var(--crm-fg);"><%= t.archivedByName || '—' %></td>
+              <td style="font-size:0.83rem;color:var(--crm-muted-fg);white-space:nowrap;"><%= fmtDate(t.archivedAt) %></td>
+              <td>
+                <form action="/tasks/<%= t.id %>/unarchive" method="POST" style="margin:0;">
+                  <button type="submit" class="arch-restore-btn" onclick="return confirm('Restore &quot;<%= (t.name||'this task').replace(/"/g, '&quot;') %>&quot;? It will become visible to all relevant users again.')">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Restore
+                  </button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+</div>
+
+<style>
+.arch-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+}
+.arch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.arch-table thead tr {
+  background: var(--crm-muted);
+  border-bottom: 1px solid var(--crm-border);
+}
+.arch-table th {
+  padding: 0.65rem 1rem;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--crm-muted-fg);
+  white-space: nowrap;
+}
+.arch-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--crm-border);
+  vertical-align: middle;
+}
+.arch-table tbody tr:last-child td { border-bottom: none; }
+.arch-table tbody tr:hover { background: var(--crm-muted); }
+.arch-task-link {
+  font-weight: 600;
+  color: var(--crm-fg);
+  text-decoration: none;
+  font-size: 0.88rem;
+}
+.arch-task-link:hover { color: var(--crm-accent); }
+.arch-task-owner { font-size: 0.75rem; color: var(--crm-muted-fg); margin-top: 0.15rem; }
+.arch-status-chip {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--crm-muted);
+  color: var(--crm-muted-fg);
+}
+.arch-restore-btn {
+  display: inline-flex; align-items: center;
+  padding: 0.3rem 0.7rem; border-radius: 6px;
+  border: 1px solid var(--crm-border); background: var(--crm-surface);
+  color: var(--crm-accent); font-size: 0.8rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: all 0.12s;
+}
+.arch-restore-btn:hover { background: var(--crm-muted); border-color: var(--crm-accent); }
+</style>
