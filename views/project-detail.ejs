@@ -246,6 +246,31 @@
         <p class="project-email-hint">Set Reply-To this address when emailing clients — their replies appear here automatically.</p>
       </div>
 
+      <% if (currentUser && ['Admin', 'Head R&D Controllers', 'Head R&D VFD'].includes(currentUser.role)) { %>
+      <div class="pnew-card rd-toggle-card <%= project.isRdIssue ? 'rd-toggle-card--on' : '' %>">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem;">
+          <div>
+            <h2 class="pnew-card-title" style="margin-bottom:0.2rem;"><i class="bi bi-cpu"></i> R&amp;D Issue</h2>
+            <p class="pnew-card-sub mb-0" style="font-size:0.75rem;">
+              When on, Engineering team can see this project if assigned to a task here.
+            </p>
+          </div>
+          <form action="/projects/<%= project.id %>/toggle-rd" method="POST" style="flex-shrink:0; margin-top:0.1rem;">
+            <button type="submit" class="rd-switch" title="<%= project.isRdIssue ? 'Disable R&D' : 'Enable R&D' %>">
+              <span class="rd-switch-track <%= project.isRdIssue ? 'rd-switch-track--on' : '' %>">
+                <span class="rd-switch-thumb"></span>
+              </span>
+            </button>
+          </form>
+        </div>
+        <% if (project.isRdIssue) { %>
+          <div class="rd-active-note">
+            <i class="bi bi-check-circle-fill"></i> Visible to R&amp;D engineers assigned here
+          </div>
+        <% } %>
+      </div>
+      <% } %>
+
       <div class="pnew-card">
         <h2 class="pnew-card-title">Related tasks</h2>
         <p class="pnew-card-sub"><%= project.subtasks.length %> total</p>
@@ -282,31 +307,6 @@
           <% } %>
         </div>
       </div>
-
-      <% if (currentUser && ['Admin', 'Head R&D Controllers', 'Head R&D VFD'].includes(currentUser.role)) { %>
-      <div class="pnew-card rd-toggle-card <%= project.isRdIssue ? 'rd-toggle-card--on' : '' %>">
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem;">
-          <div>
-            <h2 class="pnew-card-title" style="margin-bottom:0.2rem;"><i class="bi bi-cpu"></i> R&amp;D Issue</h2>
-            <p class="pnew-card-sub mb-0" style="font-size:0.75rem;">
-              When on, Engineering team can see this project if assigned to a task here.
-            </p>
-          </div>
-          <form action="/projects/<%= project.id %>/toggle-rd" method="POST" style="flex-shrink:0; margin-top:0.1rem;">
-            <button type="submit" class="rd-switch" title="<%= project.isRdIssue ? 'Disable R&D' : 'Enable R&D' %>">
-              <span class="rd-switch-track <%= project.isRdIssue ? 'rd-switch-track--on' : '' %>">
-                <span class="rd-switch-thumb"></span>
-              </span>
-            </button>
-          </form>
-        </div>
-        <% if (project.isRdIssue) { %>
-          <div class="rd-active-note">
-            <i class="bi bi-check-circle-fill"></i> Visible to R&amp;D engineers assigned here
-          </div>
-        <% } %>
-      </div>
-      <% } %>
 
       <div class="pnew-tip-card">
         <i class="bi bi-pencil-square"></i>
