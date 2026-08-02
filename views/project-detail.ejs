@@ -38,6 +38,22 @@
 
   const subtaskIds = new Set(project.subtasks.map(t => t.id));
   const linkableTasks = (typeof allTasks !== 'undefined' ? allTasks : []).filter(t => !subtaskIds.has(t.id));
+
+  const _avatarPalette = [
+    'oklch(0.50 0.20 270)', // indigo
+    'oklch(0.52 0.18 250)', // blue
+    'oklch(0.48 0.18 300)', // purple
+    'oklch(0.52 0.14 195)', // teal
+    'oklch(0.52 0.16 160)', // emerald
+    'oklch(0.55 0.18 25)',  // orange
+    'oklch(0.52 0.20 10)',  // rose
+    'oklch(0.48 0.16 230)', // cyan
+  ];
+  function avatarBg(name) {
+    let h = 0;
+    for (let i = 0; i < (name || '').length; i++) h = (name.charCodeAt(i) + ((h << 5) - h)) | 0;
+    return _avatarPalette[Math.abs(h) % _avatarPalette.length];
+  }
 %>
 
 <div class="pnew-page project-detail-page">
@@ -290,7 +306,7 @@
         </div>
         <% if (project.ownerId) { %>
           <div class="d-flex align-items-center gap-2">
-            <span class="task-people-av" style="width:28px;height:28px;font-size:0.75rem;"><%= (project.ownerName||'?').charAt(0).toUpperCase() %></span>
+            <span class="proj-people-av" style="background:<%- avatarBg(project.ownerName) %>"><%= (project.ownerName||'?').charAt(0).toUpperCase() %></span>
             <span style="font-size:0.875rem;font-weight:600;"><%= project.ownerName %></span>
           </div>
         <% } else { %>
@@ -328,7 +344,7 @@
         </div>
         <% if (project.auditorName) { %>
           <div class="d-flex align-items-center gap-2">
-            <span class="task-people-av" style="width:28px;height:28px;font-size:0.75rem;background:oklch(0.55 0.18 250);"><%= project.auditorName.charAt(0).toUpperCase() %></span>
+            <span class="proj-people-av" style="background:<%- avatarBg(project.auditorName) %>"><%= project.auditorName.charAt(0).toUpperCase() %></span>
             <span style="font-size:0.875rem;font-weight:600;"><%= project.auditorName %></span>
           </div>
         <% } else { %>
@@ -368,7 +384,7 @@
           <div class="d-flex flex-column gap-1">
             <% project.assignees.forEach(a => { %>
               <div class="d-flex align-items-center gap-2">
-                <span class="task-people-av" style="width:26px;height:26px;font-size:0.72rem;"><%= (a.name||'?').charAt(0).toUpperCase() %></span>
+                <span class="proj-people-av" style="background:<%- avatarBg(a.name) %>"><%= (a.name||'?').charAt(0).toUpperCase() %></span>
                 <span style="font-size:0.85rem;"><%= a.name %></span>
               </div>
             <% }) %>
@@ -384,7 +400,7 @@
                   <label class="task-people-check">
                     <input type="checkbox" name="userIds" value="<%= u.id %>"
                       <%= (project.assigneeIds || []).includes(u.id) ? 'checked' : '' %>>
-                    <span class="task-people-av" style="width:24px;height:24px;font-size:0.7rem;"><%= (u.name||'?').charAt(0).toUpperCase() %></span>
+                    <span class="proj-people-av" style="width:24px;height:24px;font-size:0.7rem;background:<%- avatarBg(u.name) %>"><%= (u.name||'?').charAt(0).toUpperCase() %></span>
                     <span style="font-size:0.85rem;"><%= u.name %><% if (u.title) { %> <span style="opacity:0.5;">· <%= u.title %></span><% } %></span>
                   </label>
                 <% }) %>
@@ -442,6 +458,23 @@
 </div>
 
 <style>
+/* People avatars */
+.proj-people-av {
+  width: 32px; height: 32px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.task-people-check {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 0.4rem; border-radius: 6px;
+  cursor: pointer; transition: background 0.12s;
+}
+.task-people-check:hover { background: var(--crm-muted); }
+
 .rd-toggle-card {
   border: 1.5px solid var(--crm-border);
   transition: border-color 0.2s;

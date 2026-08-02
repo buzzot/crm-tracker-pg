@@ -3597,3 +3597,17 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .due-overdue { background: oklch(0.95 0.05 15); color: oklch(0.45 0.2 15); }
 .due-soon    { background: oklch(0.96 0.06 60); color: oklch(0.45 0.18 60); }
 .due-ok      { background: oklch(0.94 0.03 145); color: oklch(0.4 0.12 145); }
+
+/* People avatar + checkbox — shared across task-detail, project-detail */
+.task-people-av {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: var(--crm-accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700;
+}
+.task-people-check {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 0.4rem; border-radius: 6px;
+  cursor: pointer; transition: background 0.12s;
+}
+.task-people-check:hover { background: var(--crm-muted); }

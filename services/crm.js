@@ -794,10 +794,12 @@ async function setProjectAssignees(projectId, userIds) {
 }
 
 async function createProject({ name, status, details, companyId, dealId, ownerId, groupId, createdById }) {
+  // Default owner to the creator if not explicitly set
+  const effectiveOwner = ownerId || createdById || null;
   const r = await query(
     `INSERT INTO projects (name, status, details, company_id, deal_id, owner_id, group_id, created_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [name, status, details, companyId, dealId, ownerId, groupId, createdById || null]
+    [name, status, details, companyId, dealId, effectiveOwner, groupId, createdById || null]
   );
   return getProject(r.rows[0].id);
 }
