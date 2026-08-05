@@ -41,7 +41,7 @@
 
 body {
   background-color: var(--crm-bg);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
 }
 
 .display-headline {
@@ -751,7 +751,7 @@ main h1 {
 }
 
 .companies-page-count {
-  font-family: 'Inter', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--crm-muted-fg);
@@ -987,7 +987,7 @@ main h1 {
 }
 
 .products-page-count {
-  font-family: 'Inter', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--crm-muted-fg);
