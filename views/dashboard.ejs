@@ -14,7 +14,14 @@
     'In Progress': { bg:'#e7eefc', fg:'#2b5fb8' },
     'Completed':   { bg:'#dff5e3', fg:'#1c7a3c' },
     'Overdue':     { bg:'#fbe5e7', fg:'#c23b4a' },
+    'Planning':    { bg:'#fef3c7', fg:'#92400e' },
+    'Active':      { bg:'#e7eefc', fg:'#2b5fb8' },
+    'On Hold':     { bg:'#fef3c7', fg:'#92400e' },
+    'Open':        { bg:'#eef0f3', fg:'#5b6172' },
   };
+  const typeIcon = { task: 'bi-diagram-3', project: 'bi-folder2-open', activity: 'bi-clock-history' };
+  const typeLabel = { task: 'Task', project: 'Project', activity: 'Activity' };
+  const typeLinkBase = { task: '/tasks/', project: '/projects/', activity: '/activities/' };
 %>
 
 <div class="mb-4">
@@ -26,19 +33,24 @@
   <div class="col-lg-8">
     <div class="pnew-card p-0" style="overflow:hidden;">
       <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem 1.25rem; border-bottom:1px solid var(--crm-border);">
-        <span class="dashboard-card-title">Active R&D Issues <span style="font-size:0.78rem; font-weight:500; color:var(--crm-muted-fg); margin-left:0.5rem;"><%= rdIssues.length %> open</span></span>
-        <a href="/tasks" class="btn-view-all" style="font-size:0.78rem;">View all tasks <i class="bi bi-arrow-up-right"></i></a>
+        <span class="dashboard-card-title">Open Issues <span style="font-size:0.78rem; font-weight:500; color:var(--crm-muted-fg); margin-left:0.5rem;"><%= rdIssues.length %> open</span></span>
+        <div style="display:flex; gap:0.75rem; align-items:center;">
+          <a href="/tasks"      class="btn-view-all" style="font-size:0.75rem;"><i class="bi bi-diagram-3"></i> Tasks</a>
+          <a href="/projects"   class="btn-view-all" style="font-size:0.75rem;"><i class="bi bi-folder2-open"></i> Projects</a>
+          <a href="/activities" class="btn-view-all" style="font-size:0.75rem;"><i class="bi bi-clock-history"></i> Activities</a>
+        </div>
       </div>
       <% if (!rdIssues.length) { %>
         <div style="padding:2.5rem; text-align:center; color:var(--crm-muted-fg);">
           <i class="bi bi-check2-circle" style="font-size:2rem; display:block; margin-bottom:0.5rem;"></i>
-          No open R&D issues right now.
+          No open issues right now.
         </div>
       <% } else { %>
         <table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
           <thead>
             <tr style="background:var(--crm-muted);">
-              <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Issue / Task</th>
+              <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Name</th>
+              <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Type</th>
               <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Project</th>
               <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Deadline</th>
               <th style="padding:0.55rem 1rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--crm-muted-fg); border-bottom:1px solid var(--crm-border);">Status</th>
@@ -50,8 +62,9 @@
                 const overdue = rdIsOverdue(t);
                 const sKey = overdue ? 'Overdue' : (t.status || 'To Do');
                 const sc = statusColors[sKey] || statusColors['To Do'];
+                const itemLink = (typeLinkBase[t._type] || '/tasks/') + t.id;
               %>
-              <tr onclick="location.href='/tasks/<%= t.id %>'" style="cursor:pointer; border-bottom:1px solid var(--crm-border);" onmouseover="this.style.background='var(--crm-muted)'" onmouseout="this.style.background=''">
+              <tr onclick="location.href='<%= itemLink %>'" style="cursor:pointer; border-bottom:1px solid var(--crm-border);" onmouseover="this.style.background='var(--crm-muted)'" onmouseout="this.style.background=''">
                 <td style="padding:0.7rem 1rem;">
                   <div style="font-weight:600; color:var(--crm-fg);"><%= t.name %></div>
                   <% if (t.assignees && t.assignees.length) { %>
@@ -59,6 +72,11 @@
                       <i class="bi bi-person"></i> <%= t.assignees.map(a => a.name).join(', ') %>
                     </div>
                   <% } %>
+                </td>
+                <td style="padding:0.7rem 1rem;">
+                  <span style="display:inline-flex; align-items:center; gap:0.25rem; padding:0.15rem 0.45rem; border-radius:6px; font-size:0.68rem; font-weight:700; background:var(--crm-muted); color:var(--crm-muted-fg); border:1px solid var(--crm-border);">
+                    <i class="bi <%= typeIcon[t._type] || 'bi-dash' %>"></i> <%= typeLabel[t._type] || '' %>
+                  </span>
                 </td>
                 <td style="padding:0.7rem 1rem; font-size:0.82rem; color:var(--crm-muted-fg);">
                   <% if (t.projectName) { %><i class="bi bi-folder2" style="opacity:0.5;"></i> <%= t.projectName %><% } else { %>—<% } %>

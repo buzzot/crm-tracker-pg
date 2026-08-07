@@ -22,19 +22,48 @@ router.get('/', async (req, res, next) => {
 
     // ── R&D dashboard ─────────────────────────────────────────────────────────
     if (isRdUser) {
-      const [rdIssues, projects, rawComments] = await Promise.all([
+      const [rdTasks, projects, activities, rawComments] = await Promise.all([
         crm.listRdIssues(user),
         crm.listProjects(user),
-        crm.listAllComments(50, null), // fetch more so filtering leaves enough
+        crm.listActivities(user),
+        crm.listAllComments(50, null),
       ]);
-      const projectById = new Map(projects.map((p) => [p.id, p]));
-      const taskById    = new Map(rdIssues.map((t) => [t.id, t]));
+
+      const projectById  = new Map(projects.map((p) => [p.id, p]));
+      const taskById     = new Map(rdTasks.map((t) => [t.id, t]));
+      const activityById = new Map(activities.map((a) => [a.id, a]));
+
+      // Combine open tasks + non-closed projects + non-completed activities
+      const openTasks = rdTasks.map(t => ({ ...t, _type: 'task' }));
+      const openProjects = projects
+        .filter(p => !['Completed', 'Closed'].includes(p.status))
+        .map(p => ({
+          _type: 'project', id: p.id, name: p.name,
+          status: p.status || 'Active', deadline: p.endDate,
+          projectName: null, assignees: []
+        }));
+      const openActivities = activities
+        .filter(a => a.result !== 'Completed')
+        .map(a => ({
+          _type: 'activity', id: a.id, name: a.name,
+          status: a.result || 'Open', deadline: a.dueDate,
+          projectName: a.projectNames?.[0] || null, assignees: []
+        }));
+
+      const rdIssues = [...openTasks, ...openProjects, ...openActivities]
+        .sort((a, b) => {
+          if (!a.deadline && !b.deadline) return 0;
+          if (!a.deadline) return 1;
+          if (!b.deadline) return -1;
+          return new Date(a.deadline) - new Date(b.deadline);
+        });
+
       const recentComments = rawComments
         .filter((c) => {
-          // Only keep comments on tasks/projects this R&D user can access
-          if (c.taskIds && c.taskIds[0])    return taskById.has(c.taskIds[0]);
-          if (c.projectIds && c.projectIds[0]) return projectById.has(c.projectIds[0]);
-          return false; // activities/deals/contacts are not shown on R&D dashboard
+          if (c.taskIds     && c.taskIds[0])     return taskById.has(c.taskIds[0]);
+          if (c.projectIds  && c.projectIds[0])  return projectById.has(c.projectIds[0]);
+          if (c.activityIds && c.activityIds[0]) return activityById.has(c.activityIds[0]);
+          return false;
         })
         .slice(0, 10)
         .map((c) => {
@@ -49,15 +78,20 @@ router.get('/', async (req, res, next) => {
             contextLabel = p ? p.name : 'Project';
             contextLink = `/projects/${c.projectIds[0]}`;
             contextType = 'project';
+          } else if (c.activityIds && c.activityIds[0]) {
+            const a = activityById.get(c.activityIds[0]);
+            contextLabel = a ? a.name : 'Activity';
+            contextLink = `/activities/${c.activityIds[0]}`;
+            contextType = 'activity';
           }
           return { ...c, contextLabel, contextLink, contextType, timeAgo: timeAgo(c.postedAt) };
         });
+
       return res.render('dashboard', {
         title: 'Dashboard',
         isRdUser: true,
         rdIssues,
         recentComments,
-        // Unused by R&D template but avoids undefined errors if referenced
         stats: { companyCount: 0, openDealCount: 0, openPipelineTotal: 0, wonTotal: 0 },
         board: [],
         allActivities: [],
