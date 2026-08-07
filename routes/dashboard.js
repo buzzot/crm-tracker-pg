@@ -25,25 +25,33 @@ router.get('/', async (req, res, next) => {
       const [rdIssues, projects, rawComments] = await Promise.all([
         crm.listRdIssues(user),
         crm.listProjects(user),
-        crm.listAllComments(10, null),
+        crm.listAllComments(50, null), // fetch more so filtering leaves enough
       ]);
       const projectById = new Map(projects.map((p) => [p.id, p]));
-      const taskById = new Map(rdIssues.map((t) => [t.id, t]));
-      const recentComments = rawComments.map((c) => {
-        let contextLabel = null, contextLink = null, contextType = null;
-        if (c.taskIds && c.taskIds[0]) {
-          const t = taskById.get(c.taskIds[0]);
-          contextLabel = t ? t.name : 'Task';
-          contextLink = `/tasks/${c.taskIds[0]}`;
-          contextType = 'task';
-        } else if (c.projectIds && c.projectIds[0]) {
-          const p = projectById.get(c.projectIds[0]);
-          contextLabel = p ? p.name : 'Project';
-          contextLink = `/projects/${c.projectIds[0]}`;
-          contextType = 'project';
-        }
-        return { ...c, contextLabel, contextLink, contextType, timeAgo: timeAgo(c.postedAt) };
-      });
+      const taskById    = new Map(rdIssues.map((t) => [t.id, t]));
+      const recentComments = rawComments
+        .filter((c) => {
+          // Only keep comments on tasks/projects this R&D user can access
+          if (c.taskIds && c.taskIds[0])    return taskById.has(c.taskIds[0]);
+          if (c.projectIds && c.projectIds[0]) return projectById.has(c.projectIds[0]);
+          return false; // activities/deals/contacts are not shown on R&D dashboard
+        })
+        .slice(0, 10)
+        .map((c) => {
+          let contextLabel = null, contextLink = null, contextType = null;
+          if (c.taskIds && c.taskIds[0]) {
+            const t = taskById.get(c.taskIds[0]);
+            contextLabel = t ? t.name : 'Task';
+            contextLink = `/tasks/${c.taskIds[0]}`;
+            contextType = 'task';
+          } else if (c.projectIds && c.projectIds[0]) {
+            const p = projectById.get(c.projectIds[0]);
+            contextLabel = p ? p.name : 'Project';
+            contextLink = `/projects/${c.projectIds[0]}`;
+            contextType = 'project';
+          }
+          return { ...c, contextLabel, contextLink, contextType, timeAgo: timeAgo(c.postedAt) };
+        });
       return res.render('dashboard', {
         title: 'Dashboard',
         isRdUser: true,
