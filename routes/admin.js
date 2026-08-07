@@ -2,18 +2,43 @@
 const express  = require('express');
 const router   = express.Router();
 const bcrypt   = require('bcrypt');
+const fs       = require('fs');
+const path     = require('path');
 const crm      = require('../services/crm');
 const db       = require('../config/db');
 const { sendInviteEmail } = require('../services/email');
 const { createOnboardingTasks } = require('../services/onboarding');
 
+// Returns a Set of user IDs that currently have an active (non-expired) session
+function getLoggedInUserIds() {
+  try {
+    const dir = path.join(__dirname, '..', '.sessions');
+    const now = Date.now();
+    const ids = new Set();
+    for (const file of fs.readdirSync(dir)) {
+      if (!file.endsWith('.json')) continue;
+      try {
+        const sess = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+        const expires = sess.cookie && sess.cookie.expires;
+        if (expires && new Date(expires).getTime() < now) continue;
+        if (sess.user && sess.user.id) ids.add(sess.user.id);
+      } catch (_) { /* skip corrupt/unreadable files */ }
+    }
+    return ids;
+  } catch (_) {
+    return new Set();
+  }
+}
+
 // GET /admin — users list
 router.get('/', async (req, res, next) => {
   try {
-    const users = await crm.listTeamUsers();
+    const users           = await crm.listTeamUsers();
+    const loggedInUserIds = getLoggedInUserIds();
     res.render('admin', {
       title: 'Admin · Users',
       users,
+      loggedInUserIds,
       ROLE_TITLES: crm.ROLE_TITLES,
       ALL_ROLES:   crm.ALL_ROLES,
       flash: req.session.flash || null,

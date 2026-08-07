@@ -3,6 +3,7 @@
   const sorted = [...users].sort((a,b) => (ROLE_ORDER[a.role]??9) - (ROLE_ORDER[b.role]??9) || a.name.localeCompare(b.name));
   const activeCount   = users.filter(u => u.isActive).length;
   const inactiveCount = users.length - activeCount;
+  const onlineCount   = users.filter(u => loggedInUserIds.has(u.id)).length;
 %>
 
 <div class="pnew-page">
@@ -11,7 +12,7 @@
   <div class="au-header">
     <div>
       <h1 class="au-title">Team</h1>
-      <p class="au-sub"><%= activeCount %> active<% if (inactiveCount) { %> · <span style="color:var(--crm-muted-fg)"><%= inactiveCount %> inactive</span><% } %></p>
+      <p class="au-sub"><%= activeCount %> active<% if (inactiveCount) { %> · <span style="color:var(--crm-muted-fg)"><%= inactiveCount %> inactive</span><% } %><% if (onlineCount) { %> · <span style="color:oklch(0.40 0.14 145)"><%= onlineCount %> online now</span><% } %></p>
     </div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <a href="/reports/monthly" target="_blank" class="pnew-btn-cancel" style="display:inline-flex; align-items:center; gap:6px;"><i class="bi bi-file-earmark-bar-graph"></i>Monthly Report</a>
@@ -64,6 +65,9 @@
           <% if (u.title) { %><div class="au-job-title"><%= u.title %></div><% } %>
           <div class="au-meta-row">
             <span class="au-badge au-badge-<%= u.role %>"><%= u.role %></span>
+            <% if (loggedInUserIds.has(u.id)) { %>
+              <span class="au-online-badge"><i class="bi bi-circle-fill"></i> Online</span>
+            <% } %>
             <% if (u.email) { %>
               <a href="mailto:<%= u.email %>" class="au-meta-link" onclick="event.stopPropagation()"><i class="bi bi-envelope"></i> <%= u.email %></a>
             <% } %>
@@ -284,6 +288,18 @@
 .au-badge-Admin   { background: #1f2a44; color: #fff; }
 .au-badge-Manager { background: oklch(0.52 0.18 250); color: #fff; }
 .au-badge-Staff   { background: var(--crm-muted); color: var(--crm-muted-fg); border: 1px solid var(--crm-border); }
+.au-online-badge {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: oklch(0.93 0.08 145);
+  color: oklch(0.40 0.14 145);
+}
+.au-online-badge i { font-size: 0.45rem; }
 .au-meta-link {
   font-size: 0.76rem;
   color: var(--crm-muted-fg);
