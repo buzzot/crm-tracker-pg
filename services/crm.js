@@ -972,6 +972,7 @@ function mapTask(row) {
     archivedAt:   row.archived_at || null,
     archivedById: row.archived_by || null,
     archivedByName: row.archived_by_name || null,
+    isOnboarding: row.is_onboarding || false,
     createdAt:    row.created_at,
     updatedAt:    row.updated_at,
   };
@@ -1010,8 +1011,9 @@ async function listTasks({ projectId, user } = {}) {
       OR EXISTS (SELECT 1 FROM projects gp WHERE gp.id=t.project_id AND gp.group_id=ANY($${params.push(groupIds)}::uuid[]))
     )`);
   }
-  // Always hide archived tasks from normal lists
+  // Always hide archived tasks and onboarding tasks from normal lists
   conditions.push('(t.is_archived = FALSE OR t.is_archived IS NULL)');
+  conditions.push('(t.is_onboarding = FALSE OR t.is_onboarding IS NULL)');
   const where = 'WHERE ' + conditions.join(' AND ');
   const r = await query(
     `${TASK_SELECT} ${where} GROUP BY t.id, p.name, p.id, u.name, au2.name, ab.name ORDER BY t.created_at DESC`,
@@ -1096,14 +1098,26 @@ async function getTaskDetail(id) {
   };
 }
 
-async function createTask({ name, projectId, type, date, deadline, status, details, description, ownerId, auditorId }) {
+async function createTask({ name, projectId, type, date, deadline, status, details, description, ownerId, auditorId, isOnboarding }) {
   const desc = description || details || null;
   const r = await query(
-    `INSERT INTO tasks (name, project_id, type, date, start_date, deadline, status, details, owner_id, auditor_id)
-     VALUES ($1,$2,$3,$4,CURRENT_DATE,$5,$6,$7,$8,$9) RETURNING id`,
-    [name, projectId || null, type || null, date || null, deadline || null, status || 'To Do', desc, ownerId || null, auditorId || null]
+    `INSERT INTO tasks (name, project_id, type, date, start_date, deadline, status, details, owner_id, auditor_id, is_onboarding)
+     VALUES ($1,$2,$3,$4,CURRENT_DATE,$5,$6,$7,$8,$9,$10) RETURNING id`,
+    [name, projectId || null, type || null, date || null, deadline || null, status || 'To Do', desc, ownerId || null, auditorId || null, isOnboarding ? true : false]
   );
   return getTask(r.rows[0].id);
+}
+
+async function listOnboardingTasks() {
+  const r = await query(
+    `${TASK_SELECT}
+     WHERE t.is_onboarding = TRUE
+       AND (t.is_archived = FALSE OR t.is_archived IS NULL)
+     GROUP BY t.id, p.name, p.id, u.name, au2.name, ab.name
+     ORDER BY t.created_at DESC`,
+    []
+  );
+  return r.rows.map(mapTask);
 }
 
 async function updateTaskDetails(id, { name, type, date, deadline, status, details, description, changedById, changedByName, deadlineReason }) {
@@ -1676,6 +1690,7 @@ module.exports = {
   archiveTask,
   unarchiveTask,
   listArchivedTasks,
+  listOnboardingTasks,
   createTask,
   getTaskDetail,
   updateTaskDetails,

@@ -13,13 +13,14 @@ router.get('/tasks', async (req, res, next) => {
     const user     = req.session.user;
     const filter   = req.query.status || 'active'; // 'active' | 'completed' | 'all'
     const userId   = req.query.userId || '';        // Admin-only user filter
-    const tasks    = await crm.listTasks({ user });
-    const projects = await crm.listProjects(user);
+    const isAdmin  = user && user.role === 'Admin';
 
-    // Only admins get the user dropdown
-    const teamUsers = (user && user.role === 'Admin')
-      ? await crm.listTeamUsers()
-      : [];
+    const [tasks, projects, teamUsers, onboardingTasks] = await Promise.all([
+      crm.listTasks({ user }),
+      crm.listProjects(user),
+      isAdmin ? crm.listTeamUsers() : Promise.resolve([]),
+      isAdmin ? crm.listOnboardingTasks() : Promise.resolve([]),
+    ]);
 
     res.render('tasks', {
       title: 'Tasks',
@@ -28,6 +29,7 @@ router.get('/tasks', async (req, res, next) => {
       filter,
       filterUserId: userId,
       teamUsers,
+      onboardingTasks,
       statusChoices: crm.schema.tables.tasks.statusChoices,
     });
   } catch (err) { next(err); }

@@ -137,7 +137,86 @@
       </table>
     </div>
   <% } %>
+
+  <%
+    // Learning tasks sub-group — Admin only
+    const _ob = typeof onboardingTasks !== 'undefined' ? onboardingTasks : [];
+    let _obShown = _ob;
+    if (activeFilter === 'active')    _obShown = _ob.filter(t => t.status !== 'Completed');
+    if (activeFilter === 'completed') _obShown = _ob.filter(t => t.status === 'Completed');
+    if (activeUserId) _obShown = _obShown.filter(t =>
+      (t.ownerId && t.ownerId === activeUserId) ||
+      (t.assignees && t.assignees.some(a => a.id === activeUserId))
+    );
+  %>
+  <% if (_ob.length > 0) { %>
+    <div class="ob-section">
+      <button class="ob-toggle" id="obToggle" onclick="toggleOb()" aria-expanded="false">
+        <span class="ob-toggle-icon"><i class="bi bi-chevron-right" id="obChevron"></i></span>
+        <i class="bi bi-mortarboard"></i>
+        Learning Tasks
+        <span class="task-count"><%= _obShown.length %></span>
+        <span class="ob-toggle-hint">Onboarding tasks assigned to new users — hidden from main list</span>
+      </button>
+      <div class="ob-body" id="obBody" style="display:none;">
+        <% if (!_obShown.length) { %>
+          <div style="padding:1.5rem; text-align:center; color:var(--crm-muted-fg); font-size:0.85rem;">
+            No learning tasks match the current filter.
+          </div>
+        <% } else { %>
+          <table class="task-list-table">
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Assigned to</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% _obShown.forEach(task => { %>
+                <tr onclick="location.href='/tasks/<%= task.id %>'" style="cursor:pointer;">
+                  <td>
+                    <div class="task-name-cell">
+                      <span class="task-name"><%= task.name %></span>
+                    </div>
+                  </td>
+                  <td class="task-meta">
+                    <% if (task.assignees && task.assignees.length) { %>
+                      <div class="task-assignee-avatars">
+                        <% task.assignees.slice(0,3).forEach(a => { %>
+                          <span class="task-assignee-av" title="<%= a.name %>"><%= (a.name||'?').charAt(0).toUpperCase() %></span>
+                        <% }) %>
+                        <% if (task.assignees.length > 3) { %><span class="task-assignee-more">+<%= task.assignees.length - 3 %></span><% } %>
+                        <span style="font-size:0.78rem; color:var(--crm-muted-fg); margin-left:0.25rem;"><%= task.assignees.map(a=>a.name).join(', ') %></span>
+                      </div>
+                    <% } else { %><span style="color:var(--crm-muted-fg);">—</span><% } %>
+                  </td>
+                  <td>
+                    <span class="task-status-badge" style="<%= statusStyle(task) %>">
+                      <%= task.status || 'To Do' %>
+                    </span>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    </div>
+  <% } %>
 </div>
+
+<script>
+function toggleOb() {
+  const body    = document.getElementById('obBody');
+  const chevron = document.getElementById('obChevron');
+  const btn     = document.getElementById('obToggle');
+  const open    = body.style.display === 'none';
+  body.style.display    = open ? '' : 'none';
+  btn.setAttribute('aria-expanded', open);
+  chevron.className     = open ? 'bi bi-chevron-down' : 'bi bi-chevron-right';
+}
+</script>
 
 <style>
 /* ── Filter bar ── */
@@ -228,4 +307,40 @@
   display:inline-block; padding:0.2rem 0.55rem; border-radius:999px;
   font-size:0.72rem; font-weight:700; white-space:nowrap;
 }
+
+/* ── Learning Tasks sub-group ── */
+.ob-section {
+  margin-top: 1.25rem;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--crm-card-bg, #fff);
+}
+.ob-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--crm-muted);
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--crm-fg);
+  text-align: left;
+}
+.ob-toggle:hover { background: var(--crm-border); }
+.ob-toggle-icon { display:flex; align-items:center; color:var(--crm-muted-fg); font-size:0.75rem; }
+.ob-toggle-hint {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--crm-muted-fg);
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ob-body { border-top: 1px solid var(--crm-border); }
+@media (max-width: 600px) { .ob-toggle-hint { display: none; } }
 </style>

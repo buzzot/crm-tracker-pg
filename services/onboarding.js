@@ -159,10 +159,11 @@ You do not need to add products to use the CRM — they are optional but useful 
 async function createOnboardingTasks(crm, adminId, newUserId) {
   for (const tmpl of ONBOARDING_TASKS) {
     const task = await crm.createTask({
-      name:        tmpl.name,
-      description: tmpl.details,
-      status:      'To Do',
-      ownerId:     adminId,
+      name:         tmpl.name,
+      description:  tmpl.details,
+      status:       'To Do',
+      ownerId:      adminId,
+      isOnboarding: true,
     });
     await crm.setTaskAssignees({ taskId: task.id, userIds: [newUserId] });
   }
