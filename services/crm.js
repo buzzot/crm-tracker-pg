@@ -984,12 +984,22 @@ async function listTasks({ projectId, user } = {}) {
   if (projectId) {
     conditions.push(`t.project_id=$${params.push(projectId)}`);
   }
-  if (user && (user.role === 'Staff' || user.role === 'Engineering')) {
-    // Staff / Engineering see tasks they own OR are assigned to OR are auditing
+  if (user && user.role === 'Staff') {
+    // Staff see tasks they own OR are assigned to OR are auditing
     conditions.push(`(
       t.owner_id=$${params.push(user.id)}
       OR t.auditor_id=$${params.push(user.id)}
       OR EXISTS (SELECT 1 FROM task_assignees ta2 WHERE ta2.task_id=t.id AND ta2.user_id=$${params.push(user.id)})
+    )`);
+  } else if (user && user.role === 'Engineering') {
+    // Engineering see all tasks in R&D projects + their group projects + tasks they own/are assigned to
+    const groupIds = user.groupIds || [];
+    conditions.push(`(
+      t.owner_id=$${params.push(user.id)}
+      OR t.auditor_id=$${params.push(user.id)}
+      OR EXISTS (SELECT 1 FROM task_assignees ta2 WHERE ta2.task_id=t.id AND ta2.user_id=$${params.push(user.id)})
+      OR EXISTS (SELECT 1 FROM projects rp WHERE rp.id=t.project_id AND rp.is_rd_issue=TRUE)
+      OR EXISTS (SELECT 1 FROM projects gp WHERE gp.id=t.project_id AND gp.group_id=ANY($${params.push(groupIds)}::uuid[]))
     )`);
   } else if (user && user.role === 'Manager') {
     // Managers see tasks they own, are assigned to, are auditing, or are in their groups' projects
