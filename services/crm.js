@@ -42,6 +42,9 @@ function accessFilter(user, alias = '', entityType = null) {
 
   const p = alias ? alias + '.' : '';
 
+  // Managers see all companies (Team Lead scope)
+  if (user.role === 'Manager' && entityType === 'company') return { where: '1=1', params: [] };
+
   // R&D Heads behave like Managers for general data access
   if (user.role === 'Manager' || isRdHead(user.role)) {
     const groupIds = user.groupIds || [];
