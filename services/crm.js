@@ -343,13 +343,13 @@ async function updateCompany(id, fields, updatedById) {
 }
 
 async function updateCompanyLogo(companyId, file) {
-  const { path: storagePath } = await storage.uploadMulterFile({
+  const { publicUrl } = await storage.uploadMulterFile({
     entityType: 'company',
     entityId: companyId,
     file
   });
-  await query('UPDATE companies SET logo_url=$1, updated_at=NOW() WHERE id=$2', [storagePath, companyId]);
-  return toMediaUrl(storagePath);
+  await query('UPDATE companies SET logo_url=$1, updated_at=NOW() WHERE id=$2', [publicUrl, companyId]);
+  return publicUrl;
 }
 
 function mapCompany(row) {
