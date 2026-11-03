@@ -1501,6 +1501,58 @@ async function getContactDetail(id) {
   return { ...contact, comments };
 }
 
+// ─── Global search (Ctrl+K) ──────────────────────────────────────────────────
+// Searches companies, contacts, deals and projects the user can already see
+// (same accessFilter rules as the list pages). Prefix matches rank first.
+async function searchAll(user, rawQuery, limitPerType = 5) {
+  const q = String(rawQuery || '').trim().slice(0, 100);
+  if (q.length < 2) return { companies: [], contacts: [], deals: [], projects: [] };
+  const like = q.replace(/[\\%_]/g, (m) => '\\' + m);
+
+  async function run(alias, entityType, sql) {
+    const { where, params } = accessFilter(user, alias, entityType);
+    const i = params.length + 1;  // $i = '%q%', $i+1 = 'q%', $i+2 = limit
+    // function replacers: `where` contains $1/$2, which must not be read as replacement patterns
+    const text = sql.replace(/\$WHERE/g, () => where).replace(/\$ANY/g, () => '$' + i).replace(/\$PREFIX/g, () => '$' + (i + 1)).replace(/\$LIMIT/g, () => '$' + (i + 2));
+    const r = await query(text, [...params, `%${like}%`, `${like}%`, limitPerType]);
+    return r.rows;
+  }
+
+  const [companies, contacts, deals, projects] = await Promise.all([
+    run('c', 'company', `
+      SELECT c.id, c.name, c.status, c.industry
+      FROM companies c
+      WHERE $WHERE AND (c.name ILIKE $ANY ESCAPE '\\' OR c.website ILIKE $ANY ESCAPE '\\')
+      ORDER BY (c.name ILIKE $PREFIX ESCAPE '\\') DESC, c.name
+      LIMIT $LIMIT`),
+    run('ct', 'contact', `
+      SELECT ct.id, ct.full_name, ct.title, ct.email, co.name AS company_name
+      FROM contacts ct LEFT JOIN companies co ON co.id = ct.company_id
+      WHERE $WHERE AND (ct.full_name ILIKE $ANY ESCAPE '\\' OR ct.email ILIKE $ANY ESCAPE '\\' OR co.name ILIKE $ANY ESCAPE '\\')
+      ORDER BY (ct.full_name ILIKE $PREFIX ESCAPE '\\') DESC, ct.full_name
+      LIMIT $LIMIT`),
+    run('d', 'deal', `
+      SELECT d.id, d.name, d.stage, d.amount, co.name AS company_name
+      FROM deals d LEFT JOIN companies co ON co.id = d.company_id
+      WHERE $WHERE AND (d.name ILIKE $ANY ESCAPE '\\' OR co.name ILIKE $ANY ESCAPE '\\')
+      ORDER BY (d.name ILIKE $PREFIX ESCAPE '\\') DESC, d.updated_at DESC
+      LIMIT $LIMIT`),
+    run('p', 'project', `
+      SELECT p.id, p.name, p.status, co.name AS company_name
+      FROM projects p LEFT JOIN companies co ON co.id = p.company_id
+      WHERE $WHERE AND (p.name ILIKE $ANY ESCAPE '\\' OR co.name ILIKE $ANY ESCAPE '\\')
+      ORDER BY (p.name ILIKE $PREFIX ESCAPE '\\') DESC, p.updated_at DESC
+      LIMIT $LIMIT`),
+  ]);
+
+  return {
+    companies: companies.map((r) => ({ id: r.id, title: r.name, sub: [r.status, r.industry].filter(Boolean).join(' · '), url: `/companies/${r.id}` })),
+    contacts:  contacts.map((r) => ({ id: r.id, title: r.full_name, sub: [r.title, r.company_name].filter(Boolean).join(' · ') || r.email || '', url: `/contacts/${r.id}` })),
+    deals:     deals.map((r) => ({ id: r.id, title: r.name, sub: [r.stage, r.company_name, r.amount != null ? '$' + Number(r.amount).toLocaleString('en-US') : null].filter(Boolean).join(' · '), url: `/deals/${r.id}` })),
+    projects:  projects.map((r) => ({ id: r.id, title: r.name, sub: [r.status, r.company_name].filter(Boolean).join(' · '), url: `/projects/${r.id}` })),
+  };
+}
+
 // ─── Schema stub (for views that reference crm.schema) ───────────────────────
 
 const schema = {
@@ -1664,6 +1716,7 @@ module.exports = {
   removeGroupMember,
   // Companies
   listCompanies,
+  searchAll,
   getCompany,
   createCompany,
   updateCompany,

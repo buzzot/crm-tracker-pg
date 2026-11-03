@@ -74,6 +74,11 @@
         </nav>
 
         <div class="tn-actions">
+          <button type="button" class="tn-search" id="ksOpen" aria-label="Search (Ctrl+K)" aria-haspopup="dialog">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <span class="tn-search-label">Search</span>
+            <kbd class="tn-kbd" data-ks-kbd>Ctrl K</kbd>
+          </button>
           <div class="dropdown">
             <button class="tn-new" type="button" data-bs-toggle="dropdown" aria-expanded="false">
               <i class="bi bi-plus-lg"></i><span class="tn-new-label">New</span>
@@ -117,6 +122,27 @@
   </header>
 
   <% if (currentUser) { %>
+  <!-- Global search palette (Ctrl/Cmd+K) -->
+  <div class="ks" id="ks" hidden>
+    <div class="ks-backdrop" data-ks-close></div>
+    <div class="ks-panel" role="dialog" aria-modal="true" aria-label="Search">
+      <div class="ks-input-row">
+        <i class="bi bi-search ks-input-icon" aria-hidden="true"></i>
+        <input type="text" id="ksInput" class="ks-input" autocomplete="off" spellcheck="false"
+               placeholder="Search companies, contacts, deals and projects"
+               role="combobox" aria-expanded="false" aria-controls="ksList" aria-autocomplete="list">
+        <span class="ks-spinner" id="ksSpin" hidden aria-hidden="true"></span>
+        <button type="button" class="ks-esc" data-ks-close aria-label="Close search">Esc</button>
+      </div>
+      <div class="ks-body" id="ksList" role="listbox" aria-label="Search results"></div>
+      <div class="ks-foot" aria-hidden="true">
+        <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span>
+        <span><kbd>Enter</kbd> to open</span>
+        <span><kbd>Esc</kbd> to close</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Mobile drawer -->
   <div class="offcanvas offcanvas-start tn-drawer" tabindex="-1" id="tnDrawer" aria-labelledby="tnDrawerTitle">
     <div class="offcanvas-header">
@@ -194,6 +220,137 @@
       document.querySelectorAll('[data-nav-group]').forEach(function(btn){
         var hit = btn.getAttribute('data-nav-group').split(' ').some(matches);
         if (hit) btn.classList.add('active');
+      });
+    })();
+
+    // ── Global search palette ────────────────────────────────────────────────
+    (function () {
+      var root = document.getElementById('ks');
+      if (!root) return;
+      var input = document.getElementById('ksInput');
+      var list = document.getElementById('ksList');
+      var spin = document.getElementById('ksSpin');
+      var isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+      document.querySelectorAll('[data-ks-kbd]').forEach(function (k) { k.textContent = isMac ? '⌘K' : 'Ctrl K'; });
+
+      var GROUPS = [
+        { key: 'companies', label: 'Companies', icon: 'bi-building' },
+        { key: 'contacts',  label: 'Contacts',  icon: 'bi-person' },
+        { key: 'deals',     label: 'Deals',     icon: 'bi-briefcase' },
+        { key: 'projects',  label: 'Projects',  icon: 'bi-folder2' },
+      ];
+      var items = [], active = -1, timer = null, ctrl = null, lastFocus = null, seq = 0;
+
+      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+      function highlight(text, q) {
+        var t = String(text || ''), i = t.toLowerCase().indexOf(q.toLowerCase());
+        if (!q || i < 0) return esc(t);
+        return esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + q.length)) + '</mark>' + esc(t.slice(i + q.length));
+      }
+
+      function hint() {
+        items = []; active = -1;
+        list.innerHTML = '<div class="ks-msg">Type at least 2 letters to search ' +
+          GROUPS.map(function (g) { return '<span class="ks-chip"><i class="bi ' + g.icon + '"></i>' + g.label + '</span>'; }).join('') + '</div>';
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+      }
+      function message(html) { items = []; active = -1; list.innerHTML = '<div class="ks-msg">' + html + '</div>'; input.setAttribute('aria-expanded', 'false'); }
+
+      function renderResults(q, res) {
+        var html = '', n = 0;
+        items = [];
+        GROUPS.forEach(function (g) {
+          var rows = (res && res[g.key]) || [];
+          if (!rows.length) return;
+          html += '<div class="ks-group" role="presentation">' + g.label + '</div>';
+          rows.forEach(function (r) {
+            var id = 'ks-opt-' + n;
+            items.push(r);
+            html += '<a class="ks-item" id="' + id + '" role="option" aria-selected="false" href="' + esc(r.url) + '" data-i="' + n + '">' +
+              '<span class="ks-ico"><i class="bi ' + g.icon + '" aria-hidden="true"></i></span>' +
+              '<span class="ks-text"><span class="ks-title">' + highlight(r.title, q) + '</span>' +
+              (r.sub ? '<span class="ks-sub">' + highlight(r.sub, q) + '</span>' : '') + '</span>' +
+              '<i class="bi bi-arrow-return-left ks-enter" aria-hidden="true"></i></a>';
+            n++;
+          });
+        });
+        if (!n) return message('No matches for <strong>' + esc(q) + '</strong>.');
+        list.innerHTML = html;
+        input.setAttribute('aria-expanded', 'true');
+        setActive(0);
+      }
+
+      function setActive(i) {
+        var els = list.querySelectorAll('.ks-item');
+        if (!els.length) return;
+        active = (i + els.length) % els.length;
+        els.forEach(function (el, j) { var on = j === active; el.classList.toggle('is-active', on); el.setAttribute('aria-selected', on); });
+        input.setAttribute('aria-activedescendant', els[active].id);
+        els[active].scrollIntoView({ block: 'nearest' });
+      }
+
+      function search(q) {
+        if (ctrl) ctrl.abort();
+        if (q.length < 2) { spin.hidden = true; return hint(); }
+        ctrl = ('AbortController' in window) ? new AbortController() : null;
+        var mine = ++seq;
+        spin.hidden = false;
+        fetch('/api/search?q=' + encodeURIComponent(q), { credentials: 'same-origin', headers: { 'Accept': 'application/json' }, signal: ctrl ? ctrl.signal : undefined })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+          .then(function (data) { if (mine !== seq) return; spin.hidden = true; renderResults(q, data.results); })
+          .catch(function (e) {
+            if (e && e.name === 'AbortError') return;
+            if (mine !== seq) return;
+            spin.hidden = true;
+            message("Search isn't available right now. <button type=\"button\" class=\"ks-retry\" id=\"ksRetry\">Try again</button>");
+            var b = document.getElementById('ksRetry'); if (b) b.addEventListener('click', function () { search(input.value.trim()); input.focus(); });
+          });
+      }
+
+      function open() {
+        if (!root.hidden) return;
+        lastFocus = document.activeElement;
+        root.hidden = false;
+        document.body.classList.add('ks-lock');
+        input.value = ''; hint();
+        setTimeout(function () { input.focus(); }, 0);
+      }
+      function close() {
+        if (root.hidden) return;
+        if (ctrl) ctrl.abort();
+        root.hidden = true; spin.hidden = true;
+        document.body.classList.remove('ks-lock');
+        if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+      }
+
+      document.getElementById('ksOpen').addEventListener('click', open);
+      root.addEventListener('click', function (e) { if (e.target.closest('[data-ks-close]')) close(); });
+      input.addEventListener('input', function () { clearTimeout(timer); var q = input.value.trim(); timer = setTimeout(function () { search(q); }, 160); });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+        else if (e.key === 'Enter') {
+          var el = list.querySelector('.ks-item.is-active');
+          if (el) { e.preventDefault(); if (e.metaKey || e.ctrlKey) window.open(el.href, '_blank'); else location.href = el.href; }
+        }
+        else if (e.key === 'Escape') { e.preventDefault(); close(); }
+        else if (e.key === 'Tab') { e.preventDefault(); setActive(active + (e.shiftKey ? -1 : 1)); }
+      });
+      list.addEventListener('mousemove', function (e) {
+        var el = e.target.closest('.ks-item');
+        if (el && +el.getAttribute('data-i') !== active) setActive(+el.getAttribute('data-i'));
+      });
+
+      document.addEventListener('keydown', function (e) {
+        var k = (e.key || '').toLowerCase();
+        if ((e.metaKey || e.ctrlKey) && k === 'k') { e.preventDefault(); root.hidden ? open() : close(); return; }
+        if (k === '/' && root.hidden && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          var t = e.target, tag = (t && t.tagName) || '';
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+          e.preventDefault(); open();
+        }
+        if (e.key === 'Escape' && !root.hidden) close();
       });
     })();
   </script>

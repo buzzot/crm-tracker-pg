@@ -9,6 +9,20 @@ const email = {
   getMessageByMessageId: async () => { throw new Error('IMAP not configured.'); }
 };
 
+// Global search (Ctrl+K palette). Results are limited to what the user can access.
+router.get('/api/search', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json({ ok: true, q, results: { companies: [], contacts: [], deals: [], projects: [] } });
+    const results = await crm.searchAll(req.session.user, q);
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, q, results });
+  } catch (err) {
+    console.error('[search]', err.message);
+    res.status(500).json({ ok: false, error: 'Search failed' });
+  }
+});
+
 // Click-to-expand detail for an Activity (used on the company page).
 router.get('/api/activities/:id', async (req, res) => {
   try {
