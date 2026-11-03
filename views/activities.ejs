@@ -1,165 +1,275 @@
-<div class="pnew-page">
+<div class="act2-page">
 
-  <div class="projects-page-header" style="margin-bottom:0.75rem;">
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <div class="act2-header">
     <div>
-      <h1 class="projects-page-title">Activity</h1>
-      <div class="projects-page-subtitle">
-        <%= activities.length %> activit<%= activities.length === 1 ? 'y' : 'ies' %> logged
-      </div>
+      <h1 class="act2-title">Activity</h1>
+      <div class="act2-subtitle" id="actSubtitle"><%= activities.length %> activities logged</div>
     </div>
-    <div class="projects-page-actions">
-      <div class="projects-search-wrap">
+    <a href="/activities/new" class="btn btn-primary btn-sm act2-new-btn">
+      <i class="bi bi-plus-lg"></i> New Activity
+    </a>
+  </div>
+
+  <!-- ── Toolbar ─────────────────────────────────────────────────────────── -->
+  <div class="act2-toolbar">
+    <div class="act2-tabs" id="actTabs">
+      <button class="act2-tab active" data-tab="all">All <span class="act2-tab-count" id="cnt-all"><%= activities.length %></span></button>
+      <button class="act2-tab" data-tab="open">Open <span class="act2-tab-count" id="cnt-open">—</span></button>
+      <button class="act2-tab" data-tab="completed">Completed <span class="act2-tab-count" id="cnt-completed">—</span></button>
+    </div>
+    <div class="act2-filters">
+      <select id="filterType" class="act2-select" title="Filter by type">
+        <option value="">All types</option>
+        <% typeChoices.forEach(function(t) { %>
+          <option value="<%= t %>"><%= t %></option>
+        <% }) %>
+      </select>
+      <select id="filterCompany" class="act2-select" title="Filter by company">
+        <option value="">All companies</option>
+      </select>
+      <button class="act2-filter-btn" id="filterOverdue" title="Show only overdue activities">Overdue only</button>
+      <div class="act2-search-wrap">
         <i class="bi bi-search"></i>
-        <input type="text" id="activitySearch" placeholder="Search...">
+        <input type="text" id="actSearch" class="act2-search" placeholder="Search activities…" autocomplete="off">
       </div>
+      <button class="act2-clear-btn" id="clearFilters" style="display:none;">Clear <i class="bi bi-x-lg" style="font-size:0.7rem;"></i></button>
     </div>
   </div>
 
-  <div class="act-filter-row">
-    <button class="dash-filter-btn active" data-filter="all">All <span class="act-filter-badge" id="badgeAll"><%= activities.length %></span></button>
-    <button class="dash-filter-btn" data-filter="open">Open <span class="act-filter-badge" id="badgeOpen"></span></button>
-    <button class="dash-filter-btn" data-filter="completed">Completed <span class="act-filter-badge" id="badgeCompleted"></span></button>
-  </div>
-
-  <div class="pnew-card act-list-card">
-    <% if (activities.length === 0) { %>
-      <div class="act-list-empty">No activity logged yet.</div>
-    <% } %>
-    <% activities.forEach((a, idx) => { %>
-      <%
-        const _isCompleted = (a.result || '').toLowerCase() === 'completed' || (a.type || '').toLowerCase() === 'completed';
-        const t = (a.type || '').toLowerCase();
-        const icon = t.includes('call') ? 'bi-telephone' : t.includes('email') ? 'bi-envelope' : t.includes('linkedin') ? 'bi-linkedin' : (t.includes('meet') || t.includes('demo')) ? 'bi-people' : 'bi-clock-history';
-        const iconBg = t.includes('call') ? 'act-icon-blue' : t.includes('email') ? 'act-icon-purple' : t.includes('linkedin') ? 'act-icon-blue' : 'act-icon-gray';
-
-        // Progress bar
-        const _today = new Date(); _today.setHours(0,0,0,0);
-        let barState = 'planned', barWidth = 0, barText = '';
-
-        if (_isCompleted) {
-          barState = 'done'; barWidth = 100;
-          const _doneDate = a.statusDate ? new Date(a.statusDate + 'T00:00:00') : null;
-          barText = 'DONE ' + (_doneDate ? _doneDate.toLocaleDateString(undefined, {month:'short', day:'numeric'}) : '');
-        } else if (a.dueDate) {
-          const _due = new Date(a.dueDate + 'T00:00:00');
-          const _daysUntil = Math.floor((_due - _today) / 86400000);
-          if (_daysUntil < 0) {
-            barState = 'overdue'; barWidth = 50;
-            barText = 'OVERDUE ' + Math.abs(_daysUntil) + 'd';
-          } else {
-            const _hasAction = a.statusDate && a.statusDate !== a.date && new Date(a.statusDate) > new Date(a.date);
-            if (_hasAction) {
-              const _daysAgo = Math.max(1, Math.floor((_today - new Date(a.statusDate + 'T00:00:00')) / 86400000));
-              barState = 'inprogress';
-              barWidth = Math.min(85, Math.max(20, Math.round((_daysAgo / 45) * 85)));
-              barText = _daysAgo + ' DAYS AGO';
-            } else {
-              barText = _daysUntil === 0 ? 'DUE TODAY' : 'DUE IN ' + _daysUntil + 'd';
-            }
-          }
-        } else {
-          const _hasAction = a.statusDate && a.statusDate !== a.date && new Date(a.statusDate) > new Date(a.date);
-          if (_hasAction) {
-            const _daysAgo = Math.max(1, Math.floor((_today - new Date(a.statusDate + 'T00:00:00')) / 86400000));
-            barState = 'inprogress';
-            barWidth = Math.min(85, Math.max(20, Math.round((_daysAgo / 45) * 85)));
-            barText = _daysAgo + ' DAYS AGO';
-          } else {
-            barText = '—';
-          }
-        }
-
-        // Due chip
-        let dueChipLabel = '', dueChipCls = '';
-        if (!_isCompleted && a.dueDate) {
-          const _due2 = new Date(a.dueDate + 'T00:00:00');
-          const _days2 = Math.floor((_due2 - _today) / 86400000);
-          if (_days2 < 0) { dueChipLabel = 'Overdue'; dueChipCls = 'due-overdue'; }
-          else if (_days2 === 0) { dueChipLabel = 'Due today'; dueChipCls = 'due-soon'; }
-          else if (_days2 <= 3) {
-            dueChipLabel = 'Due ' + _due2.toLocaleDateString(undefined, {month:'short', day:'numeric'});
-            dueChipCls = 'due-soon';
-          }
-        }
-      %>
-      <div class="act-list-row<%= idx === 0 ? ' act-list-row-first' : '' %>"
-           data-search="<%= [a.name, a.type, a.result, (a.companyNames||[]).join(' '), (a.projectNames||[]).join(' ')].join(' ').toLowerCase() %>"
-           data-state="<%= _isCompleted ? 'completed' : 'open' %>">
-
-        <div class="act-list-icon-wrap">
-          <div class="act-list-icon <%= iconBg %>"><i class="bi <%= icon %>"></i></div>
-        </div>
-
-        <div class="act-list-body">
-          <div class="act-list-top">
-            <a href="/activities/<%= a.id %>" class="act-list-name <%= _isCompleted ? 'act-list-name-done' : '' %>"><%= a.name || '(untitled)' %></a>
-            <div class="act-bar-wrap flex-shrink-0">
-              <div class="act-bar-track">
-                <% if (barWidth === 0) { %>
-                  <div style="width:100%;display:flex;align-items:center;padding:0 7px;">
-                    <span class="act-bar-label act-bar-label-muted"><%= barText %></span>
-                  </div>
-                <% } else { %>
-                  <div class="act-bar-fill act-bar-<%= barState %>" style="width:<%= barWidth %>%;<%= barState === 'done' ? 'border-radius:9px;' : '' %>">
-                    <span class="act-bar-label"><%= barText %></span>
-                  </div>
-                <% } %>
-              </div>
-            </div>
-          </div>
-
-          <div class="act-list-meta">
-            <% if (a.companyIds && a.companyIds[0]) { %>
-              <a href="/companies/<%= a.companyIds[0] %>" class="act-meta-company"><i class="bi bi-building"></i> <%= (a.companyNames||[]).join(', ') %></a>
-            <% } %>
-            <% if (a.type) { %><span class="act-meta-pill"><%= a.type %></span><% } %>
-            <% if (a.projectNames && a.projectNames.length) { %>
-              <span class="act-meta-pill"><i class="bi bi-diagram-3"></i> <%= a.projectNames.join(', ') %></span>
-            <% } %>
-            <% if (dueChipLabel) { %><span class="due-chip <%= dueChipCls %>"><%= dueChipLabel %></span><% } %>
-            <% if (_isCompleted) { %><span class="act-meta-pill act-meta-pill-done"><i class="bi bi-check-circle-fill"></i> Completed</span><% } else if (a.result) { %><span class="act-meta-pill"><%= a.result %></span><% } %>
-          </div>
-        </div>
-
-      </div>
-    <% }) %>
+  <!-- ── Table ───────────────────────────────────────────────────────────── -->
+  <div class="act2-table-wrap">
+    <div class="act2-table-head">
+      <div class="act2-col-icon"></div>
+      <div class="act2-col-name">Activity</div>
+      <div class="act2-col-company">Company</div>
+      <div class="act2-col-type">Type</div>
+      <div class="act2-col-outcome">Outcome</div>
+      <div class="act2-col-due">Due / Status</div>
+    </div>
+    <div id="actTableBody"></div>
+    <div id="actEmptyState" class="act2-empty" style="display:none;">
+      <i class="bi bi-inbox"></i>
+      <div>No activities match your filters.</div>
+      <button onclick="document.getElementById('clearFilters').click()" style="margin-top:0.6rem; padding:0.3rem 0.8rem; border:1px solid var(--crm-border); border-radius:7px; background:#fff; font-size:0.82rem; cursor:pointer; color:var(--crm-accent);">Clear filters</button>
+    </div>
   </div>
 
 </div>
 
 <script>
 (function () {
-  const list = document.querySelector('.act-list-card');
-  const rows = list ? Array.from(list.querySelectorAll('.act-list-row')) : [];
-  const searchInput = document.getElementById('activitySearch');
-  const filterBtns = document.querySelectorAll('.act-filter-btn, .dash-filter-btn[data-filter]');
-  let currentFilter = 'all';
+  var DATA = <%- JSON.stringify(activities) %>;
+  var today = new Date(); today.setHours(0, 0, 0, 0);
 
-  // Count badges
-  const openCount = rows.filter(r => r.dataset.state === 'open').length;
-  const completedCount = rows.filter(r => r.dataset.state === 'completed').length;
-  const b = id => document.getElementById(id);
-  if (b('badgeOpen')) b('badgeOpen').textContent = openCount;
-  if (b('badgeCompleted')) b('badgeCompleted').textContent = completedCount;
+  // ── Status helpers ────────────────────────────────────────────────────────
+  function isCompleted(a) {
+    // Only "Completed" result counts as done — Replied / Meeting booked / etc. are outcomes, not completion
+    return (a.result || '') === 'Completed';
+  }
 
-  function applyFilters() {
-    const q = (searchInput ? searchInput.value : '').toLowerCase();
-    rows.forEach(row => {
-      const matchSearch = (row.dataset.search || '').includes(q);
-      const matchFilter = currentFilter === 'all' || row.dataset.state === currentFilter;
-      row.style.display = (matchSearch && matchFilter) ? '' : 'none';
+  function daysUntilDue(a) {
+    if (!a.dueDate) return null;
+    return Math.floor((new Date(a.dueDate + 'T00:00:00') - today) / 86400000);
+  }
+
+  function fmtDate(str) {
+    if (!str) return '';
+    return new Date(str + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ── Rendering helpers ─────────────────────────────────────────────────────
+  function typeIconCls(type) {
+    var t = (type || '').toLowerCase();
+    if (t === 'call')                return { icon: 'bi-telephone',    bg: 'att-blue'   };
+    if (t === 'email')               return { icon: 'bi-envelope',     bg: 'att-purple' };
+    if (t === 'linkedin')            return { icon: 'bi-linkedin',     bg: 'att-indigo' };
+    if (t === 'meeting')             return { icon: 'bi-people',       bg: 'att-teal'   };
+    if (t === 'demo')                return { icon: 'bi-play-circle',  bg: 'att-teal'   };
+    return { icon: 'bi-clock-history', bg: 'att-gray' };
+  }
+
+  function typeBadge(type) {
+    if (!type) return '<span class="act2-dash">—</span>';
+    var t = (type || '').toLowerCase();
+    var cls = t === 'call' ? 'atb-blue' : t === 'email' ? 'atb-purple' : t === 'linkedin' ? 'atb-indigo' : (t === 'meeting' || t === 'demo') ? 'atb-teal' : 'atb-gray';
+    return '<span class="act2-type-badge ' + cls + '">' + esc(type) + '</span>';
+  }
+
+  function outcomeBadge(result) {
+    if (!result) return '<span class="act2-dash">—</span>';
+    var cls;
+    if (result === 'Completed')        cls = 'ato-green';
+    else if (result === 'Replied')     cls = 'ato-blue';
+    else if (result === 'Meeting booked') cls = 'ato-teal';
+    else if (result === 'Not interested') cls = 'ato-red';
+    else                               cls = 'ato-gray';
+    return '<span class="act2-outcome-badge ' + cls + '">' + esc(result) + '</span>';
+  }
+
+  function dueCell(a) {
+    if (isCompleted(a)) {
+      var d = a.statusDate ? fmtDate(a.statusDate) : '';
+      return '<span class="act2-done-chip"><i class="bi bi-check-circle-fill" style="font-size:0.65rem;"></i> Done' + (d ? ' ' + d : '') + '</span>';
+    }
+    var days = daysUntilDue(a);
+    if (days === null) return '<span class="act2-dash">—</span>';
+    if (days < 0)  return '<span class="act2-overdue-chip">' + Math.abs(days) + 'd overdue</span>';
+    if (days === 0) return '<span class="act2-duetoday-chip">Due today</span>';
+    if (days === 1) return '<span class="act2-duesoon-chip">Due tomorrow</span>';
+    if (days <= 7)  return '<span class="act2-duesoon-chip">Due ' + fmtDate(a.dueDate) + '</span>';
+    return '<span style="font-size:0.78rem; color:var(--crm-muted-fg);">' + fmtDate(a.dueDate) + '</span>';
+  }
+
+  function renderRow(a) {
+    var ti = typeIconCls(a.type);
+    var co = (a.companyNames && a.companyNames[0]) || '';
+    var coId = (a.companyIds && a.companyIds[0]) || '';
+    var proj = (a.projectNames || []).join(', ');
+    var done = isCompleted(a);
+
+    return '<div class="act2-row" onclick="location.href=\'/activities/' + a.id + '\'" tabindex="0" role="link" onkeydown="if(event.key===\'Enter\')location.href=\'/activities/' + a.id + '\'">' +
+      '<div class="act2-col-icon"><div class="act2-icon ' + ti.bg + '"><i class="bi ' + ti.icon + '"></i></div></div>' +
+      '<div class="act2-col-name">' +
+        '<a href="/activities/' + a.id + '" class="act2-name' + (done ? ' act2-name-done' : '') + '" onclick="event.stopPropagation()">' + esc(a.name || '(untitled)') + '</a>' +
+        (proj ? '<div class="act2-proj"><i class="bi bi-folder2" style="opacity:0.45; margin-right:0.2rem;"></i>' + esc(proj) + '</div>' : '') +
+      '</div>' +
+      '<div class="act2-col-company">' +
+        (coId
+          ? '<a href="/companies/' + coId + '" class="act2-co-link" onclick="event.stopPropagation()"><i class="bi bi-building" style="font-size:0.72rem; opacity:0.5; margin-right:0.25rem;"></i>' + esc(co) + '</a>'
+          : '<span class="act2-dash">—</span>') +
+      '</div>' +
+      '<div class="act2-col-type">' + typeBadge(a.type) + '</div>' +
+      '<div class="act2-col-outcome">' + outcomeBadge(a.result) + '</div>' +
+      '<div class="act2-col-due">' + dueCell(a) + '</div>' +
+    '</div>';
+  }
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  var state = { tab: 'all', type: '', company: '', overdue: false, search: '' };
+
+  // ── Filter + sort ─────────────────────────────────────────────────────────
+  function filterAndSort() {
+    return DATA.filter(function (a) {
+      if (state.tab === 'open' && isCompleted(a)) return false;
+      if (state.tab === 'completed' && !isCompleted(a)) return false;
+      if (state.type && (a.type || '') !== state.type) return false;
+      if (state.company && !(a.companyNames || []).includes(state.company)) return false;
+      if (state.overdue) {
+        var days = daysUntilDue(a);
+        if (isCompleted(a) || days === null || days >= 0) return false;
+      }
+      if (state.search) {
+        var q = state.search.toLowerCase();
+        var txt = [a.name, a.type, a.result, (a.companyNames || []).join(' '), (a.projectNames || []).join(' ')].join(' ').toLowerCase();
+        if (!txt.includes(q)) return false;
+      }
+      return true;
+    }).sort(function (a, b) {
+      if (state.tab === 'completed') {
+        // Most recently updated first
+        return new Date(b.statusDate || b.date || 0) - new Date(a.statusDate || a.date || 0);
+      }
+      if (state.tab === 'open') {
+        // Overdue first (most negative days first), then by dueDate ASC, no due-date last
+        var da = daysUntilDue(a), db = daysUntilDue(b);
+        if (da === null && db === null) return 0;
+        if (da === null) return 1;
+        if (db === null) return -1;
+        return da - db;
+      }
+      // All: latest statusDate/date first
+      return new Date(b.statusDate || b.date || 0) - new Date(a.statusDate || a.date || 0);
     });
   }
 
-  document.querySelectorAll('.dash-filter-btn[data-filter]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.dash-filter-btn[data-filter]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentFilter = btn.dataset.filter;
-      applyFilters();
+  // ── Render ────────────────────────────────────────────────────────────────
+  function render() {
+    var list = filterAndSort();
+    var body = document.getElementById('actTableBody');
+    var empty = document.getElementById('actEmptyState');
+    var sub = document.getElementById('actSubtitle');
+
+    if (list.length) {
+      body.innerHTML = list.map(renderRow).join('');
+      body.style.display = '';
+      empty.style.display = 'none';
+    } else {
+      body.innerHTML = '';
+      body.style.display = 'none';
+      empty.style.display = '';
+    }
+
+    var total = DATA.length;
+    sub.textContent = list.length === total
+      ? total + ' activit' + (total === 1 ? 'y' : 'ies') + ' logged'
+      : 'Showing ' + list.length + ' of ' + total + ' activities';
+
+    // Clear button visibility
+    var hasFilter = state.type || state.company || state.overdue || state.search;
+    document.getElementById('clearFilters').style.display = hasFilter ? '' : 'none';
+  }
+
+  function updateCounts() {
+    var open = DATA.filter(function (a) { return !isCompleted(a); }).length;
+    var done = DATA.filter(function (a) { return  isCompleted(a); }).length;
+    document.getElementById('cnt-all').textContent = DATA.length;
+    document.getElementById('cnt-open').textContent = open;
+    document.getElementById('cnt-completed').textContent = done;
+  }
+
+  function populateCompanyFilter() {
+    var sel = document.getElementById('filterCompany');
+    var seen = {};
+    DATA.forEach(function (a) {
+      (a.companyNames || []).forEach(function (n) {
+        if (n && !seen[n]) {
+          seen[n] = true;
+          var opt = document.createElement('option');
+          opt.value = n; opt.textContent = n;
+          sel.appendChild(opt);
+        }
+      });
     });
+  }
+
+  // ── Event listeners ───────────────────────────────────────────────────────
+  document.getElementById('actTabs').addEventListener('click', function (e) {
+    var btn = e.target.closest('.act2-tab');
+    if (!btn) return;
+    document.querySelectorAll('.act2-tab').forEach(function (b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    state.tab = btn.dataset.tab;
+    render();
   });
 
-  if (searchInput) searchInput.addEventListener('input', applyFilters);
+  document.getElementById('filterType').addEventListener('change', function () { state.type = this.value; render(); });
+  document.getElementById('filterCompany').addEventListener('change', function () { state.company = this.value; render(); });
+
+  document.getElementById('filterOverdue').addEventListener('click', function () {
+    state.overdue = !state.overdue;
+    this.classList.toggle('act2-filter-active', state.overdue);
+    render();
+  });
+
+  document.getElementById('actSearch').addEventListener('input', function () { state.search = this.value; render(); });
+
+  document.getElementById('clearFilters').addEventListener('click', function () {
+    state.type = ''; state.company = ''; state.overdue = false; state.search = '';
+    document.getElementById('filterType').value = '';
+    document.getElementById('filterCompany').value = '';
+    document.getElementById('filterOverdue').classList.remove('act2-filter-active');
+    document.getElementById('actSearch').value = '';
+    render();
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  populateCompanyFilter();
+  updateCounts();
+  render();
 })();
 </script>
