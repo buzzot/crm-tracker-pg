@@ -1,5 +1,4 @@
 <%
-  /* ── helpers ─────────────────────────────────────────────── */
   function noteTimeAgo(dateStr) {
     if (!dateStr) return '';
     const then = new Date(dateStr);
@@ -12,100 +11,48 @@
     if (hr < 24) return hr + 'h ago';
     const day = Math.floor(hr / 24);
     if (day < 30) return day + 'd ago';
-    return then.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return then.toLocaleDateString();
   }
-
-  function fmtDateShort(str) {
-    if (!str) return '—';
-    const d = str instanceof Date ? str : new Date(String(str).includes('T') ? str : str + 'T00:00:00');
-    if (isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
   const noteAvatarClasses = ['note-avatar-blue', 'note-avatar-purple', 'note-avatar-gray'];
   const youInitial = ((typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || '?').trim().charAt(0).toUpperCase();
   const orderedComments = activity.comments.slice().reverse();
-
-  const typeIconMap = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-people', Demo: 'bi-play-circle' };
+  const typeIconMap = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-camera-video', Demo: 'bi-camera-video' };
   const typeIcon = typeIconMap[activity.type] || 'bi-clock-history';
-
-  const typeBgMap = { Call: 'att-blue', Email: 'att-purple', LinkedIn: 'att-indigo', Meeting: 'att-teal', Demo: 'att-teal' };
-  const typeBg = typeBgMap[activity.type] || 'att-gray';
-
-  /* overdue / due logic */
-  const _todayDate = new Date(); _todayDate.setHours(0,0,0,0);
-  const _isCompleted = (activity.result || '') === 'Completed';
-  let _dueLabel = null, _dueCls = null;
-  if (activity.dueDate && !_isCompleted) {
-    const _days = Math.floor((new Date(activity.dueDate + 'T00:00:00') - _todayDate) / 86400000);
-    if (_days < 0)      { _dueLabel = Math.abs(_days) + 'd overdue'; _dueCls = 'adp-chip-overdue'; }
-    else if (_days === 0) { _dueLabel = 'Due today';                  _dueCls = 'adp-chip-today'; }
-    else if (_days <= 7)  { _dueLabel = 'Due ' + fmtDateShort(activity.dueDate); _dueCls = 'adp-chip-soon'; }
-  } else if (_isCompleted) {
-    _dueLabel = 'Completed' + (activity.statusDate ? ' ' + fmtDateShort(activity.statusDate) : '');
-    _dueCls = 'adp-chip-done';
-  }
-
-  const _canManage = currentUser && ['Admin','Manager','Head R&D Controllers','Head R&D VFD'].includes(currentUser.role);
-  const _sharedIds = new Set((activity.participants||[]).map(p => p.id));
-  const _notShared = (teamUsers||[]).filter(u => !_sharedIds.has(u.id));
-  const _actEmail = 'activity-' + activity.id + '@' + (typeof emailDomain !== 'undefined' ? emailDomain : 'mail.samyou.se');
 %>
 
-<div class="pnew-page adp-page">
+<div class="pnew-page activity-detail-page">
 
-  <!-- ── COMPACT HEADER ──────────────────────────────────────────────────── -->
-  <div class="adp-header">
-    <!-- Breadcrumbs -->
-    <nav class="adp-breadcrumb">
-      <a href="/activities" class="adp-bc-link">Activity</a>
-      <% if (activity.companyIds && activity.companyIds.length) { %>
-        <i class="bi bi-chevron-right adp-bc-sep"></i>
-        <a href="/companies/<%= activity.companyIds[0] %>" class="adp-bc-link"><%= (activity.companyNames && activity.companyNames[0]) || 'Company' %></a>
-      <% } %>
-    </nav>
+  <% if (activity.companyIds && activity.companyIds.length) { %>
+    <a href="/companies/<%= activity.companyIds[0] %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= (activity.companyNames && activity.companyNames[0]) || 'Company' %></a>
+  <% } else { %>
+    <a href="/activities" class="pnew-back-link"><i class="bi bi-arrow-left"></i> All activities</a>
+  <% } %>
 
-    <!-- Title row -->
-    <div class="adp-title-row">
-      <div class="adp-title-icon-wrap">
-        <div class="adp-title-icon act2-icon <%= typeBg %>"><i class="bi <%= typeIcon %>"></i></div>
-      </div>
-      <h1 class="adp-title"><%= activity.name || '(untitled)' %></h1>
-      <div class="adp-header-actions">
-        <% if (editMode) { %>
-          <a href="/activities/<%= activity.id %>" class="pnew-btn-cancel">Cancel</a>
-          <button type="button" class="pnew-btn-save" onclick="document.getElementById('activityForm').submit()"><i class="bi bi-check-lg"></i> Save</button>
-        <% } else { %>
-          <a href="/activities/<%= activity.id %>?edit=1" class="adp-edit-btn"><i class="bi bi-pencil"></i> Edit</a>
+  <!-- Hero + Save/Cancel at top right -->
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+        <% if (activity.type) { %>
+          <div class="pnew-badge"><i class="bi <%= typeIcon %>"></i> <%= activity.type %></div>
+        <% } %>
+        <% if (activity.result && activity.result.toLowerCase() !== (activity.type || '').toLowerCase()) { %>
+          <div class="pnew-badge" style="background: oklch(0.93 0.04 155 / 0.5); color: var(--crm-success);"><i class="bi bi-flag-fill"></i> <%= activity.result %></div>
         <% } %>
       </div>
+      <h1 class="pnew-hero mb-1"><%= activity.name || '(untitled)' %></h1>
+      <p class="pnew-hero-sub mb-0">
+        <% if (activity.companyIds && activity.companyIds.length) { %>
+          <i class="bi bi-building"></i>
+          <a href="/companies/<%= activity.companyIds[0] %>" style="color: var(--crm-accent); text-decoration: none;"><%= (activity.companyNames && activity.companyNames.join(', ')) || 'Unknown company' %></a>
+        <% } %>
+      </p>
     </div>
-
-    <!-- Meta row -->
-    <div class="adp-meta-row">
-      <% if (activity.type) { %>
-        <span class="adp-meta-chip adp-meta-type"><i class="bi <%= typeIcon %>"></i> <%= activity.type %></span>
-      <% } %>
-      <% if (activity.result) { %>
-        <%
-          const _rCls = activity.result === 'Completed' ? 'adp-meta-green'
-                       : activity.result === 'Replied' ? 'adp-meta-blue'
-                       : activity.result === 'Meeting booked' ? 'adp-meta-teal'
-                       : activity.result === 'Not interested' ? 'adp-meta-red'
-                       : 'adp-meta-muted';
-        %>
-        <span class="adp-meta-chip <%= _rCls %>"><i class="bi bi-flag-fill"></i> <%= activity.result %></span>
-      <% } %>
-      <% if (_dueLabel) { %>
-        <span class="adp-meta-chip <%= _dueCls %>"><%= _dueLabel %></span>
-      <% } %>
-      <% if (activity.companyIds && activity.companyIds.length) { %>
-        <a href="/companies/<%= activity.companyIds[0] %>" class="adp-meta-chip adp-meta-co">
-          <i class="bi bi-building"></i> <%= (activity.companyNames || []).join(', ') %>
-        </a>
-      <% } %>
-      <% if (activity.date || activity.createdAt) { %>
-        <span class="adp-meta-chip adp-meta-muted"><i class="bi bi-calendar3"></i> <%= fmtDateShort(activity.date || activity.createdAt) %></span>
+    <div class="d-flex gap-2 align-items-center">
+      <% if (editMode) { %>
+        <a href="/activities/<%= activity.id %>" class="pnew-btn-cancel">Cancel</a>
+        <button type="button" class="pnew-btn-save" onclick="document.getElementById('activityForm').submit()"><i class="bi bi-check-lg"></i> Save changes</button>
+      <% } else { %>
+        <a href="/activities/<%= activity.id %>?edit=1" class="pnew-btn-save"><i class="bi bi-pencil-square"></i> Edit</a>
       <% } %>
     </div>
   </div>
@@ -116,28 +63,27 @@
 
   <div class="pnew-grid">
 
-    <!-- ── MAIN ──────────────────────────────────────────────────────────── -->
     <div class="pnew-main">
 
-      <!-- Details card -->
+      <!-- Details card: read-only view OR edit form -->
       <div class="pnew-card">
         <% if (!editMode) { %>
-          <!-- Read-only details -->
+          <!-- Read-only view -->
           <% if (activity.details) { %>
-            <div class="adp-details-body"><%= activity.details %></div>
+            <div style="font-size:0.9rem; line-height:1.7; white-space:pre-wrap; color:var(--crm-fg);"><%= activity.details %></div>
           <% } else { %>
             <p class="pnew-card-sub mb-0">No details recorded.</p>
           <% } %>
 
           <% if (activity.attendees && activity.attendees.length) { %>
-            <div class="adp-people-section">
-              <div class="pnew-field-label"><i class="bi bi-people"></i> Attendees</div>
-              <div class="adp-chip-list">
+            <div style="margin-top:1rem;">
+              <div class="pnew-field-label mb-1"><i class="bi bi-people"></i> Attendees</div>
+              <div class="d-flex flex-wrap gap-2">
                 <% activity.attendees.forEach(att => {
-                     const dn = att.name || 'Unknown contact'; %>
-                  <span class="adp-person-chip">
-                    <span class="adp-person-avatar"><%= dn.trim().charAt(0).toUpperCase() %></span>
-                    <%= dn %>
+                     const displayName = att.name || 'Unknown contact'; %>
+                  <span style="display:inline-flex; align-items:center; gap:0.4rem; background:var(--crm-muted); border:1px solid var(--crm-border); border-radius:999px; padding:0.2rem 0.65rem; font-size:0.8rem;">
+                    <span style="width:20px;height:20px;border-radius:50%;background:var(--crm-accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;"><%= displayName.trim().charAt(0).toUpperCase() %></span>
+                    <%= displayName %>
                   </span>
                 <% }) %>
               </div>
@@ -145,13 +91,13 @@
           <% } %>
 
           <% if (activity.projectIds && activity.projectIds.length) { %>
-            <div class="adp-people-section">
-              <div class="pnew-field-label"><i class="bi bi-folder2-open"></i> Related projects</div>
-              <div class="adp-chip-list">
+            <div style="margin-top:1rem;">
+              <div class="pnew-field-label mb-1"><i class="bi bi-kanban"></i> Related projects</div>
+              <div class="d-flex flex-wrap gap-2">
                 <% activity.projectIds.forEach(id => {
                      const pr = projects.find(pp => pp.id === id); %>
-                  <a href="/projects/<%= id %>" class="adp-proj-chip">
-                    <i class="bi bi-folder2-open" style="font-size:0.7rem;"></i> <%= pr ? pr.name : id %>
+                  <a href="/projects/<%= id %>" style="display:inline-flex;align-items:center;gap:0.3rem;background:var(--crm-muted);border:1px solid var(--crm-border);border-radius:999px;padding:0.2rem 0.65rem;font-size:0.8rem;text-decoration:none;color:var(--crm-accent);">
+                    <i class="bi bi-folder2-open" style="font-size:0.7rem;"></i><%= pr ? pr.name : id %>
                   </a>
                 <% }) %>
               </div>
@@ -159,12 +105,12 @@
           <% } %>
 
           <% if (activity.participants && activity.participants.length) { %>
-            <div class="adp-people-section">
-              <div class="pnew-field-label"><i class="bi bi-people-fill"></i> Team participants</div>
-              <div class="adp-chip-list">
+            <div style="margin-top:1rem;">
+              <div class="pnew-field-label mb-1"><i class="bi bi-people-fill"></i> Team participants</div>
+              <div class="d-flex flex-wrap gap-2">
                 <% activity.participants.forEach(p => { %>
-                  <span class="adp-person-chip">
-                    <span class="adp-person-avatar adp-person-avatar--team"><%= (p.name||'?').trim().charAt(0).toUpperCase() %></span>
+                  <span style="display:inline-flex; align-items:center; gap:0.4rem; background:var(--crm-muted); border:1px solid var(--crm-border); border-radius:999px; padding:0.2rem 0.65rem; font-size:0.8rem;">
+                    <span style="width:20px;height:20px;border-radius:50%;background:oklch(0.55 0.18 250);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;"><%= (p.name||'?').trim().charAt(0).toUpperCase() %></span>
                     <%= p.name %>
                   </span>
                 <% }) %>
@@ -172,167 +118,219 @@
             </div>
           <% } %>
 
-        <% } else { %>
-          <!-- Edit form -->
-          <h2 class="pnew-card-title">Edit activity</h2>
-          <p class="pnew-card-sub">Make your changes and save.</p>
-
-          <form id="activityForm" action="/activities/<%= activity.id %>" method="POST">
-
-            <div class="mb-3">
-              <label class="pnew-field-label">Activity name <span class="pnew-required">*</span></label>
-              <input type="text" name="name" class="pnew-input" value="<%= activity.name || '' %>" required>
-            </div>
-
-            <div class="row g-3 mb-3">
-              <div class="col-md-6">
-                <label class="pnew-field-label"><i class="bi bi-tag"></i> Type</label>
-                <select name="type" class="pnew-select">
-                  <option value="">— Select —</option>
-                  <% typeChoices.forEach(opt => { %>
-                    <option value="<%= opt %>" <%= activity.type === opt ? 'selected' : '' %>><%= opt %></option>
-                  <% }) %>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label class="pnew-field-label"><i class="bi bi-flag"></i> Result / Status</label>
-                <select name="result" class="pnew-select">
-                  <option value="">— Select —</option>
-                  <% resultChoices.forEach(opt => { %>
-                    <option value="<%= opt %>" <%= activity.result === opt ? 'selected' : '' %>><%= opt %></option>
-                  <% }) %>
-                </select>
-              </div>
-            </div>
-
-            <div class="row g-3 mb-3">
-              <div class="col-md-6">
-                <label class="pnew-field-label"><i class="bi bi-calendar-check"></i> Complete before <span class="text-muted fw-normal">(optional)</span></label>
-                <input type="date" name="dueDate" class="pnew-input" value="<%= activity.dueDate || '' %>">
-              </div>
-            </div>
-
-            <div class="mb-3">
-              <label class="pnew-field-label"><i class="bi bi-people"></i> Attendees</label>
-              <div class="chip-field" id="attendeesChipField">
-                <% [].concat(activity.attendees||[]).forEach(att => {
-                     const p = persons.find(pp => pp.id === att.id);
-                     const displayName = (p && p.fullName) || att.name || 'Unknown contact'; %>
-                  <span class="chip" data-id="<%= att.id %>">
-                    <span class="chip-avatar"><%= displayName.trim().charAt(0).toUpperCase() %></span>
-                    <%= displayName %>
-                    <input type="hidden" name="attendeeIds" value="<%= att.id %>">
-                    <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
-                  </span>
-                <% }) %>
-                <div class="chip-add-wrap">
-                  <button type="button" class="chip-add-btn" data-target="attendeesChipField" data-field="attendeeIds" data-avatar="1">Add attendee</button>
-                  <select class="chip-add-select d-none">
-                    <option value="">— Select —</option>
-                    <% persons.forEach(p => { %><option value="<%= p.id %>" data-name="<%= p.fullName %>"><%= p.fullName %></option><% }) %>
-                  </select>
-                </div>
-                <%
-                  const activityCompanyIdForContact = (activity.companyIds || [])[0];
-                  const createContactHref = activityCompanyIdForContact ? `/companies/${activityCompanyIdForContact}/contacts/new` : null;
+          <% if (activity.files && activity.files.length) { %>
+            <div style="margin-top:1rem;">
+              <div class="pnew-field-label mb-1"><i class="bi bi-paperclip"></i> Attachments</div>
+              <div class="act-file-list">
+                <% activity.files.forEach(file => {
+                  const ext = (file.filename || '').split('.').pop().toLowerCase();
+                  const iconMap = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel', png: 'bi-file-earmark-image', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image' };
+                  const icon = iconMap[ext] || 'bi-file-earmark';
                 %>
-                <% if (createContactHref) { %>
-                  <a href="<%= createContactHref %>" class="chip-add-btn">Create contact</a>
-                <% } %>
-              </div>
-            </div>
-
-            <div class="mb-3">
-              <label class="pnew-field-label"><i class="bi bi-people-fill"></i> Team participants <span class="text-muted fw-normal" style="font-size:0.75rem;">(get email when confirmed)</span></label>
-              <div class="chip-field" id="participantsChipField">
-                <% [].concat((activity.participants||[]).map(p=>p.id)).forEach(uid => {
-                     const tu = (typeof teamUsers !== 'undefined' ? teamUsers : []).find(u => u.id === uid); %>
-                  <span class="chip" data-id="<%= uid %>">
-                    <span class="chip-avatar"><%= ((tu && tu.name) || '?').trim().charAt(0).toUpperCase() %></span>
-                    <%= tu ? tu.name : uid %>
-                    <input type="hidden" name="participantIds" value="<%= uid %>">
-                    <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
-                  </span>
+                  <a href="<%= file.url %>" target="_blank" rel="noopener" class="act-file-row">
+                    <i class="bi <%= icon %> act-file-icon"></i>
+                    <span class="act-file-name"><%= file.filename %></span>
+                    <i class="bi bi-box-arrow-up-right act-file-open"></i>
+                  </a>
                 <% }) %>
-                <div class="chip-add-wrap">
-                  <button type="button" class="chip-add-btn" data-target="participantsChipField" data-field="participantIds" data-avatar="1">Add team member</button>
-                  <select class="chip-add-select d-none">
-                    <option value="">— Select —</option>
-                    <% (typeof teamUsers !== 'undefined' ? teamUsers : []).forEach(u => { %><option value="<%= u.id %>" data-name="<%= u.name %>"><%= u.name %><% if (u.title) { %> — <%= u.title %><% } %></option><% }) %>
-                  </select>
-                </div>
               </div>
-            </div>
-
-            <div class="mb-3">
-              <label class="pnew-field-label"><i class="bi bi-kanban"></i> Related project(s)</label>
-              <div class="chip-field" id="projectsChipField">
-                <% [].concat(activity.projectIds||[]).forEach(id => {
-                     const pr = projects.find(pp => pp.id === id); %>
-                  <span class="chip chip-link" data-id="<%= id %>">
-                    <%= pr ? pr.name : id %>
-                    <input type="hidden" name="projectIds" value="<%= id %>">
-                    <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
-                  </span>
-                <% }) %>
-                <div class="chip-add-wrap">
-                  <button type="button" class="chip-add-btn" data-target="projectsChipField" data-field="projectIds">Link a project</button>
-                  <select class="chip-add-select d-none">
-                    <option value="">— Select —</option>
-                    <% projects.forEach(p => { %><option value="<%= p.id %>" data-name="<%= p.name %>"><%= p.name %></option><% }) %>
-                  </select>
-                </div>
-                <%
-                  const activityCompanyId = (activity.companyIds || [])[0];
-                  const createProjectHref = activityCompanyId ? `/companies/${activityCompanyId}/projects/new` : '/projects/new';
-                %>
-                <a href="<%= createProjectHref %>" class="chip-add-btn">Create project</a>
-              </div>
-            </div>
-
-            <div class="mb-0">
-              <label class="pnew-field-label"><i class="bi bi-card-text"></i> Details / notes</label>
-              <textarea name="details" class="pnew-input pnew-textarea" rows="6" id="activityDetailsTextarea"><%= activity.details || '' %></textarea>
-            </div>
-
-          </form>
-
-          <% if (editMode && typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'Admin') { %>
-            <div class="adp-danger-zone">
-              <div class="adp-danger-label">Danger zone</div>
-              <form action="/activities/<%= activity.id %>/delete" method="POST" onsubmit="return confirm('Delete this activity permanently? This cannot be undone.')">
-                <button type="submit" class="act-delete-btn"><i class="bi bi-trash me-1"></i> Delete activity</button>
-              </form>
             </div>
           <% } %>
+
+        <% } else { %>
+          <!-- Edit form -->
+          <h2 class="pnew-card-title">Details</h2>
+          <p class="pnew-card-sub">Edit and save changes to this activity.</p>
+
+        <form id="activityForm" action="/activities/<%= activity.id %>" method="POST">
+
+          <div class="mb-3">
+            <label class="pnew-field-label">Activity name <span class="pnew-required">*</span></label>
+            <input type="text" name="name" class="pnew-input" value="<%= activity.name || '' %>" required>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-tag"></i> Type</label>
+              <select name="type" class="pnew-select">
+                <option value="">— Select —</option>
+                <% typeChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= activity.type === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-flag"></i> Result / Status</label>
+              <select name="result" class="pnew-select">
+                <option value="">— Select —</option>
+                <% resultChoices.forEach(opt => { %>
+                  <option value="<%= opt %>" <%= activity.result === opt ? 'selected' : '' %>><%= opt %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="pnew-field-label"><i class="bi bi-calendar-check"></i> Complete before <span class="text-muted fw-normal">(optional)</span></label>
+              <input type="date" name="dueDate" class="pnew-input" value="<%= activity.dueDate || '' %>">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-people"></i> Attendees</label>
+            <div class="chip-field" id="attendeesChipField">
+              <% [].concat(activity.attendees||[]).forEach(att => {
+                   const p = persons.find(pp => pp.id === att.id);
+                   const displayName = (p && p.fullName) || att.name || 'Unknown contact'; %>
+                <span class="chip" data-id="<%= att.id %>">
+                  <span class="chip-avatar"><%= displayName.trim().charAt(0).toUpperCase() %></span>
+                  <%= displayName %>
+                  <input type="hidden" name="attendeeIds" value="<%= att.id %>">
+                  <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
+                </span>
+              <% }) %>
+              <div class="chip-add-wrap">
+                <button type="button" class="chip-add-btn" data-target="attendeesChipField" data-field="attendeeIds" data-avatar="1">Add attendee</button>
+                <select class="chip-add-select d-none">
+                  <option value="">— Select —</option>
+                  <% persons.forEach(p => { %><option value="<%= p.id %>" data-name="<%= p.fullName %>"><%= p.fullName %></option><% }) %>
+                </select>
+              </div>
+              <%
+                const activityCompanyIdForContact = (activity.companyIds || [])[0];
+                const createContactHref = activityCompanyIdForContact ? `/companies/${activityCompanyIdForContact}/contacts/new` : null;
+              %>
+              <% if (createContactHref) { %>
+                <a href="<%= createContactHref %>" class="chip-add-btn">Create contact</a>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-people-fill"></i> Team participants <span class="text-muted fw-normal" style="font-size:0.75rem;">(get email when confirmed)</span></label>
+            <div class="chip-field" id="participantsChipField">
+              <% [].concat((activity.participants||[]).map(p=>p.id)).forEach(uid => {
+                   const tu = (typeof teamUsers !== 'undefined' ? teamUsers : []).find(u => u.id === uid); %>
+                <span class="chip" data-id="<%= uid %>">
+                  <span class="chip-avatar"><%= ((tu && tu.name) || '?').trim().charAt(0).toUpperCase() %></span>
+                  <%= tu ? tu.name : uid %>
+                  <input type="hidden" name="participantIds" value="<%= uid %>">
+                  <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
+                </span>
+              <% }) %>
+              <div class="chip-add-wrap">
+                <button type="button" class="chip-add-btn" data-target="participantsChipField" data-field="participantIds" data-avatar="1">Add team member</button>
+                <select class="chip-add-select d-none">
+                  <option value="">— Select —</option>
+                  <% (typeof teamUsers !== 'undefined' ? teamUsers : []).forEach(u => { %><option value="<%= u.id %>" data-name="<%= u.name %>"><%= u.name %><% if (u.title) { %> — <%= u.title %><% } %></option><% }) %>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="pnew-field-label"><i class="bi bi-kanban"></i> Related project(s)</label>
+            <div class="chip-field" id="projectsChipField">
+              <% [].concat(activity.projectIds||[]).forEach(id => {
+                   const pr = projects.find(pp => pp.id === id); %>
+                <span class="chip chip-link" data-id="<%= id %>">
+                  <%= pr ? pr.name : id %>
+                  <input type="hidden" name="projectIds" value="<%= id %>">
+                  <button type="button" class="chip-remove" aria-label="Remove">&times;</button>
+                </span>
+              <% }) %>
+              <div class="chip-add-wrap">
+                <button type="button" class="chip-add-btn" data-target="projectsChipField" data-field="projectIds">Link a project</button>
+                <select class="chip-add-select d-none">
+                  <option value="">— Select —</option>
+                  <% projects.forEach(p => { %><option value="<%= p.id %>" data-name="<%= p.name %>"><%= p.name %></option><% }) %>
+                </select>
+              </div>
+              <%
+                const activityCompanyId = (activity.companyIds || [])[0];
+                const createProjectHref = activityCompanyId ? `/companies/${activityCompanyId}/projects/new` : '/projects/new';
+              %>
+              <a href="<%= createProjectHref %>" class="chip-add-btn">Create project</a>
+            </div>
+          </div>
+
+          <div class="mb-0">
+            <label class="pnew-field-label"><i class="bi bi-card-text"></i> Details / notes</label>
+            <textarea name="details" class="pnew-input pnew-textarea" rows="6" id="activityDetailsTextarea"><%= activity.details || '' %></textarea>
+          </div>
+
+        </form>
+
+        <% if (activity.files && activity.files.length) { %>
+          <div class="act-attachments mt-3">
+            <div class="pnew-field-label mb-2"><i class="bi bi-paperclip"></i> Attachments (<%= activity.files.length %>)</div>
+            <div class="act-file-list">
+              <% activity.files.forEach(file => {
+                const ext = (file.filename || '').split('.').pop().toLowerCase();
+                const iconMap = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel', png: 'bi-file-earmark-image', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image', gif: 'bi-file-earmark-image', zip: 'bi-file-earmark-zip' };
+                const colorMap = { pdf: 'act-file-pdf', doc: 'act-file-doc', docx: 'act-file-doc', xls: 'act-file-xls', xlsx: 'act-file-xls', png: 'act-file-img', jpg: 'act-file-img', jpeg: 'act-file-img', gif: 'act-file-img' };
+                const icon = iconMap[ext] || 'bi-file-earmark';
+                const cls = colorMap[ext] || '';
+              %>
+                <a href="<%= file.url %>" target="_blank" rel="noopener" class="act-file-row">
+                  <i class="bi <%= icon %> act-file-icon <%= cls %>"></i>
+                  <span class="act-file-name"><%= file.filename %></span>
+                  <i class="bi bi-box-arrow-up-right act-file-open"></i>
+                </a>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
+
+        <form action="/activities/<%= activity.id %>/files" method="POST" enctype="multipart/form-data" class="mt-3" id="activityFileForm">
+          <input type="file" name="file" multiple id="activityFileInput" style="display:none;">
+          <div class="act-dropzone" id="activityDropZone">
+            <i class="bi bi-upload act-dropzone-icon"></i>
+            <p class="act-dropzone-text">Drop files here or <span class="act-dropzone-browse">browse</span></p>
+            <p class="act-dropzone-hint">PDF, images, documents — up to 25 MB</p>
+          </div>
+          <div class="act-drop-filelist d-none" id="activityDropFileList"></div>
+          <button type="submit" class="act-drop-submit d-none" id="activityDropSubmit"><i class="bi bi-upload me-1"></i><span id="activityDropSubmitLabel">Upload</span></button>
+        </form>
+
+        <% if (editMode && typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'Admin') { %>
+          <div style="margin-top:2rem; padding-top:1.25rem; border-top:1px solid var(--crm-border);">
+            <div style="font-size:0.75rem; color:var(--crm-muted-fg); margin-bottom:0.65rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Danger zone</div>
+            <form action="/activities/<%= activity.id %>/delete" method="POST" onsubmit="return confirm('Delete this activity permanently? This cannot be undone.')">
+              <button type="submit" class="act-delete-btn"><i class="bi bi-trash me-1"></i> Delete activity</button>
+            </form>
+          </div>
+        <% } %>
 
         <% } %> <!-- end editMode -->
       </div>
 
-      <!-- Conversation card -->
+      <!-- Comments — below the form -->
       <div class="pnew-card">
-        <h2 class="pnew-card-title"><i class="bi bi-chat-text me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Conversation <span class="adp-count-badge"><%= activity.comments.length %></span></h2>
+        <h2 class="pnew-card-title">Comments (<%= activity.comments.length %>)</h2>
+        <p class="pnew-card-sub">Notes and updates about this activity.</p>
 
         <form action="/activities/<%= activity.id %>/comments" method="POST" enctype="multipart/form-data">
-          <div class="adp-compose">
-            <span class="note-avatar note-avatar-you"><%= youInitial %></span>
-            <div class="adp-compose-body">
-              <textarea name="comment" class="adp-compose-input" rows="2" placeholder="Add a comment…" required></textarea>
-              <div class="adp-compose-footer">
-                <label class="adp-attach-label">
-                  <i class="bi bi-paperclip"></i>
-                  <span id="activityCommentFileLabel">Attach</span>
-                  <input type="file" name="attachment" multiple style="display:none;" id="activityCommentFileInput">
-                </label>
-                <button type="submit" class="adp-send-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
-              </div>
+          <div class="note-compose-box">
+            <div class="d-flex gap-2">
+              <span class="note-avatar note-avatar-you"><%= youInitial %></span>
+              <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a comment..." required></textarea>
+            </div>
+            <div class="note-compose-footer">
+              <label class="note-link-field" style="cursor: pointer;">
+                <i class="bi bi-paperclip"></i>
+                <span id="activityCommentFileLabel">Attach</span>
+                <input type="file" name="attachment" multiple style="display: none;" id="activityCommentFileInput">
+              </label>
+              <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
             </div>
           </div>
         </form>
 
-        <div class="note-thread" style="margin-top:0.75rem;">
+        <div class="note-thread">
           <% if (!orderedComments.length) { %>
-            <p class="text-muted mb-0" style="font-size:0.85rem;">No messages yet.</p>
+            <p class="text-muted mb-0">No comments yet.</p>
           <% } %>
           <% orderedComments.forEach((c, i) => { %>
             <% const initial = (c.author || '?').trim().charAt(0).toUpperCase(); %>
@@ -347,7 +345,7 @@
                   <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
                 </div>
                 <div class="note-bubble note-email-bubble">
-                  <div class="note-text" style="white-space:pre-wrap;"><%= c.comment %></div>
+                  <div class="note-text" style="white-space: pre-wrap;"><%= c.comment %></div>
                   <% if (c.attachments && c.attachments.length) { %>
                     <div class="d-flex flex-wrap gap-2 mt-2">
                       <% c.attachments.forEach(file => { %>
@@ -383,134 +381,78 @@
         </div>
       </div>
 
-      <!-- Files card -->
-      <div class="pnew-card">
-        <h2 class="pnew-card-title"><i class="bi bi-paperclip me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Files
-          <% if (activity.files && activity.files.length) { %><span class="adp-count-badge"><%= activity.files.length %></span><% } %>
-        </h2>
+    </div>
 
-        <% if (activity.files && activity.files.length) { %>
-          <div class="act-file-list" style="margin-bottom:0.75rem;">
-            <% activity.files.forEach(file => {
-              const ext = (file.filename || '').split('.').pop().toLowerCase();
-              const iconMap = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel', png: 'bi-file-earmark-image', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image', gif: 'bi-file-earmark-image', zip: 'bi-file-earmark-zip' };
-              const colorMap = { pdf: 'act-file-pdf', doc: 'act-file-doc', docx: 'act-file-doc', xls: 'act-file-xls', xlsx: 'act-file-xls', png: 'act-file-img', jpg: 'act-file-img', jpeg: 'act-file-img', gif: 'act-file-img' };
-              const icon = iconMap[ext] || 'bi-file-earmark';
-              const cls  = colorMap[ext] || '';
-            %>
-              <a href="<%= file.url %>" target="_blank" rel="noopener" class="act-file-row">
-                <i class="bi <%= icon %> act-file-icon <%= cls %>"></i>
-                <span class="act-file-name"><%= file.filename %></span>
-                <i class="bi bi-box-arrow-up-right act-file-open"></i>
-              </a>
-            <% }) %>
-          </div>
-        <% } else { %>
-          <p class="pnew-card-sub">No files yet.</p>
-        <% } %>
-
-        <form action="/activities/<%= activity.id %>/files" method="POST" enctype="multipart/form-data" id="activityFileForm">
-          <input type="file" name="file" multiple id="activityFileInput" style="display:none;">
-          <div class="act-dropzone" id="activityDropZone">
-            <i class="bi bi-upload act-dropzone-icon"></i>
-            <p class="act-dropzone-text">Drop files here or <span class="act-dropzone-browse">browse</span></p>
-            <p class="act-dropzone-hint">PDF, images, documents — up to 25 MB</p>
-          </div>
-          <div class="act-drop-filelist d-none" id="activityDropFileList"></div>
-          <button type="submit" class="act-drop-submit d-none" id="activityDropSubmit"><i class="bi bi-upload me-1"></i><span id="activityDropSubmitLabel">Upload</span></button>
-        </form>
-      </div>
-
-    </div> <!-- /pnew-main -->
-
-    <!-- ── SIDEBAR ────────────────────────────────────────────────────────── -->
     <div class="pnew-aside">
 
-      <!-- Metadata overview -->
       <div class="pnew-summary-card">
         <div class="pnew-summary-title">Overview</div>
-        <div class="pnew-summary-row"><span>Type</span><span><%= activity.type || '—' %></span></div>
-        <div class="pnew-summary-row"><span>Status</span><span><%= activity.result || '—' %></span></div>
         <% if (activity.companyIds && activity.companyIds.length) { %>
-          <div class="pnew-summary-row"><span>Company</span>
-            <a href="/companies/<%= activity.companyIds[0] %>" style="color:var(--crm-accent);text-decoration:none;font-size:0.82rem;"><%= (activity.companyNames||[]).join(', ') %></a>
-          </div>
+          <div class="pnew-summary-row"><span>Company</span><span><%= (activity.companyNames || []).join(', ') %></span></div>
         <% } %>
+        <div class="pnew-summary-row"><span>Type</span><span><%= activity.type || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Created</span><span><%= activity.createdAt ? new Date(activity.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—' %></span></div>
+        <div class="pnew-summary-row"><span>Status</span><span><%= activity.result || '—' %></span></div>
+        <div class="pnew-summary-row"><span>Status date</span><span><%= activity.statusDate || '—' %></span></div>
         <% if (activity.dueDate) { %>
-          <div class="pnew-summary-row"><span>Due date</span><span><%= fmtDateShort(activity.dueDate) %></span></div>
-        <% } %>
-        <% if (activity.statusDate) { %>
-          <div class="pnew-summary-row"><span>Status date</span><span><%= fmtDateShort(activity.statusDate) %></span></div>
-        <% } %>
-        <div class="pnew-summary-row"><span>Created</span><span><%= activity.createdAt ? new Date(activity.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—' %></span></div>
-        <% if (activity.ownerName) { %>
-          <div class="pnew-summary-row"><span>Owner</span><span><%= activity.ownerName %></span></div>
+          <div class="pnew-summary-row"><span>Complete before</span><span><%= activity.dueDate %></span></div>
         <% } %>
         <div class="pnew-summary-row"><span>Attendees</span><span><%= (activity.attendeeIds || []).length %></span></div>
         <div class="pnew-summary-row"><span>Projects</span><span><%= (activity.projectIds || []).length %></span></div>
+        <div class="pnew-summary-row pnew-summary-row--email">
+          <span>Activity email</span>
+          <span class="project-email-chip">
+            <% const _actEmail = 'activity-' + activity.id + '@' + emailDomain; %>
+            <span class="project-email-addr"><%= _actEmail %></span>
+            <button type="button" class="project-email-copy" title="Copy address" onclick="(function(btn){navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(function(){btn.innerHTML='<i class=\'bi bi-check-lg\'></i>';setTimeout(function(){btn.innerHTML='<i class=\'bi bi-copy\'></i>';},1500)});})(this)"><i class="bi bi-copy"></i></button>
+          </span>
+        </div>
+        <p class="project-email-hint">CC this address when emailing clients — replies appear here automatically.</p>
       </div>
 
-      <!-- Technical details (collapsible) -->
-      <details class="adp-tech-card">
-        <summary class="adp-tech-summary"><i class="bi bi-gear me-1"></i> Technical details</summary>
-        <div class="adp-tech-body">
-          <div class="adp-tech-row">
-            <span class="adp-tech-label">Activity ID</span>
-            <span class="adp-tech-val adp-tech-mono"><%= activity.id %></span>
-          </div>
-          <div class="adp-tech-row">
-            <span class="adp-tech-label">Inbound email</span>
-            <span class="project-email-chip" style="margin-top:0.2rem;">
-              <span class="project-email-addr" style="font-size:0.72rem;"><%= _actEmail %></span>
-              <button type="button" class="project-email-copy" title="Copy" onclick="(function(btn){navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(function(){btn.innerHTML='<i class=\'bi bi-check-lg\'></i>';setTimeout(function(){btn.innerHTML='<i class=\'bi bi-copy\'></i>';},1500)});})(this)"><i class="bi bi-copy"></i></button>
-            </span>
-          </div>
-          <p class="project-email-hint" style="margin-top:0.4rem;">CC this address when emailing clients — replies appear here automatically.</p>
-        </div>
-      </details>
+      <%
+        // Users who can manage sharing/projects
+        const _canManage = currentUser && ['Admin','Manager','Head R&D Controllers','Head R&D VFD'].includes(currentUser.role);
+        // Users NOT yet shared with (exclude participants and self)
+        const _sharedIds = new Set((activity.participants||[]).map(p => p.id));
+        const _notShared = (teamUsers||[]).filter(u => !_sharedIds.has(u.id));
+      %>
 
-      <!-- Shared with -->
-      <div class="pnew-card adp-share-card">
-        <div class="adp-share-header">
-          <div class="pnew-card-title" style="margin:0;"><i class="bi bi-people me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Shared with</div>
-          <% if (_canManage && _notShared.length) { %>
-            <button type="button" class="adp-manage-btn" onclick="document.getElementById('adpSharePanel').toggleAttribute('hidden')">
-              <i class="bi bi-person-plus"></i>
-            </button>
-          <% } %>
+      <!-- Shared with / Participants card -->
+      <div class="pnew-card">
+        <div class="pnew-card-header-row">
+          <h2 class="pnew-card-title"><i class="bi bi-share me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Shared with</h2>
         </div>
-
         <% if (activity.participants && activity.participants.length) { %>
-          <div class="adp-share-list">
+          <div style="display:flex;flex-direction:column;gap:0.45rem;margin-bottom:0.75rem;">
             <% activity.participants.forEach(p => { %>
-              <div class="adp-share-row">
-                <span class="adp-avatar-sm"><%= (p.name||'?').trim().charAt(0).toUpperCase() %></span>
+              <div style="display:flex;align-items:center;gap:0.55rem;">
+                <span style="width:28px;height:28px;border-radius:50%;background:var(--crm-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;flex-shrink:0;"><%= (p.name||'?').trim().charAt(0).toUpperCase() %></span>
                 <div style="flex:1;min-width:0;">
-                  <div class="adp-share-name"><%= p.name %></div>
-                  <% if (p.title) { %><div class="adp-share-title"><%= p.title %></div><% } %>
+                  <div style="font-size:0.85rem;font-weight:600;color:var(--crm-fg);"><%= p.name %></div>
+                  <% if (p.title) { %><div style="font-size:0.72rem;color:var(--crm-muted-fg);"><%= p.title %></div><% } %>
                 </div>
                 <% if (_canManage) { %>
                   <form action="/activities/<%= activity.id %>/share/remove" method="POST" style="margin:0;">
                     <input type="hidden" name="removeId" value="<%= p.id %>">
-                    <button type="submit" class="adp-share-remove" title="Remove" onclick="return confirm('Remove <%= p.name %> from shared access?')"><i class="bi bi-x-lg"></i></button>
+                    <button type="submit" title="Remove" style="background:none;border:none;padding:0;cursor:pointer;color:var(--crm-muted-fg);font-size:0.85rem;line-height:1;" onclick="return confirm('Remove <%= p.name %> from shared access?')"><i class="bi bi-x-lg"></i></button>
                   </form>
                 <% } %>
               </div>
             <% }) %>
           </div>
         <% } else { %>
-          <p class="adp-share-empty">Not shared with anyone yet.</p>
+          <p style="font-size:0.82rem;color:var(--crm-muted-fg);margin-bottom:0.75rem;">No one else has access yet.</p>
         <% } %>
-
-        <!-- Add people panel (hidden by default) -->
         <% if (_canManage && _notShared.length) { %>
-          <div id="adpSharePanel" hidden>
-            <form action="/activities/<%= activity.id %>/share" method="POST">
-              <div class="act-picker-list" style="margin-top:0.5rem;">
+          <details class="act-picker-details">
+            <summary class="act-picker-summary"><i class="bi bi-person-plus me-1"></i> Share with someone</summary>
+            <form action="/activities/<%= activity.id %>/share" method="POST" style="margin-top:0.6rem;">
+              <div class="act-picker-list">
                 <% _notShared.forEach(u => { %>
                   <label class="act-picker-row">
                     <input type="checkbox" name="shareWithIds" value="<%= u.id %>">
-                    <span class="adp-avatar-sm" style="background:oklch(0.55 0.18 250);"><%= (u.name||'?').trim().charAt(0).toUpperCase() %></span>
+                    <span style="width:24px;height:24px;border-radius:50%;background:oklch(0.55 0.18 250);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0;"><%= (u.name||'?').trim().charAt(0).toUpperCase() %></span>
                     <span style="flex:1;min-width:0;">
                       <span style="font-size:0.83rem;font-weight:600;"><%= u.name %></span>
                       <% if (u.title) { %><span style="font-size:0.72rem;color:var(--crm-muted-fg);margin-left:0.3rem;"><%= u.title %></span><% } %>
@@ -520,293 +462,66 @@
               </div>
               <button type="submit" class="act-picker-btn">Share</button>
             </form>
-          </div>
+          </details>
         <% } %>
       </div>
 
-      <!-- Quick actions -->
-      <div class="pnew-card" style="padding:0.75rem 0.9rem;">
-        <div class="pnew-summary-title" style="margin-bottom:0.6rem;">Actions</div>
-        <div class="adp-quick-actions">
-          <% if (_canManage) { %>
-            <button type="button" class="adp-quick-btn" onclick="document.getElementById('adpCreateProjectModal').removeAttribute('hidden')">
-              <i class="bi bi-kanban"></i> Create project
-            </button>
-          <% } %>
-          <a href="/activities/new" class="adp-quick-btn adp-quick-btn--outline">
-            <i class="bi bi-plus-lg"></i> Log follow-up
-          </a>
+      <!-- Create project from this activity -->
+      <% if (_canManage) { %>
+      <div class="pnew-card">
+        <div class="pnew-card-header-row">
+          <h2 class="pnew-card-title"><i class="bi bi-kanban me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Create project</h2>
         </div>
+        <p style="font-size:0.8rem;color:var(--crm-muted-fg);margin-bottom:0.75rem;">Turn this activity into a tracked project and assign it to someone.</p>
+        <form action="/activities/<%= activity.id %>/projects/new" method="POST">
+          <div style="margin-bottom:0.5rem;">
+            <label style="font-size:0.75rem;font-weight:600;color:var(--crm-muted-fg);display:block;margin-bottom:0.25rem;">Project name</label>
+            <input type="text" name="projectName" required placeholder="<%= activity.name %>" value="<%= activity.name %>"
+              style="width:100%;padding:0.35rem 0.6rem;border:1px solid var(--crm-border);border-radius:7px;font-size:0.85rem;background:var(--crm-surface);color:var(--crm-fg);">
+          </div>
+          <div style="margin-bottom:0.75rem;">
+            <label style="font-size:0.75rem;font-weight:600;color:var(--crm-muted-fg);display:block;margin-bottom:0.25rem;">Assign to</label>
+            <select name="assigneeId" style="width:100%;padding:0.35rem 0.6rem;border:1px solid var(--crm-border);border-radius:7px;font-size:0.85rem;background:var(--crm-surface);color:var(--crm-fg);">
+              <option value="">— no one —</option>
+              <% (teamUsers||[]).forEach(u => { %>
+                <option value="<%= u.id %>"><%= u.name %><%= u.title ? ' · ' + u.title : '' %></option>
+              <% }) %>
+            </select>
+          </div>
+          <button type="submit" style="width:100%;padding:0.45rem 0;border:none;border-radius:7px;background:var(--crm-accent);color:#fff;font-size:0.85rem;font-weight:600;cursor:pointer;">Create project</button>
+        </form>
       </div>
+      <% } %>
 
-    </div> <!-- /pnew-aside -->
-
-  </div> <!-- /pnew-grid -->
-
-</div> <!-- /adp-page -->
-
-<!-- ── CREATE PROJECT MODAL ──────────────────────────────────────────────── -->
-<% if (_canManage) { %>
-<div id="adpCreateProjectModal" class="adp-modal-backdrop" hidden>
-  <div class="adp-modal" role="dialog" aria-modal="true" aria-label="Create project">
-    <div class="adp-modal-header">
-      <div class="adp-modal-title"><i class="bi bi-kanban me-1"></i> Create project</div>
-      <button type="button" class="adp-modal-close" onclick="document.getElementById('adpCreateProjectModal').setAttribute('hidden','')" aria-label="Close"><i class="bi bi-x-lg"></i></button>
-    </div>
-    <div class="adp-modal-body">
-      <p class="adp-modal-desc">Turn this activity into a tracked project.</p>
-      <form action="/activities/<%= activity.id %>/projects/new" method="POST">
-        <div class="adp-modal-field">
-          <label class="pnew-field-label">Project name <span class="pnew-required">*</span></label>
-          <input type="text" name="projectName" required value="<%= activity.name %>" class="pnew-input">
+      <% if (activity.ownerName) { %>
+        <div class="pnew-card" style="padding-top:0.9rem;padding-bottom:0.9rem;">
+          <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--crm-muted-fg);margin-bottom:0.55rem;">Created by</div>
+          <div style="display:flex;align-items:center;gap:0.55rem;">
+            <span style="width:30px;height:30px;border-radius:50%;background:var(--crm-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;flex-shrink:0;"><%= activity.ownerName.trim().charAt(0).toUpperCase() %></span>
+            <span style="font-size:0.88rem;font-weight:600;color:var(--crm-fg);"><%= activity.ownerName %></span>
+          </div>
         </div>
-        <div class="adp-modal-field">
-          <label class="pnew-field-label">Assign to</label>
-          <select name="assigneeId" class="pnew-select">
-            <option value="">— No one —</option>
-            <% (teamUsers||[]).forEach(u => { %>
-              <option value="<%= u.id %>"><%= u.name %><%= u.title ? ' · ' + u.title : '' %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="adp-modal-actions">
-          <button type="button" class="pnew-btn-cancel" onclick="document.getElementById('adpCreateProjectModal').setAttribute('hidden','')">Cancel</button>
-          <button type="submit" class="pnew-btn-save"><i class="bi bi-kanban me-1"></i>Create project</button>
-        </div>
-      </form>
+      <% } %>
+
     </div>
   </div>
 </div>
-<% } %>
 
 <style>
-/* ── Activity detail page — adp-* ───────────────────────────────────────── */
-.adp-page { }
-
-/* header */
-.adp-header { margin-bottom: 1.5rem; }
-.adp-breadcrumb { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.5rem; }
-.adp-bc-link { font-size: 0.8rem; color: var(--crm-accent); text-decoration: none; }
-.adp-bc-link:hover { text-decoration: underline; }
-.adp-bc-sep { font-size: 0.65rem; color: var(--crm-muted-fg); }
-
-.adp-title-row {
-  display: flex; align-items: center; gap: 0.75rem;
-  flex-wrap: wrap; margin-bottom: 0.5rem;
-}
-.adp-title-icon-wrap { flex-shrink: 0; }
-.adp-title-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
-.adp-title { font-size: 1.35rem; font-weight: 700; color: var(--crm-fg); margin: 0; flex: 1; min-width: 0; }
-.adp-header-actions { display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; }
-.adp-edit-btn {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  padding: 0.35rem 0.85rem; border-radius: 7px;
-  border: 1px solid var(--crm-border); background: var(--crm-surface);
-  color: var(--crm-fg); font-size: 0.82rem; font-weight: 600;
-  text-decoration: none; transition: all 0.12s;
-}
-.adp-edit-btn:hover { background: var(--crm-muted); color: var(--crm-accent); }
-
-/* meta row */
-.adp-meta-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
-.adp-meta-chip {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  padding: 0.22rem 0.6rem; border-radius: 999px;
-  font-size: 0.77rem; font-weight: 500;
-  background: var(--crm-muted); color: var(--crm-muted-fg);
-  border: 1px solid var(--crm-border); text-decoration: none;
-  transition: opacity 0.12s;
-}
-.adp-meta-co:hover { opacity: 0.8; }
-.adp-meta-type { color: var(--crm-fg); }
-.adp-meta-blue  { background: oklch(0.93 0.06 258 / 0.5); color: oklch(0.45 0.18 258); border-color: oklch(0.8 0.1 258 / 0.4); }
-.adp-meta-green { background: oklch(0.93 0.06 155 / 0.5); color: oklch(0.42 0.15 155); border-color: oklch(0.8 0.1 155 / 0.4); }
-.adp-meta-teal  { background: oklch(0.93 0.06 200 / 0.5); color: oklch(0.42 0.13 200); border-color: oklch(0.8 0.1 200 / 0.4); }
-.adp-meta-red   { background: oklch(0.95 0.05 25  / 0.5); color: oklch(0.48 0.18 25 ); border-color: oklch(0.85 0.1 25  / 0.4); }
-.adp-meta-muted { color: var(--crm-muted-fg); }
-.adp-chip-overdue { background: oklch(0.95 0.06 25  / 0.7); color: oklch(0.48 0.2  25 ); border-color: oklch(0.85 0.12 25  / 0.5); font-weight: 600; }
-.adp-chip-today   { background: oklch(0.95 0.06 55  / 0.7); color: oklch(0.45 0.18 55 ); border-color: oklch(0.85 0.12 55  / 0.5); }
-.adp-chip-soon    { background: oklch(0.93 0.05 258 / 0.5); color: oklch(0.45 0.18 258); border-color: oklch(0.8  0.1  258 / 0.4); }
-.adp-chip-done    { background: oklch(0.93 0.06 155 / 0.5); color: oklch(0.42 0.15 155); border-color: oklch(0.8  0.1  155 / 0.4); }
-
-/* details body */
-.adp-details-body {
-  font-size: 0.9rem; line-height: 1.75;
-  white-space: pre-wrap; color: var(--crm-fg);
-}
-.adp-people-section { margin-top: 1rem; }
-.adp-chip-list { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
-.adp-person-chip {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  background: var(--crm-muted); border: 1px solid var(--crm-border);
-  border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.8rem;
-}
-.adp-person-avatar {
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--crm-accent); color: #fff;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 0.62rem; font-weight: 700; flex-shrink: 0;
-}
-.adp-person-avatar--team { background: oklch(0.55 0.18 250); }
-.adp-proj-chip {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  background: var(--crm-muted); border: 1px solid var(--crm-border);
-  border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.8rem;
-  text-decoration: none; color: var(--crm-accent);
-}
-.adp-proj-chip:hover { background: oklch(0.93 0.06 258 / 0.4); }
-
-/* count badge */
-.adp-count-badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--crm-muted); border: 1px solid var(--crm-border);
-  border-radius: 999px; padding: 0.05rem 0.45rem;
-  font-size: 0.72rem; font-weight: 600; color: var(--crm-muted-fg);
-  vertical-align: middle; margin-left: 0.35rem;
-}
-
-/* compose */
-.adp-compose { display: flex; gap: 0.6rem; align-items: flex-start; margin-bottom: 0; }
-.adp-compose-body { flex: 1; min-width: 0; }
-.adp-compose-input {
-  width: 100%; padding: 0.5rem 0.75rem;
-  border: 1px solid var(--crm-border); border-radius: 8px;
-  background: var(--crm-surface); color: var(--crm-fg);
-  font-size: 0.875rem; resize: vertical; outline: none;
-  transition: border-color 0.15s;
-}
-.adp-compose-input:focus { border-color: var(--crm-accent); }
-.adp-compose-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 0.4rem; }
-.adp-attach-label { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--crm-muted-fg); cursor: pointer; transition: color 0.12s; }
-.adp-attach-label:hover { color: var(--crm-accent); }
-.adp-send-btn {
-  display: inline-flex; align-items: center;
-  padding: 0.32rem 0.85rem; border-radius: 7px;
-  border: none; background: var(--crm-accent); color: #fff;
-  font-size: 0.82rem; font-weight: 600; cursor: pointer;
-  transition: opacity 0.12s;
-}
-.adp-send-btn:hover { opacity: 0.88; }
-
-/* danger zone */
-.adp-danger-zone {
-  margin-top: 2rem; padding-top: 1.25rem;
-  border-top: 1px solid var(--crm-border);
-}
-.adp-danger-label {
-  font-size: 0.72rem; color: var(--crm-muted-fg); margin-bottom: 0.65rem;
-  font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-}
-
-/* act-delete-btn */
 .act-delete-btn {
   display: inline-flex; align-items: center;
-  padding: 0.4rem 1rem; border-radius: 7px;
+  padding: 0.45rem 1rem; border-radius: 7px;
   border: 1px solid #fca5a5; background: #fff5f5;
   color: #b91c1c; font-size: 0.85rem; font-weight: 600;
   cursor: pointer; transition: all 0.12s;
 }
 .act-delete-btn:hover { background: #fee2e2; border-color: #ef4444; }
-
-/* tech card */
-.adp-tech-card {
-  background: var(--crm-surface); border: 1px solid var(--crm-border);
-  border-radius: 10px; overflow: hidden; margin-bottom: 0.75rem;
+.act-picker-details { margin: 0; }
+.act-picker-summary {
+  font-size: 0.82rem; font-weight: 600; color: var(--crm-accent);
+  cursor: pointer; list-style: none; padding: 0.3rem 0;
 }
-.adp-tech-summary {
-  padding: 0.6rem 0.85rem; font-size: 0.8rem; font-weight: 600;
-  color: var(--crm-muted-fg); cursor: pointer; list-style: none;
-  transition: background 0.1s;
-}
-.adp-tech-summary::-webkit-details-marker { display: none; }
-.adp-tech-summary:hover { background: var(--crm-muted); }
-.adp-tech-body { padding: 0.65rem 0.85rem; border-top: 1px solid var(--crm-border); }
-.adp-tech-row { margin-bottom: 0.5rem; }
-.adp-tech-label { display: block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--crm-muted-fg); margin-bottom: 0.15rem; }
-.adp-tech-val { font-size: 0.8rem; color: var(--crm-fg); }
-.adp-tech-mono { font-family: monospace; font-size: 0.75rem; }
-
-/* shared with card */
-.adp-share-card { }
-.adp-share-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
-.adp-manage-btn {
-  width: 28px; height: 28px; border-radius: 7px;
-  border: 1px solid var(--crm-border); background: var(--crm-muted);
-  color: var(--crm-accent); cursor: pointer; display: flex; align-items: center; justify-content: center;
-  font-size: 0.8rem; transition: all 0.12s;
-}
-.adp-manage-btn:hover { background: oklch(0.93 0.06 258 / 0.4); }
-
-.adp-avatar-stack { display: flex; align-items: center; margin-bottom: 0.5rem; }
-.adp-avatar-tip { margin-right: -6px; }
-.adp-avatar-sm {
-  width: 26px; height: 26px; border-radius: 50%;
-  background: var(--crm-accent); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.65rem; font-weight: 700;
-  border: 2px solid var(--crm-surface);
-}
-.adp-avatar-more { background: var(--crm-muted); color: var(--crm-muted-fg); font-size: 0.62rem; }
-
-.adp-share-list { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.5rem; }
-.adp-share-row { display: flex; align-items: center; gap: 0.5rem; }
-.adp-share-name { font-size: 0.83rem; font-weight: 600; color: var(--crm-fg); }
-.adp-share-title { font-size: 0.7rem; color: var(--crm-muted-fg); }
-.adp-share-remove {
-  background: none; border: none; padding: 0; cursor: pointer;
-  color: var(--crm-muted-fg); font-size: 0.75rem; line-height: 1;
-  flex-shrink: 0; transition: color 0.12s;
-}
-.adp-share-remove:hover { color: var(--crm-danger); }
-.adp-share-empty { font-size: 0.8rem; color: var(--crm-muted-fg); margin: 0; }
-
-/* quick actions */
-.adp-quick-actions { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
-.adp-quick-btn {
-  display: flex; align-items: center; justify-content: center; gap: 0.4rem;
-  padding: 0.45rem 0; border-radius: 8px;
-  background: var(--crm-accent); color: #fff;
-  font-size: 0.83rem; font-weight: 600; cursor: pointer;
-  border: none; text-decoration: none; transition: opacity 0.12s;
-}
-.adp-quick-btn:hover { opacity: 0.88; color: #fff; }
-.adp-quick-btn--outline {
-  background: var(--crm-surface); color: var(--crm-accent);
-  border: 1px solid var(--crm-border);
-}
-.adp-quick-btn--outline:hover { background: var(--crm-muted); opacity: 1; color: var(--crm-accent); }
-
-/* modal */
-.adp-modal-backdrop {
-  position: fixed; inset: 0; z-index: 1050;
-  background: rgba(0,0,0,0.45); backdrop-filter: blur(2px);
-  display: flex; align-items: center; justify-content: center;
-  padding: 1rem;
-}
-.adp-modal-backdrop[hidden] { display: none; }
-.adp-modal {
-  background: var(--crm-surface); border: 1px solid var(--crm-border);
-  border-radius: 14px; width: 100%; max-width: 420px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
-  animation: adpModalIn 0.18s ease;
-}
-@keyframes adpModalIn { from { opacity:0; transform:scale(0.96) translateY(8px); } to { opacity:1; transform:none; } }
-.adp-modal-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 1rem 1.1rem 0.75rem; border-bottom: 1px solid var(--crm-border);
-}
-.adp-modal-title { font-size: 0.95rem; font-weight: 700; color: var(--crm-fg); }
-.adp-modal-close {
-  width: 28px; height: 28px; border-radius: 7px;
-  border: none; background: var(--crm-muted); color: var(--crm-muted-fg);
-  cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;
-}
-.adp-modal-body { padding: 1rem 1.1rem 1.1rem; }
-.adp-modal-desc { font-size: 0.82rem; color: var(--crm-muted-fg); margin-bottom: 0.85rem; }
-.adp-modal-field { margin-bottom: 0.75rem; }
-.adp-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
-
-/* share picker */
+.act-picker-summary::-webkit-details-marker { display: none; }
 .act-picker-list {
   max-height: 180px; overflow-y: auto;
   border: 1px solid var(--crm-border); border-radius: 7px;
@@ -814,7 +529,8 @@
 }
 .act-picker-row {
   display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.3rem 0.6rem; cursor: pointer; transition: background 0.1s;
+  padding: 0.3rem 0.6rem; cursor: pointer;
+  transition: background 0.1s;
 }
 .act-picker-row:hover { background: var(--crm-muted); }
 .act-picker-row input[type="checkbox"] { flex-shrink: 0; }
@@ -824,151 +540,153 @@
   background: var(--crm-accent); color: #fff;
   font-size: 0.83rem; font-weight: 600; cursor: pointer;
 }
-
-/* close modal on backdrop click */
-@media (max-width: 640px) {
-  .adp-title { font-size: 1.1rem; }
-}
 </style>
 
 <script>
-(function () {
-  /* close modal on backdrop click */
-  var modal = document.getElementById('adpCreateProjectModal');
-  if (modal) {
-    modal.addEventListener('click', function (e) {
-      if (e.target === modal) modal.setAttribute('hidden', '');
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !modal.hasAttribute('hidden')) {
-        modal.setAttribute('hidden', '');
-      }
-    });
-  }
-
-  /* comment file label */
-  var cinput = document.getElementById('activityCommentFileInput');
-  var clabel = document.getElementById('activityCommentFileLabel');
-  if (cinput && clabel) {
-    cinput.addEventListener('change', function () {
-      var n = cinput.files ? cinput.files.length : 0;
-      clabel.textContent = n ? (n + ' file' + (n === 1 ? '' : 's')) : 'Attach';
-    });
-  }
-
-  /* drag-and-drop file upload */
   (function () {
-    var dropZone  = document.getElementById('activityDropZone');
-    var fileInput = document.getElementById('activityFileInput');
-    var fileList  = document.getElementById('activityDropFileList');
-    var submitBtn = document.getElementById('activityDropSubmit');
-    var submitLbl = document.getElementById('activityDropSubmitLabel');
-    if (!dropZone || !fileInput) return;
+    // Comment file label
+    const input = document.getElementById('activityCommentFileInput');
+    const label = document.getElementById('activityCommentFileLabel');
+    if (input && label) {
+      input.addEventListener('change', function () {
+        const n = input.files ? input.files.length : 0;
+        label.textContent = n ? (n + ' file' + (n === 1 ? '' : 's')) : 'Attach';
+      });
+    }
 
-    function iconForName(name) {
-      var ext = (name || '').split('.').pop().toLowerCase();
-      var map = { pdf:'bi-file-earmark-pdf', doc:'bi-file-earmark-word', docx:'bi-file-earmark-word', xls:'bi-file-earmark-excel', xlsx:'bi-file-earmark-excel', png:'bi-file-earmark-image', jpg:'bi-file-earmark-image', jpeg:'bi-file-earmark-image', gif:'bi-file-earmark-image', zip:'bi-file-earmark-zip' };
-      return map[ext] || 'bi-file-earmark';
-    }
-    function fmtSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1048576) return Math.round(bytes / 1024) + ' KB';
-      return (bytes / 1048576).toFixed(1) + ' MB';
-    }
-    function renderFiles(files) {
-      if (!files || !files.length) {
-        fileList.classList.add('d-none');
-        submitBtn.classList.add('d-none');
-        dropZone.querySelector('.act-dropzone-text').innerHTML = 'Drop files here or <span class="act-dropzone-browse">browse</span>';
-        dropZone.querySelector('.act-dropzone-hint').style.display = '';
-        return;
+    // Drag and drop upload
+    (function () {
+      var dropZone   = document.getElementById('activityDropZone');
+      var fileInput  = document.getElementById('activityFileInput');
+      var fileList   = document.getElementById('activityDropFileList');
+      var submitBtn  = document.getElementById('activityDropSubmit');
+      var submitLbl  = document.getElementById('activityDropSubmitLabel');
+      if (!dropZone || !fileInput) return;
+
+      function iconForName(name) {
+        var ext = (name || '').split('.').pop().toLowerCase();
+        var map = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel', png: 'bi-file-earmark-image', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image', gif: 'bi-file-earmark-image', zip: 'bi-file-earmark-zip' };
+        return map[ext] || 'bi-file-earmark';
       }
-      fileList.classList.remove('d-none');
-      submitBtn.classList.remove('d-none');
-      submitLbl.textContent = 'Upload ' + files.length + ' file' + (files.length === 1 ? '' : 's');
-      dropZone.querySelector('.act-dropzone-text').innerHTML = 'Drop more files or <span class="act-dropzone-browse">browse</span>';
-      dropZone.querySelector('.act-dropzone-hint').style.display = 'none';
-      fileList.innerHTML = Array.from(files).map(function(f) {
-        return '<div class="act-drop-filerow"><i class="bi ' + iconForName(f.name) + ' act-file-icon"></i><span class="act-file-name">' + f.name + '</span><span class="act-drop-filesize">' + fmtSize(f.size) + '</span></div>';
-      }).join('');
-    }
-    dropZone.addEventListener('click', function () { fileInput.click(); });
-    fileInput.addEventListener('change', function () { renderFiles(fileInput.files); });
-    dropZone.addEventListener('dragover', function (e) {
-      e.preventDefault();
-      dropZone.classList.add('act-dropzone--over');
-      dropZone.querySelector('.act-dropzone-text').innerHTML = 'Drop to upload';
-      dropZone.querySelector('.act-dropzone-hint').textContent = 'Release to attach files';
-    });
-    dropZone.addEventListener('dragleave', function (e) {
-      if (!dropZone.contains(e.relatedTarget)) {
+
+      function fmtSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      }
+
+      function renderFiles(files) {
+        if (!files || !files.length) {
+          fileList.classList.add('d-none');
+          submitBtn.classList.add('d-none');
+          dropZone.querySelector('.act-dropzone-text').innerHTML = 'Drop files here or <span class="act-dropzone-browse">browse</span>';
+          dropZone.querySelector('.act-dropzone-hint').style.display = '';
+          return;
+        }
+        fileList.classList.remove('d-none');
+        submitBtn.classList.remove('d-none');
+        submitLbl.textContent = 'Upload ' + files.length + ' file' + (files.length === 1 ? '' : 's');
+        dropZone.querySelector('.act-dropzone-text').innerHTML = 'Drop more files or <span class="act-dropzone-browse">browse</span>';
+        dropZone.querySelector('.act-dropzone-hint').style.display = 'none';
+        fileList.innerHTML = Array.from(files).map(function(f) {
+          return '<div class="act-drop-filerow">' +
+            '<i class="bi ' + iconForName(f.name) + ' act-file-icon"></i>' +
+            '<span class="act-file-name">' + f.name + '</span>' +
+            '<span class="act-drop-filesize">' + fmtSize(f.size) + '</span>' +
+          '</div>';
+        }).join('');
+      }
+
+      // Click to browse
+      dropZone.addEventListener('click', function() { fileInput.click(); });
+      fileInput.addEventListener('change', function() { renderFiles(fileInput.files); });
+
+      // Drag events
+      dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.classList.add('act-dropzone--over');
+        dropZone.querySelector('.act-dropzone-text').innerHTML = 'Drop to upload';
+        dropZone.querySelector('.act-dropzone-hint').textContent = 'Release to attach files';
+      });
+      dropZone.addEventListener('dragleave', function(e) {
+        if (!dropZone.contains(e.relatedTarget)) {
+          dropZone.classList.remove('act-dropzone--over');
+          renderFiles(fileInput.files);
+        }
+      });
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
         dropZone.classList.remove('act-dropzone--over');
-        renderFiles(fileInput.files);
-      }
+        var dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length) {
+          // Merge dropped files with already-selected files
+          var existing = fileInput.files ? Array.from(fileInput.files) : [];
+          var dropped  = Array.from(dt.files);
+          var merged   = existing.concat(dropped);
+          var transfer = new DataTransfer();
+          merged.forEach(function(f) { transfer.items.add(f); });
+          fileInput.files = transfer.files;
+          renderFiles(fileInput.files);
+        }
+      });
+    })();
+
+    // Chip fields
+    function refreshChipOptions(field, select) {
+      var usedIds = Array.from(field.querySelectorAll('.chip')).map(function (chip) {
+        return chip.dataset.id;
+      });
+      Array.from(select.options).forEach(function (opt) {
+        if (!opt.value) return;
+        opt.hidden = usedIds.indexOf(opt.value) !== -1;
+      });
+    }
+
+    document.querySelectorAll('.chip-add-btn').forEach(function (btn) {
+      var wrap = btn.parentElement;
+      var field = document.getElementById(btn.dataset.target);
+      var select = wrap.querySelector('.chip-add-select');
+      if (!field || !select) return;
+      btn.addEventListener('click', function () {
+        refreshChipOptions(field, select);
+        btn.classList.add('d-none');
+        select.classList.remove('d-none');
+        select.focus();
+      });
+      select.addEventListener('change', function () {
+        var opt = select.options[select.selectedIndex];
+        if (!opt.value) return;
+        var field = document.getElementById(btn.dataset.target);
+        if (!field.querySelector('[data-id="' + opt.value + '"]')) {
+          var chip = document.createElement('span');
+          chip.className = 'chip' + (btn.dataset.avatar ? '' : ' chip-link');
+          chip.dataset.id = opt.value;
+          var avatarHtml = btn.dataset.avatar
+            ? '<span class="chip-avatar">' + opt.dataset.name.trim().charAt(0).toUpperCase() + '</span>'
+            : '';
+          chip.innerHTML = avatarHtml +
+            opt.dataset.name +
+            '<input type="hidden" name="' + btn.dataset.field + '" value="' + opt.value + '">' +
+            '<button type="button" class="chip-remove" aria-label="Remove">&times;</button>';
+          field.insertBefore(chip, wrap);
+          refreshChipOptions(field, select);
+        }
+        select.value = '';
+        select.classList.add('d-none');
+        btn.classList.remove('d-none');
+      });
+      select.addEventListener('blur', function () {
+        select.classList.add('d-none');
+        btn.classList.remove('d-none');
+      });
     });
-    dropZone.addEventListener('drop', function (e) {
-      e.preventDefault();
-      dropZone.classList.remove('act-dropzone--over');
-      var dt = e.dataTransfer;
-      if (dt && dt.files && dt.files.length) {
-        var existing = fileInput.files ? Array.from(fileInput.files) : [];
-        var merged   = existing.concat(Array.from(dt.files));
-        var transfer = new DataTransfer();
-        merged.forEach(function (f) { transfer.items.add(f); });
-        fileInput.files = transfer.files;
-        renderFiles(fileInput.files);
-      }
+
+    document.querySelectorAll('.chip-field').forEach(function (field) {
+      field.addEventListener('click', function (e) {
+        if (e.target.classList.contains('chip-remove')) {
+          e.target.closest('.chip').remove();
+        }
+      });
     });
   })();
-
-  /* chip fields */
-  function refreshChipOptions(field, select) {
-    var usedIds = Array.from(field.querySelectorAll('.chip')).map(function (c) { return c.dataset.id; });
-    Array.from(select.options).forEach(function (opt) {
-      if (!opt.value) return;
-      opt.hidden = usedIds.indexOf(opt.value) !== -1;
-    });
-  }
-  document.querySelectorAll('.chip-add-btn').forEach(function (btn) {
-    var wrap   = btn.parentElement;
-    var field  = document.getElementById(btn.dataset.target);
-    var select = wrap.querySelector('.chip-add-select');
-    if (!field || !select) return;
-    btn.addEventListener('click', function () {
-      refreshChipOptions(field, select);
-      btn.classList.add('d-none');
-      select.classList.remove('d-none');
-      select.focus();
-    });
-    select.addEventListener('change', function () {
-      var opt = select.options[select.selectedIndex];
-      if (!opt.value) return;
-      if (!field.querySelector('[data-id="' + opt.value + '"]')) {
-        var chip = document.createElement('span');
-        chip.className = 'chip' + (btn.dataset.avatar ? '' : ' chip-link');
-        chip.dataset.id = opt.value;
-        var avatarHtml = btn.dataset.avatar ? '<span class="chip-avatar">' + opt.dataset.name.trim().charAt(0).toUpperCase() + '</span>' : '';
-        chip.innerHTML = avatarHtml + opt.dataset.name +
-          '<input type="hidden" name="' + btn.dataset.field + '" value="' + opt.value + '">' +
-          '<button type="button" class="chip-remove" aria-label="Remove">&times;</button>';
-        field.insertBefore(chip, wrap);
-        refreshChipOptions(field, select);
-      }
-      select.value = '';
-      select.classList.add('d-none');
-      btn.classList.remove('d-none');
-    });
-    select.addEventListener('blur', function () {
-      select.classList.add('d-none');
-      btn.classList.remove('d-none');
-    });
-  });
-  document.querySelectorAll('.chip-field').forEach(function (field) {
-    field.addEventListener('click', function (e) {
-      if (e.target.classList.contains('chip-remove')) {
-        e.target.closest('.chip').remove();
-      }
-    });
-  });
-})();
 </script>

@@ -41,24 +41,10 @@ router.get('/activities', async (req, res, next) => {
         projectNames: a.projectIds.map((id) => projectById.get(id)?.name).filter(Boolean)
       }));
 
-    res.render('activities', {
-      title: 'Activity',
-      activities: sorted,
-      typeChoices: crm.schema.tables.activities.typeChoices,
-      resultChoices: crm.schema.tables.activities.resultChoices,
-    });
+    res.render('activities', { title: 'Activity', activities: sorted });
   } catch (err) {
     next(err);
   }
-});
-
-// Global "New Activity" — company picker that redirects to the company's new-activity form
-router.get('/activities/new', async (req, res, next) => {
-  try {
-    const user = req.session.user;
-    const companies = await crm.listCompanies(user);
-    res.render('activity-new-global', { title: 'New Activity', companies, error: null });
-  } catch (err) { next(err); }
 });
 
 router.get('/activities/:id', async (req, res, next) => {
