@@ -481,16 +481,6 @@
         </div>
 
         <% if (activity.participants && activity.participants.length) { %>
-          <div class="adp-avatar-stack">
-            <% activity.participants.slice(0, 5).forEach(p => { %>
-              <span class="adp-avatar-tip" title="<%= p.name %>">
-                <span class="adp-avatar-sm"><%= (p.name||'?').trim().charAt(0).toUpperCase() %></span>
-              </span>
-            <% }) %>
-            <% if (activity.participants.length > 5) { %>
-              <span class="adp-avatar-sm adp-avatar-more">+<%= activity.participants.length - 5 %></span>
-            <% } %>
-          </div>
           <div class="adp-share-list">
             <% activity.participants.forEach(p => { %>
               <div class="adp-share-row">
@@ -535,15 +525,18 @@
       </div>
 
       <!-- Quick actions -->
-      <div class="adp-quick-actions">
-        <% if (_canManage) { %>
-          <button type="button" class="adp-quick-btn" onclick="document.getElementById('adpCreateProjectModal').removeAttribute('hidden')">
-            <i class="bi bi-kanban"></i> Create project
-          </button>
-        <% } %>
-        <a href="/activities/new" class="adp-quick-btn adp-quick-btn--outline">
-          <i class="bi bi-plus-lg"></i> Log follow-up activity
-        </a>
+      <div class="pnew-card" style="padding:0.75rem 0.9rem;">
+        <div class="pnew-summary-title" style="margin-bottom:0.6rem;">Actions</div>
+        <div class="adp-quick-actions">
+          <% if (_canManage) { %>
+            <button type="button" class="adp-quick-btn" onclick="document.getElementById('adpCreateProjectModal').removeAttribute('hidden')">
+              <i class="bi bi-kanban"></i> Create project
+            </button>
+          <% } %>
+          <a href="/activities/new" class="adp-quick-btn adp-quick-btn--outline">
+            <i class="bi bi-plus-lg"></i> Log follow-up
+          </a>
+        </div>
       </div>
 
     </div> <!-- /pnew-aside -->
