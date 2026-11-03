@@ -10,49 +10,143 @@
   <link href="/css/style.css" rel="stylesheet">
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg app-navbar">
-    <div class="container-fluid">
-      <a class="navbar-brand fw-semibold d-flex align-items-center" href="/">
-        <span class="brand-icon me-2"><i class="bi bi-stars"></i></span>Samyou <span class="brand-tag ms-1">CRM</span>
+  <%
+    const _role      = currentUser ? currentUser.role : null;
+    const _isRd      = ['Head R&D Controllers','Head R&D VFD','Engineering'].includes(_role);
+    const _isAdmin   = _role === 'Admin';
+    const _canReport = ['Admin','Manager'].includes(_role);
+    const _tc        = (typeof taskBadge !== 'undefined' && taskBadge) ? taskBadge : { open: 0, overdue: 0 };
+    const _tcTitle   = _tc.overdue ? `${_tc.overdue} overdue of your ${_tc.open} open tasks` : `${_tc.open} open tasks assigned to you`;
+    const _navItems  = [
+      { href: '/',           label: 'Dashboard', icon: 'bi-speedometer2' },
+      ...(_isRd ? [] : [{ href: '/pipeline', label: 'Pipeline', icon: 'bi-funnel' }]),
+      { href: '/companies',  label: 'Companies', icon: 'bi-building' },
+      { href: '/activities', label: 'Activity',  icon: 'bi-activity' },
+      { href: '/tasks',      label: 'Tasks',     icon: 'bi-check2-square', badge: true },
+      { href: '/projects',   label: 'Projects',  icon: 'bi-folder2-open' },
+    ];
+    const _moreItems = [
+      { href: '/products', label: 'Products', icon: 'bi-box-seam' },
+      ...(_canReport ? [{ href: '/reports/monthly', label: 'Monthly report', icon: 'bi-bar-chart' }] : []),
+    ];
+    const _newItems = [
+      { href: '/tasks/new', label: 'Task', icon: 'bi-check2-square' },
+      ...(_isRd ? [] : [{ href: '/companies/new', label: 'Company', icon: 'bi-building' }]),
+      { href: '/projects/new', label: 'Project', icon: 'bi-folder2' },
+    ];
+    const _navColorMap = { indigo:'oklch(0.50 0.20 270)', blue:'oklch(0.52 0.18 250)', teal:'oklch(0.52 0.14 195)', emerald:'oklch(0.52 0.16 160)', amber:'oklch(0.62 0.18 72)', rose:'oklch(0.52 0.20 10)', slate:'oklch(0.35 0.02 265)' };
+    const _navBg     = currentUser ? (_navColorMap[currentUser.avatarColor] || null) : null;
+    const _initial   = currentUser ? (currentUser.name || currentUser.email || '?').trim().charAt(0).toUpperCase() : '?';
+  %>
+  <header class="tn" role="banner">
+    <div class="tn-inner">
+      <% if (currentUser) { %>
+        <button class="tn-icon-btn tn-burger" type="button" data-bs-toggle="offcanvas" data-bs-target="#tnDrawer" aria-controls="tnDrawer" aria-label="Open menu">
+          <i class="bi bi-list"></i>
+        </button>
+      <% } %>
+
+      <a class="tn-brand" href="/" aria-label="Samyou home">
+        <span class="tn-logo"><i class="bi bi-stars"></i></span>
+        <span class="tn-brand-name">Samyou</span>
       </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navMenu">
-        <ul class="navbar-nav me-auto app-nav-pills" id="appNavPills">
-          <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-speedometer2"></i><span class="nav-label">Dashboard</span></a></li>
-          <% if (!currentUser || !['Head R&D Controllers','Head R&D VFD','Engineering'].includes(currentUser.role)) { %>
-          <li class="nav-item"><a class="nav-link" href="/pipeline"><i class="bi bi-funnel"></i><span class="nav-label">Pipeline</span></a></li>
-          <% } %>
-          <li class="nav-item"><a class="nav-link" href="/activities"><i class="bi bi-activity"></i><span class="nav-label">Activity</span></a></li>
-          <li class="nav-item"><a class="nav-link" href="/companies"><i class="bi bi-building"></i><span class="nav-label">Companies</span></a></li>
-          <li class="nav-item"><a class="nav-link" href="/projects"><i class="bi bi-folder2-open"></i><span class="nav-label">Projects</span></a></li>
-          <li class="nav-item"><a class="nav-link" href="/tasks"><i class="bi bi-list-check"></i><span class="nav-label">Tasks</span><% if (openTaskCount > 0) { %><span class="nav-task-badge"><%= openTaskCount %></span><% } %></a></li>
-          <li class="nav-item"><a class="nav-link" href="/products"><i class="bi bi-box-seam"></i><span class="nav-label">Products</span></a></li>
-          <% if (currentUser && currentUser.role === 'Admin') { %>
-            <li class="nav-item"><a class="nav-link" href="/admin"><i class="bi bi-gear"></i><span class="nav-label">Admin</span></a></li>
-          <% } %>
-        </ul>
-        <% if (currentUser) { %>
-        <div class="d-flex align-items-center gap-2">
-          <a href="/profile" class="user-chip user-chip-link" title="My profile">
-            <%
-              const _navColor = currentUser.avatarColor;
-              const _navColorMap = { indigo:'oklch(0.50 0.20 270)', blue:'oklch(0.52 0.18 250)', teal:'oklch(0.52 0.14 195)', emerald:'oklch(0.52 0.16 160)', amber:'oklch(0.62 0.18 72)', rose:'oklch(0.52 0.20 10)', slate:'oklch(0.35 0.02 265)' };
-              const _navBg = _navColorMap[_navColor] || null;
-            %>
-            <span class="user-avatar" <% if (_navBg) { %>style="background:<%- _navBg %>"<% } %>><%= (currentUser.name || currentUser.email || '?').charAt(0).toUpperCase() %></span>
-            <span class="d-none d-sm-inline"><%= currentUser.name || currentUser.email %></span>
-            <span class="badge text-bg-light text-dark ms-1"><%= currentUser.role %></span>
-          </a>
-          <form action="/logout" method="POST" style="margin:0;">
-            <button class="btn btn-sm btn-outline-secondary" type="submit">Log out</button>
-          </form>
+
+      <% if (currentUser) { %>
+        <nav class="tn-tabs" aria-label="Main">
+          <% _navItems.forEach(it => { %>
+            <a class="tn-tab" href="<%= it.href %>" data-nav="<%= it.href %>">
+              <%= it.label %>
+              <% if (it.badge && _tc.open > 0) { %>
+                <span class="tn-badge <%= _tc.overdue ? 'is-danger' : '' %>" title="<%= _tcTitle %>" aria-label="<%= _tcTitle %>"><%= _tc.overdue || _tc.open %></span>
+              <% } %>
+            </a>
+          <% }) %>
+          <div class="dropdown tn-more">
+            <button class="tn-tab tn-tab-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-nav-group="<%= _moreItems.map(m => m.href).join(' ') %>">
+              More <i class="bi bi-chevron-down tn-caret"></i>
+            </button>
+            <ul class="dropdown-menu tn-menu">
+              <% _moreItems.forEach(m => { %>
+                <li><a class="dropdown-item" href="<%= m.href %>" data-nav="<%= m.href %>"><i class="bi <%= m.icon %>"></i><%= m.label %></a></li>
+              <% }) %>
+            </ul>
+          </div>
+        </nav>
+
+        <div class="tn-actions">
+          <div class="dropdown">
+            <button class="tn-new" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-plus-lg"></i><span class="tn-new-label">New</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end tn-menu">
+              <li class="tn-menu-label">Create</li>
+              <% _newItems.forEach(n => { %>
+                <li><a class="dropdown-item" href="<%= n.href %>"><i class="bi <%= n.icon %>"></i><%= n.label %></a></li>
+              <% }) %>
+              <li><hr class="dropdown-divider"></li>
+              <li class="tn-menu-hint">Log activities and deals from a company page</li>
+            </ul>
+          </div>
+
+          <div class="dropdown">
+            <button class="tn-user" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account menu for <%= currentUser.name || currentUser.email %>">
+              <span class="tn-avatar" <% if (_navBg) { %>style="background:<%- _navBg %>;color:#fff"<% } %>><%= _initial %></span>
+              <i class="bi bi-chevron-down tn-caret"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end tn-menu tn-user-menu">
+              <li class="tn-user-head">
+                <div class="tn-user-name"><%= currentUser.name || currentUser.email %></div>
+                <div class="tn-user-meta"><%= currentUser.role %><% if (currentUser.email && currentUser.name) { %> &middot; <%= currentUser.email %><% } %></div>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="/profile"><i class="bi bi-person"></i>Profile</a></li>
+              <% if (_isAdmin) { %>
+                <li><a class="dropdown-item" href="/admin" data-nav="/admin"><i class="bi bi-gear"></i>Admin settings</a></li>
+              <% } %>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <form action="/logout" method="POST" class="m-0">
+                  <button type="submit" class="dropdown-item"><i class="bi bi-box-arrow-right"></i>Log out</button>
+                </form>
+              </li>
+            </ul>
+          </div>
         </div>
-        <% } %>
-      </div>
+      <% } %>
     </div>
-  </nav>
+  </header>
+
+  <% if (currentUser) { %>
+  <!-- Mobile drawer -->
+  <div class="offcanvas offcanvas-start tn-drawer" tabindex="-1" id="tnDrawer" aria-labelledby="tnDrawerTitle">
+    <div class="offcanvas-header">
+      <a class="tn-brand" href="/" id="tnDrawerTitle"><span class="tn-logo"><i class="bi bi-stars"></i></span><span class="tn-brand-name">Samyou</span></a>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close menu"></button>
+    </div>
+    <div class="offcanvas-body">
+      <%
+        const _work    = _navItems.filter(i => ['/', '/activities', '/tasks'].includes(i.href));
+        const _records = [..._navItems.filter(i => ['/pipeline', '/companies', '/projects'].includes(i.href)), ..._moreItems];
+      %>
+      <div class="tn-drawer-label">Work</div>
+      <% _work.forEach(it => { %>
+        <a class="tn-drawer-link" href="<%= it.href %>" data-nav="<%= it.href %>"><i class="bi <%= it.icon %>"></i><%= it.label %>
+          <% if (it.badge && _tc.open > 0) { %><span class="tn-badge <%= _tc.overdue ? 'is-danger' : '' %>" title="<%= _tcTitle %>"><%= _tc.overdue || _tc.open %></span><% } %>
+        </a>
+      <% }) %>
+      <div class="tn-drawer-label">Records</div>
+      <% _records.forEach(it => { %>
+        <a class="tn-drawer-link" href="<%= it.href %>" data-nav="<%= it.href %>"><i class="bi <%= it.icon %>"></i><%= it.label %></a>
+      <% }) %>
+      <div class="tn-drawer-label">Account</div>
+      <a class="tn-drawer-link" href="/profile" data-nav="/profile"><i class="bi bi-person"></i>Profile</a>
+      <% if (_isAdmin) { %><a class="tn-drawer-link" href="/admin" data-nav="/admin"><i class="bi bi-gear"></i>Admin settings</a><% } %>
+      <form action="/logout" method="POST" class="m-0">
+        <button type="submit" class="tn-drawer-link tn-drawer-btn"><i class="bi bi-box-arrow-right"></i>Log out</button>
+      </form>
+    </div>
+  </div>
+  <% } %>
 
   <main class="container-fluid py-4">
     <%- body %>
@@ -93,10 +187,13 @@
   <script>
     (function(){
       var path = window.location.pathname;
-      document.querySelectorAll('#appNavPills .nav-link').forEach(function(a){
-        var href = a.getAttribute('href');
-        var isActive = href === '/' ? path === '/' : path === href || path.startsWith(href + '/');
-        if (isActive) a.classList.add('active');
+      function matches(href) { return href === '/' ? path === '/' : path === href || path.indexOf(href + '/') === 0; }
+      document.querySelectorAll('[data-nav]').forEach(function(a){
+        if (matches(a.getAttribute('data-nav'))) { a.classList.add('active'); a.setAttribute('aria-current', 'page'); }
+      });
+      document.querySelectorAll('[data-nav-group]').forEach(function(btn){
+        var hit = btn.getAttribute('data-nav-group').split(' ').some(matches);
+        if (hit) btn.classList.add('active');
       });
     })();
   </script>

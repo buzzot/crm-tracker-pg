@@ -88,19 +88,28 @@ app.use(webhookRoutes);
 app.use(requireAuth);
 app.use(requirePasswordChange);
 
-// Inject open-task count into every view (shows badge on Tasks nav item)
+// Inject the current user's own task counts into every view (Tasks nav badge).
+// Counts only tasks the user owns or is assigned to — not the whole team's list
+// that Admins/Managers can see.
 app.use(async (req, res, next) => {
+  res.locals.openTaskCount = 0;
+  res.locals.taskBadge = { open: 0, overdue: 0 };
   try {
     const user = req.session.user;
     if (user) {
       const tasks = await crm.listTasks({ user });
-      res.locals.openTaskCount = tasks.filter(t => t.status !== 'Completed').length;
-    } else {
-      res.locals.openTaskCount = 0;
+      const today = new Date().toISOString().slice(0, 10);
+      const mine = tasks.filter(t =>
+        t.status !== 'Completed' &&
+        (t.ownerId === user.id || (t.assigneeIds || []).includes(user.id))
+      );
+      res.locals.openTaskCount = mine.length;
+      res.locals.taskBadge = {
+        open: mine.length,
+        overdue: mine.filter(t => t.deadline && t.deadline < today).length,
+      };
     }
-  } catch (_) {
-    res.locals.openTaskCount = 0;
-  }
+  } catch (_) { /* badge is non-critical */ }
   next();
 });
 
