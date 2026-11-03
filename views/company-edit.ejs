@@ -80,16 +80,26 @@
       <div class="pnew-aside">
         <div class="pnew-card">
           <h2 class="pnew-card-title">Logo</h2>
-          <% if (company.logo) { %>
-            <img src="<%= company.logo %>" alt="<%= company.name %> logo"
-              style="height:3rem; width:auto; max-width:100%; object-fit:contain; display:block; margin-bottom:0.75rem; border-radius:6px;">
-          <% } %>
-          <form action="/companies/<%= company.id %>/logo" method="POST" enctype="multipart/form-data" id="coLogoForm">
-            <label class="pnew-btn-cancel" style="cursor:pointer; justify-content:center; width:100%;">
-              <i class="bi bi-image"></i>&nbsp;<%= company.logo ? 'Change logo' : 'Upload logo' %>
-              <input type="file" name="logo" accept="image/*" style="display:none;" onchange="this.form.submit();">
-            </label>
-          </form>
+          <!-- Not a <form>: this card sits inside the main edit form, and nested forms are
+               discarded by browsers. Uploads go through fetch; the file input has no name
+               so it is never sent with the company fields. -->
+          <div class="logo-drop <%= company.logo ? 'has-logo' : '' %>" id="logoDrop" tabindex="0" role="button"
+               aria-label="Company logo. Drop an image, paste it, or press Enter to choose a file."
+               data-upload-url="/companies/<%= company.id %>/logo">
+            <img class="logo-drop-img" id="logoImg" alt="<%= company.name %> logo" <% if (company.logo) { %>src="<%= company.logo %>"<% } else { %>hidden<% } %>>
+            <div class="logo-drop-empty" id="logoEmpty" <% if (company.logo) { %>hidden<% } %>>
+              <i class="bi bi-image" aria-hidden="true"></i>
+              <span><strong>Drop or paste</strong> an image</span>
+              <span class="logo-drop-or">or <span class="logo-drop-link">choose a file</span></span>
+            </div>
+            <div class="logo-drop-over" aria-hidden="true">Drop to upload</div>
+            <div class="logo-drop-busy" id="logoBusy" hidden><span class="logo-spin" aria-hidden="true"></span>Uploading…</div>
+            <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden>
+          </div>
+          <div class="logo-drop-foot">
+            <span id="logoMsg" class="logo-msg" role="status" aria-live="polite">PNG, JPG, WebP, GIF or SVG, up to 5 MB</span>
+            <button type="button" class="logo-change" id="logoChange" <% if (!company.logo) { %>hidden<% } %>>Change</button>
+          </div>
         </div>
         <div class="pnew-summary-card">
           <div class="pnew-summary-title">Current values</div>
@@ -141,6 +151,95 @@
         `<li>${f.name} <span style="color:var(--crm-muted-fg);">(${(f.size/1024).toFixed(0)} KB)</span></li>`
       ).join('');
     }
+  </script>
+
+  <script>
+  // ── Company logo: click, drag-and-drop or paste; uploads immediately via fetch ──
+  (function () {
+    var drop = document.getElementById('logoDrop');
+    if (!drop) return;
+    var file = document.getElementById('logoFile');
+    var img = document.getElementById('logoImg');
+    var empty = document.getElementById('logoEmpty');
+    var busy = document.getElementById('logoBusy');
+    var msg = document.getElementById('logoMsg');
+    var change = document.getElementById('logoChange');
+    var TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
+    var MAX = 5 * 1024 * 1024;
+    var DEFAULT_MSG = msg.textContent;
+    var uploading = false;
+
+    function say(text, kind) { msg.textContent = text; msg.className = 'logo-msg' + (kind ? ' is-' + kind : ''); }
+    function show(src) {
+      img.src = src; img.hidden = false; empty.hidden = true;
+      drop.classList.add('has-logo'); change.hidden = false;
+    }
+
+    function upload(f) {
+      if (!f || uploading) return;
+      if (TYPES.indexOf(f.type) === -1) return say('Use a PNG, JPG, WebP, GIF or SVG image.', 'error');
+      if (f.size > MAX) return say('That image is larger than 5 MB.', 'error');
+
+      var previous = img.hidden ? null : img.src;
+      var localUrl = URL.createObjectURL(f);
+      show(localUrl);                       // instant preview
+      uploading = true; busy.hidden = false; drop.setAttribute('aria-busy', 'true');
+      say('Uploading…');
+
+      var fd = new FormData();
+      var ext = (f.type.split('/')[1] || 'png').replace('svg+xml', 'svg').replace('jpeg', 'jpg');
+      fd.append('logo', f, f.name && f.name !== 'image.png' ? f.name : 'logo.' + ext);
+
+      fetch(drop.getAttribute('data-upload-url'), {
+        method: 'POST', body: fd, credentials: 'same-origin', headers: { 'Accept': 'application/json' }
+      })
+        .then(function (r) { return r.json().catch(function () { return { ok: false }; }).then(function (j) { return r.ok && j.ok ? j : Promise.reject(j); }); })
+        .then(function (j) {
+          if (j.logo) img.src = j.logo;
+          say('Logo updated', 'ok');
+          setTimeout(function () { if (msg.classList.contains('is-ok')) say(DEFAULT_MSG); }, 3000);
+        })
+        .catch(function (j) {
+          if (previous) show(previous); else { img.hidden = true; img.removeAttribute('src'); empty.hidden = false; drop.classList.remove('has-logo'); change.hidden = true; }
+          say((j && j.error) || "Upload failed. Try again.", 'error');
+        })
+        .then(function () {
+          uploading = false; busy.hidden = true; drop.removeAttribute('aria-busy');
+          URL.revokeObjectURL(localUrl); file.value = '';
+        });
+    }
+
+    function pick() { if (!uploading) file.click(); }
+    drop.addEventListener('click', pick);
+    change.addEventListener('click', pick);
+    drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+    file.addEventListener('change', function () { upload(file.files[0]); });
+
+    ['dragenter', 'dragover'].forEach(function (t) {
+      drop.addEventListener(t, function (e) { e.preventDefault(); e.stopPropagation(); drop.classList.add('is-over'); });
+    });
+    ['dragleave', 'dragend'].forEach(function (t) {
+      drop.addEventListener(t, function (e) { if (!drop.contains(e.relatedTarget)) drop.classList.remove('is-over'); });
+    });
+    drop.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation(); drop.classList.remove('is-over');
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) upload(f); else say('Drop an image file from your computer.', 'error');
+    });
+
+    // Paste: an image on the clipboard goes to the logo, unless the user is pasting text into a field
+    document.addEventListener('paste', function (e) {
+      var cd = e.clipboardData; if (!cd) return;
+      var imgItem = Array.prototype.find.call(cd.items || [], function (it) { return it.kind === 'file' && it.type.indexOf('image/') === 0; });
+      if (!imgItem) return;
+      var t = e.target, tag = (t && t.tagName) || '';
+      var typingText = (tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) && cd.getData('text/plain');
+      if (typingText) return;
+      e.preventDefault();
+      drop.focus();
+      upload(imgItem.getAsFile());
+    });
+  })();
   </script>
 
 </div>

@@ -4114,3 +4114,34 @@ body.ks-lock { overflow: hidden; }
   .ks-panel { max-height: 86vh; }
   .ks-foot { display: none; }
 }
+
+/* ── Company logo drop / paste field (company-edit.ejs) ───────────────── */
+.logo-drop {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  height: 120px; padding: 12px; border: 1.5px dashed var(--crm-border); border-radius: 10px;
+  background: oklch(0.99 0.003 250); cursor: pointer; outline: 0; transition: border-color .12s, background .12s;
+}
+.logo-drop:hover { border-color: oklch(0.55 0.2 258 / 0.45); background: #fff; }
+.logo-drop:focus-visible { border-color: var(--crm-accent); box-shadow: 0 0 0 3px oklch(0.55 0.2 258 / 0.14); }
+.logo-drop.has-logo { border-style: solid; background: #fff; }
+.logo-drop [hidden] { display: none !important; }
+.logo-drop-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.logo-drop-empty { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; font-size: 0.8rem; color: var(--crm-muted-fg); }
+.logo-drop-empty i { font-size: 1.3rem; margin-bottom: 4px; opacity: .7; }
+.logo-drop-empty strong { color: var(--crm-fg); font-weight: 600; }
+.logo-drop-or { font-size: 0.75rem; }
+.logo-drop-link { color: var(--crm-accent); font-weight: 500; }
+.logo-drop-over, .logo-drop-busy {
+  position: absolute; inset: 0; display: none; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 9px; font-size: 0.8rem; font-weight: 600;
+}
+.logo-drop.is-over { border-color: var(--crm-accent); border-style: dashed; }
+.logo-drop.is-over .logo-drop-over { display: flex; background: oklch(0.96 0.03 258 / 0.94); color: var(--crm-accent); }
+.logo-drop-busy:not([hidden]) { display: flex; background: rgba(255,255,255,0.82); color: var(--crm-fg); }
+.logo-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--crm-border); border-top-color: var(--crm-accent); animation: ks-spin .7s linear infinite; }
+.logo-drop-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.logo-msg { font-size: 0.72rem; color: var(--crm-muted-fg); }
+.logo-msg.is-ok { color: oklch(0.48 0.13 155); font-weight: 600; }
+.logo-msg.is-error { color: var(--crm-danger); font-weight: 500; }
+.logo-change { background: none; border: 0; padding: 0; font-size: 0.75rem; font-weight: 600; color: var(--crm-accent); cursor: pointer; }
+.logo-change:hover { text-decoration: underline; }

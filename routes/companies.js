@@ -279,11 +279,28 @@ router.post('/companies/:id/activities', async (req, res, next) => {
   }
 });
 
+const LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
+const LOGO_MAX_BYTES = 5 * 1024 * 1024;
+
+// Logo upload. The edit page posts via fetch (JSON); a plain form post still redirects.
 router.post('/companies/:id/logo', upload.single('logo'), async (req, res, next) => {
+  const wantsJson = (req.get('accept') || '').includes('application/json');
+  const fail = (code, msg) => (wantsJson ? res.status(code).json({ ok: false, error: msg }) : res.redirect(`/companies/${req.params.id}/edit`));
   try {
-    if (req.file) await crm.updateCompanyLogo(req.params.id, req.file);
+    const company = await crm.getCompany(req.params.id);
+    if (!company) return fail(404, 'Company not found.');
+    if (!req.file) return fail(400, 'No image received.');
+    if (!LOGO_TYPES.has(req.file.mimetype)) return fail(400, 'Use a PNG, JPG, WebP, GIF or SVG image.');
+    if (req.file.size > LOGO_MAX_BYTES) return fail(400, 'Image is larger than 5 MB.');
+    const url = await crm.updateCompanyLogo(req.params.id, req.file);
+    if (wantsJson) {
+      const updated = await crm.getCompany(req.params.id);
+      return res.json({ ok: true, logo: (updated && updated.logo) || url });
+    }
     res.redirect(`/companies/${req.params.id}`);
   } catch (err) {
+    console.error('[companies] logo upload failed:', err.message);
+    if (wantsJson) return res.status(500).json({ ok: false, error: "Upload failed. Check your connection and try again." });
     next(err);
   }
 });
