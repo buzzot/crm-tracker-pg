@@ -1,0 +1,47 @@
+<div class="av av-narrow">
+  <a href="/activities" class="av-back"><i class="bi bi-arrow-left"></i>Activity</a>
+  <header class="av-header">
+    <div>
+      <h1 class="av-title">Log activity</h1>
+      <div class="av-subtitle">Choose the company this activity is for.</div>
+    </div>
+  </header>
+
+  <label class="av-search av-search-wide">
+    <i class="bi bi-search" aria-hidden="true"></i>
+    <input type="search" id="coSearch" placeholder="Search companies" autocomplete="off" aria-label="Search companies" autofocus>
+  </label>
+
+  <div class="av-pick" id="coList">
+    <% if (!companies.length) { %>
+      <div class="av-empty">No companies yet. <a href="/companies/new" class="av-link">Add a company</a> first.</div>
+    <% } %>
+    <% companies.forEach(c => { %>
+      <a href="/companies/<%= c.id %>/activities/new" class="av-pick-row" data-name="<%= (c.name || '').toLowerCase() %>">
+        <span class="av-pick-avatar"><%= (c.name || '?').trim().charAt(0).toUpperCase() %></span>
+        <span class="av-pick-name"><%= c.name %></span>
+        <% if (c.status) { %><span class="av-pick-meta"><%= c.status %></span><% } %>
+        <i class="bi bi-chevron-right av-pick-arrow" aria-hidden="true"></i>
+      </a>
+    <% }) %>
+    <div class="av-empty" id="coNone" hidden>No companies match your search.</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var input = document.getElementById('coSearch');
+  var rows = Array.prototype.slice.call(document.querySelectorAll('.av-pick-row'));
+  var none = document.getElementById('coNone');
+  input.addEventListener('input', function () {
+    var q = input.value.trim().toLowerCase(), shown = 0;
+    rows.forEach(function (r) { var on = !q || r.dataset.name.indexOf(q) !== -1; r.hidden = !on; if (on) shown++; });
+    none.hidden = shown > 0 || !rows.length;
+  });
+  input.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var first = rows.find(function (r) { return !r.hidden; });
+    if (first) { e.preventDefault(); location.href = first.href; }
+  });
+})();
+</script>
