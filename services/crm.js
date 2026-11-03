@@ -539,21 +539,6 @@ async function updateActivity(id, { name, type, dueDate, details, regarding, res
   return getActivity(id);
 }
 
-// Quick actions from the Activity list — touch only the fields involved,
-// unlike updateActivity which rewrites attendees/projects/participants.
-async function completeActivity(id) {
-  await query(
-    `UPDATE activities SET result='Completed', status_date=NOW(), updated_at=NOW() WHERE id=$1`,
-    [id]
-  );
-  return getActivity(id);
-}
-
-async function rescheduleActivity(id, dueDate) {
-  await query('UPDATE activities SET due_date=$2, updated_at=NOW() WHERE id=$1', [id, dueDate]);
-  return getActivity(id);
-}
-
 async function deleteActivity(id) {
   await query('DELETE FROM activities WHERE id=$1', [id]);
 }
@@ -1677,8 +1662,6 @@ module.exports = {
   getActivity,
   createActivity,
   updateActivity,
-  completeActivity,
-  rescheduleActivity,
   deleteActivity,
   getActivityDetail,
   listActivityParticipants,

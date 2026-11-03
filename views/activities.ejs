@@ -1,282 +1,165 @@
-<%
-  // Compact payload for the client-side table (escaped for safe embedding in <script>)
-  const _rows = activities.map(a => ({
-    id: a.id,
-    name: a.name || '',
-    type: a.type || '',
-    result: a.result || '',
-    dueDate: a.dueDate || '',
-    statusDate: a.statusDate || a.date || '',
-    companyId: (a.companyIds || [])[0] || '',
-    companyName: (a.companyNames || [])[0] || '',
-    projects: (a.projectNames || []).join(', '),
-    ownerId: a.ownerId || '',
-    ownerName: a.ownerName || '',
-  }));
-  const _json = JSON.stringify(_rows).replace(/</g, '\\u003c').split(String.fromCharCode(0x2028)).join('\\u2028').split(String.fromCharCode(0x2029)).join('\\u2029');
-%>
+<div class="pnew-page">
 
-<div class="av" id="activityPage">
-
-  <header class="av-header">
+  <div class="projects-page-header" style="margin-bottom:0.75rem;">
     <div>
-      <h1 class="av-title">Activity</h1>
-      <div class="av-subtitle" id="avSummary"><%= activities.length %> activities</div>
+      <h1 class="projects-page-title">Activity</h1>
+      <div class="projects-page-subtitle">
+        <%= activities.length %> activit<%= activities.length === 1 ? 'y' : 'ies' %> logged
+      </div>
     </div>
-    <a href="/activities/new" class="av-btn av-btn-primary"><i class="bi bi-plus-lg"></i>Log activity</a>
-  </header>
-
-  <nav class="av-tabs" role="tablist" aria-label="Activity status">
-    <button class="av-tab" role="tab" data-tab="open">Open <span class="av-count" data-count="open"></span></button>
-    <button class="av-tab" role="tab" data-tab="overdue">Overdue <span class="av-count av-count-danger" data-count="overdue"></span></button>
-    <button class="av-tab" role="tab" data-tab="completed">Completed <span class="av-count" data-count="completed"></span></button>
-    <button class="av-tab" role="tab" data-tab="all">All <span class="av-count" data-count="all"></span></button>
-  </nav>
-
-  <div class="av-filters">
-    <label class="av-search">
-      <i class="bi bi-search" aria-hidden="true"></i>
-      <input type="search" id="avSearch" placeholder="Search activities" autocomplete="off" aria-label="Search activities">
-    </label>
-    <select id="avType" class="av-select" aria-label="Filter by type">
-      <option value="">All types</option>
-      <% typeChoices.forEach(t => { %><option value="<%= t %>"><%= t %></option><% }) %>
-    </select>
-    <select id="avCompany" class="av-select" aria-label="Filter by company">
-      <option value="">All companies</option>
-    </select>
-    <select id="avOwner" class="av-select" aria-label="Filter by owner">
-      <option value="">Anyone</option>
-      <option value="me">Me</option>
-    </select>
-    <button type="button" class="av-clear" id="avClear" hidden>Clear filters</button>
+    <div class="projects-page-actions">
+      <div class="projects-search-wrap">
+        <i class="bi bi-search"></i>
+        <input type="text" id="activitySearch" placeholder="Search...">
+      </div>
+    </div>
   </div>
 
-  <div class="av-table" role="table" aria-label="Activities">
-    <div class="av-thead" role="row">
-      <span role="columnheader">Activity</span>
-      <span role="columnheader">Company</span>
-      <span role="columnheader">Type</span>
-      <span role="columnheader">Owner</span>
-      <span role="columnheader">Last outcome</span>
-      <span role="columnheader" class="av-right">Due</span>
-    </div>
-    <div id="avBody" role="rowgroup"></div>
-    <div class="av-empty" id="avEmpty" hidden></div>
+  <div class="act-filter-row">
+    <button class="dash-filter-btn active" data-filter="all">All <span class="act-filter-badge" id="badgeAll"><%= activities.length %></span></button>
+    <button class="dash-filter-btn" data-filter="open">Open <span class="act-filter-badge" id="badgeOpen"></span></button>
+    <button class="dash-filter-btn" data-filter="completed">Completed <span class="act-filter-badge" id="badgeCompleted"></span></button>
   </div>
 
-  <div class="av-toast" id="avToast" role="status" aria-live="polite" hidden></div>
+  <div class="pnew-card act-list-card">
+    <% if (activities.length === 0) { %>
+      <div class="act-list-empty">No activity logged yet.</div>
+    <% } %>
+    <% activities.forEach((a, idx) => { %>
+      <%
+        const _isCompleted = (a.result || '').toLowerCase() === 'completed' || (a.type || '').toLowerCase() === 'completed';
+        const t = (a.type || '').toLowerCase();
+        const icon = t.includes('call') ? 'bi-telephone' : t.includes('email') ? 'bi-envelope' : t.includes('linkedin') ? 'bi-linkedin' : (t.includes('meet') || t.includes('demo')) ? 'bi-people' : 'bi-clock-history';
+        const iconBg = t.includes('call') ? 'act-icon-blue' : t.includes('email') ? 'act-icon-purple' : t.includes('linkedin') ? 'act-icon-blue' : 'act-icon-gray';
+
+        // Progress bar
+        const _today = new Date(); _today.setHours(0,0,0,0);
+        let barState = 'planned', barWidth = 0, barText = '';
+
+        if (_isCompleted) {
+          barState = 'done'; barWidth = 100;
+          const _doneDate = a.statusDate ? new Date(a.statusDate + 'T00:00:00') : null;
+          barText = 'DONE ' + (_doneDate ? _doneDate.toLocaleDateString(undefined, {month:'short', day:'numeric'}) : '');
+        } else if (a.dueDate) {
+          const _due = new Date(a.dueDate + 'T00:00:00');
+          const _daysUntil = Math.floor((_due - _today) / 86400000);
+          if (_daysUntil < 0) {
+            barState = 'overdue'; barWidth = 50;
+            barText = 'OVERDUE ' + Math.abs(_daysUntil) + 'd';
+          } else {
+            const _hasAction = a.statusDate && a.statusDate !== a.date && new Date(a.statusDate) > new Date(a.date);
+            if (_hasAction) {
+              const _daysAgo = Math.max(1, Math.floor((_today - new Date(a.statusDate + 'T00:00:00')) / 86400000));
+              barState = 'inprogress';
+              barWidth = Math.min(85, Math.max(20, Math.round((_daysAgo / 45) * 85)));
+              barText = _daysAgo + ' DAYS AGO';
+            } else {
+              barText = _daysUntil === 0 ? 'DUE TODAY' : 'DUE IN ' + _daysUntil + 'd';
+            }
+          }
+        } else {
+          const _hasAction = a.statusDate && a.statusDate !== a.date && new Date(a.statusDate) > new Date(a.date);
+          if (_hasAction) {
+            const _daysAgo = Math.max(1, Math.floor((_today - new Date(a.statusDate + 'T00:00:00')) / 86400000));
+            barState = 'inprogress';
+            barWidth = Math.min(85, Math.max(20, Math.round((_daysAgo / 45) * 85)));
+            barText = _daysAgo + ' DAYS AGO';
+          } else {
+            barText = '—';
+          }
+        }
+
+        // Due chip
+        let dueChipLabel = '', dueChipCls = '';
+        if (!_isCompleted && a.dueDate) {
+          const _due2 = new Date(a.dueDate + 'T00:00:00');
+          const _days2 = Math.floor((_due2 - _today) / 86400000);
+          if (_days2 < 0) { dueChipLabel = 'Overdue'; dueChipCls = 'due-overdue'; }
+          else if (_days2 === 0) { dueChipLabel = 'Due today'; dueChipCls = 'due-soon'; }
+          else if (_days2 <= 3) {
+            dueChipLabel = 'Due ' + _due2.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+            dueChipCls = 'due-soon';
+          }
+        }
+      %>
+      <div class="act-list-row<%= idx === 0 ? ' act-list-row-first' : '' %>"
+           data-search="<%= [a.name, a.type, a.result, (a.companyNames||[]).join(' '), (a.projectNames||[]).join(' ')].join(' ').toLowerCase() %>"
+           data-state="<%= _isCompleted ? 'completed' : 'open' %>">
+
+        <div class="act-list-icon-wrap">
+          <div class="act-list-icon <%= iconBg %>"><i class="bi <%= icon %>"></i></div>
+        </div>
+
+        <div class="act-list-body">
+          <div class="act-list-top">
+            <a href="/activities/<%= a.id %>" class="act-list-name <%= _isCompleted ? 'act-list-name-done' : '' %>"><%= a.name || '(untitled)' %></a>
+            <div class="act-bar-wrap flex-shrink-0">
+              <div class="act-bar-track">
+                <% if (barWidth === 0) { %>
+                  <div style="width:100%;display:flex;align-items:center;padding:0 7px;">
+                    <span class="act-bar-label act-bar-label-muted"><%= barText %></span>
+                  </div>
+                <% } else { %>
+                  <div class="act-bar-fill act-bar-<%= barState %>" style="width:<%= barWidth %>%;<%= barState === 'done' ? 'border-radius:9px;' : '' %>">
+                    <span class="act-bar-label"><%= barText %></span>
+                  </div>
+                <% } %>
+              </div>
+            </div>
+          </div>
+
+          <div class="act-list-meta">
+            <% if (a.companyIds && a.companyIds[0]) { %>
+              <a href="/companies/<%= a.companyIds[0] %>" class="act-meta-company"><i class="bi bi-building"></i> <%= (a.companyNames||[]).join(', ') %></a>
+            <% } %>
+            <% if (a.type) { %><span class="act-meta-pill"><%= a.type %></span><% } %>
+            <% if (a.projectNames && a.projectNames.length) { %>
+              <span class="act-meta-pill"><i class="bi bi-diagram-3"></i> <%= a.projectNames.join(', ') %></span>
+            <% } %>
+            <% if (dueChipLabel) { %><span class="due-chip <%= dueChipCls %>"><%= dueChipLabel %></span><% } %>
+            <% if (_isCompleted) { %><span class="act-meta-pill act-meta-pill-done"><i class="bi bi-check-circle-fill"></i> Completed</span><% } else if (a.result) { %><span class="act-meta-pill"><%= a.result %></span><% } %>
+          </div>
+        </div>
+
+      </div>
+    <% }) %>
+  </div>
+
 </div>
 
 <script>
 (function () {
-  var DATA = <%- _json %>;
-  var ME = <%- JSON.stringify(currentUserId || '') %>;
-  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  var TYPE_ICON = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-people', Demo: 'bi-easel' };
+  const list = document.querySelector('.act-list-card');
+  const rows = list ? Array.from(list.querySelectorAll('.act-list-row')) : [];
+  const searchInput = document.getElementById('activitySearch');
+  const filterBtns = document.querySelectorAll('.act-filter-btn, .dash-filter-btn[data-filter]');
+  let currentFilter = 'all';
 
-  var today = new Date(); today.setHours(0, 0, 0, 0);
-  var state = { tab: 'open', q: '', type: '', company: '', owner: '' };
+  // Count badges
+  const openCount = rows.filter(r => r.dataset.state === 'open').length;
+  const completedCount = rows.filter(r => r.dataset.state === 'completed').length;
+  const b = id => document.getElementById(id);
+  if (b('badgeOpen')) b('badgeOpen').textContent = openCount;
+  if (b('badgeCompleted')) b('badgeCompleted').textContent = completedCount;
 
-  // ── helpers ───────────────────────────────────────────────────────────────
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function parseDay(s) { var p = (s || '').slice(0, 10).split('-'); return p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]) : null; }
-  function days(s) { var d = parseDay(s); return d ? Math.round((d - today) / 86400000) : null; }
-  function shortDate(s) { var d = parseDay(s); return d ? MONTHS[d.getMonth()] + ' ' + d.getDate() + (d.getFullYear() !== today.getFullYear() ? ', ' + d.getFullYear() : '') : ''; }
-  function isDone(a) { return a.result === 'Completed'; }
-  function isOverdue(a) { var n = days(a.dueDate); return !isDone(a) && n !== null && n < 0; }
-  function initials(name) { return (name || '?').trim().charAt(0).toUpperCase(); }
-
-  function dueCell(a) {
-    if (isDone(a)) return '<span class="av-due av-due-done"><i class="bi bi-check2"></i>Done' + (a.statusDate ? ' ' + shortDate(a.statusDate) : '') + '</span>';
-    var n = days(a.dueDate);
-    if (n === null) return '<span class="av-due av-muted">&mdash;</span>';
-    if (n < 0)  return '<span class="av-due av-due-overdue" aria-label="Overdue by ' + (-n) + ' days">' + (-n) + 'd overdue</span>';
-    if (n === 0) return '<span class="av-due av-due-today">Due today</span>';
-    if (n === 1) return '<span class="av-due av-due-soon">Tomorrow</span>';
-    if (n <= 6)  return '<span class="av-due av-due-soon">' + DAYS[parseDay(a.dueDate).getDay()] + '</span>';
-    return '<span class="av-due">' + shortDate(a.dueDate) + '</span>';
-  }
-
-  function row(a) {
-    var done = isDone(a);
-    var icon = TYPE_ICON[a.type] || 'bi-clock-history';
-    var actions = done ? '' :
-      '<span class="av-actions">' +
-        '<button type="button" class="av-act" data-act="done" data-id="' + a.id + '" title="Mark as done"><i class="bi bi-check2"></i>Done</button>' +
-        '<button type="button" class="av-act" data-act="snooze" data-id="' + a.id + '" title="Move due date to one week from today"><i class="bi bi-calendar-plus"></i>+1 week</button>' +
-      '</span>';
-    return '<div class="av-row' + (done ? ' is-done' : '') + '" role="row" data-href="/activities/' + a.id + '">' +
-      '<span class="av-c-name" role="cell">' +
-        '<a href="/activities/' + a.id + '" class="av-name">' + esc(a.name || '(untitled)') + '</a>' +
-        (a.projects ? '<span class="av-sub">' + esc(a.projects) + '</span>' : '') +
-      '</span>' +
-      '<span class="av-c-company" role="cell">' + (a.companyId ? '<a href="/companies/' + a.companyId + '" class="av-link">' + esc(a.companyName) + '</a>' : '<span class="av-muted">&mdash;</span>') + '</span>' +
-      '<span class="av-c-type" role="cell">' + (a.type ? '<i class="bi ' + icon + '" aria-hidden="true"></i>' + esc(a.type) : '<span class="av-muted">&mdash;</span>') + '</span>' +
-      '<span class="av-c-owner" role="cell">' + (a.ownerName ? '<span class="av-avatar" title="' + esc(a.ownerName) + '">' + esc(initials(a.ownerName)) + '</span><span class="av-owner-name">' + esc(a.ownerName) + '</span>' : '<span class="av-muted">&mdash;</span>') + '</span>' +
-      '<span class="av-c-outcome" role="cell">' + (a.result && !done ? esc(a.result) : (done ? '<span class="av-muted">Completed</span>' : '<span class="av-muted">No outcome yet</span>')) + '</span>' +
-      '<span class="av-c-due av-right" role="cell">' + dueCell(a) + actions + '</span>' +
-      '<span class="av-c-meta" aria-hidden="true">' + esc([a.companyName, a.type, done ? '' : a.result].filter(Boolean).join(' \u00b7 ')) + '</span>' +
-    '</div>';
-  }
-
-  // ── filtering / grouping ──────────────────────────────────────────────────
-  function matchesFilters(a) {
-    if (state.type && a.type !== state.type) return false;
-    if (state.company && a.companyName !== state.company) return false;
-    if (state.owner === 'me' && a.ownerId !== ME) return false;
-    if (state.owner && state.owner !== 'me' && a.ownerId !== state.owner) return false;
-    if (state.q) {
-      var hay = (a.name + ' ' + a.companyName + ' ' + a.type + ' ' + a.result + ' ' + a.projects + ' ' + a.ownerName).toLowerCase();
-      if (hay.indexOf(state.q) === -1) return false;
-    }
-    return true;
-  }
-  function byDueAsc(a, b) { return days(a.dueDate) - days(b.dueDate); }
-  function byRecent(a, b) { return (b.statusDate || '').localeCompare(a.statusDate || ''); }
-
-  function groupsFor(list) {
-    if (state.tab === 'open') {
-      var open = list.filter(function (a) { return !isDone(a); });
-      var dated = open.filter(function (a) { return days(a.dueDate) !== null; });
-      return [
-        { label: 'Overdue',     cls: 'is-danger', items: dated.filter(function (a) { return days(a.dueDate) < 0; }).sort(byDueAsc) },
-        { label: 'This week',   items: dated.filter(function (a) { var n = days(a.dueDate); return n >= 0 && n <= 6; }).sort(byDueAsc) },
-        { label: 'Later',       items: dated.filter(function (a) { return days(a.dueDate) > 6; }).sort(byDueAsc) },
-        { label: 'No due date', items: open.filter(function (a) { return days(a.dueDate) === null; }).sort(byRecent) },
-      ];
-    }
-    if (state.tab === 'overdue')   return [{ items: list.filter(isOverdue).sort(byDueAsc) }];
-    if (state.tab === 'completed') return [{ items: list.filter(isDone).sort(byRecent) }];
-    return [{ items: list.slice().sort(byRecent) }];
-  }
-
-  var EMPTY = {
-    open: 'No open activities. Everything is followed up.',
-    overdue: 'Nothing overdue. Nice work.',
-    completed: 'No completed activities yet.',
-    all: 'No activities logged yet.',
-  };
-
-  function render() {
-    var filtered = DATA.filter(matchesFilters);
-    var groups = groupsFor(filtered);
-    var html = '', total = 0;
-    groups.forEach(function (g) {
-      if (!g.items.length) return;
-      total += g.items.length;
-      if (g.label) html += '<div class="av-group ' + (g.cls || '') + '" role="row"><span role="cell">' + g.label + ' <span class="av-group-n">' + g.items.length + '</span></span></div>';
-      html += g.items.map(row).join('');
-    });
-    document.getElementById('avBody').innerHTML = html;
-
-    var empty = document.getElementById('avEmpty');
-    var filtering = !!(state.q || state.type || state.company || state.owner);
-    empty.hidden = total > 0;
-    empty.textContent = filtering ? 'No activities match these filters.' : EMPTY[state.tab];
-    document.getElementById('avClear').hidden = !filtering;
-
-    // Counts reflect the active filters so tabs and list always agree
-    var c = { all: filtered.length, open: 0, overdue: 0, completed: 0 };
-    filtered.forEach(function (a) { if (isDone(a)) c.completed++; else { c.open++; if (isOverdue(a)) c.overdue++; } });
-    document.querySelectorAll('[data-count]').forEach(function (el) {
-      var n = c[el.getAttribute('data-count')];
-      el.textContent = n;
-      el.hidden = el.getAttribute('data-count') === 'overdue' && !n;
-    });
-    document.getElementById('avSummary').textContent =
-      c.open + ' open · ' + c.overdue + ' overdue · ' + c.completed + ' completed' + (filtering ? ' (filtered)' : '');
-
-    document.querySelectorAll('.av-tab').forEach(function (t) {
-      var on = t.getAttribute('data-tab') === state.tab;
-      t.classList.toggle('is-active', on);
-      t.setAttribute('aria-selected', on ? 'true' : 'false');
+  function applyFilters() {
+    const q = (searchInput ? searchInput.value : '').toLowerCase();
+    rows.forEach(row => {
+      const matchSearch = (row.dataset.search || '').includes(q);
+      const matchFilter = currentFilter === 'all' || row.dataset.state === currentFilter;
+      row.style.display = (matchSearch && matchFilter) ? '' : 'none';
     });
   }
 
-  // ── filter controls ───────────────────────────────────────────────────────
-  (function fillSelects() {
-    var cos = {}, owners = {};
-    DATA.forEach(function (a) {
-      if (a.companyName) cos[a.companyName] = 1;
-      if (a.ownerId && a.ownerId !== ME) owners[a.ownerId] = a.ownerName || 'Unknown';
+  document.querySelectorAll('.dash-filter-btn[data-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.dash-filter-btn[data-filter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      applyFilters();
     });
-    var cSel = document.getElementById('avCompany');
-    Object.keys(cos).sort().forEach(function (n) { cSel.insertAdjacentHTML('beforeend', '<option value="' + esc(n) + '">' + esc(n) + '</option>'); });
-    var oSel = document.getElementById('avOwner');
-    Object.keys(owners).sort(function (a, b) { return owners[a].localeCompare(owners[b]); })
-      .forEach(function (id) { oSel.insertAdjacentHTML('beforeend', '<option value="' + esc(id) + '">' + esc(owners[id]) + '</option>'); });
-  })();
-
-  function syncUrl() {
-    try {
-      var u = new URL(location.href);
-      if (state.tab === 'open') u.searchParams.delete('tab'); else u.searchParams.set('tab', state.tab);
-      history.replaceState(null, '', u.pathname + (u.search || ''));
-    } catch (e) {}
-  }
-
-  document.querySelectorAll('.av-tab').forEach(function (t) {
-    t.addEventListener('click', function () { state.tab = t.getAttribute('data-tab'); syncUrl(); render(); });
-  });
-  document.getElementById('avSearch').addEventListener('input', function (e) { state.q = e.target.value.trim().toLowerCase(); render(); });
-  document.getElementById('avType').addEventListener('change', function (e) { state.type = e.target.value; render(); });
-  document.getElementById('avCompany').addEventListener('change', function (e) { state.company = e.target.value; render(); });
-  document.getElementById('avOwner').addEventListener('change', function (e) { state.owner = e.target.value; render(); });
-  document.getElementById('avClear').addEventListener('click', function () {
-    state.q = state.type = state.company = state.owner = '';
-    ['avSearch', 'avType', 'avCompany', 'avOwner'].forEach(function (id) { document.getElementById(id).value = ''; });
-    render();
   });
 
-  // ── row navigation + quick actions ────────────────────────────────────────
-  var body = document.getElementById('avBody');
-  body.addEventListener('click', function (e) {
-    var btn = e.target.closest('.av-act');
-    if (btn) { e.preventDefault(); quick(btn); return; }
-    if (e.target.closest('a')) return;
-    var r = e.target.closest('.av-row');
-    if (r && !window.getSelection().toString()) location.href = r.getAttribute('data-href');
-  });
-
-  var toastTimer;
-  function toast(msg, isError) {
-    var t = document.getElementById('avToast');
-    t.textContent = msg;
-    t.classList.toggle('is-error', !!isError);
-    t.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.hidden = true; }, 2600);
-  }
-
-  function quick(btn) {
-    var id = btn.getAttribute('data-id'), act = btn.getAttribute('data-act');
-    var item = DATA.find(function (a) { return a.id === id; });
-    if (!item) return;
-    btn.disabled = true;
-    fetch('/activities/' + encodeURIComponent(id) + '/quick', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ action: act }),
-    })
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
-      .then(function (res) {
-        item.result = res.result || item.result;
-        item.dueDate = res.dueDate || '';
-        item.statusDate = res.statusDate || item.statusDate;
-        render();
-        toast(act === 'done' ? 'Marked as done' : 'Due date moved to ' + shortDate(item.dueDate));
-      })
-      .catch(function () { btn.disabled = false; toast("Couldn't update that activity. Try again.", true); });
-  }
-
-  // ── init ──────────────────────────────────────────────────────────────────
-  try {
-    var t = new URL(location.href).searchParams.get('tab');
-    if (['open', 'overdue', 'completed', 'all'].indexOf(t) !== -1) state.tab = t;
-  } catch (e) {}
-  render();
+  if (searchInput) searchInput.addEventListener('input', applyFilters);
 })();
 </script>

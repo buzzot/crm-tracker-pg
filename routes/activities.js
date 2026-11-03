@@ -41,68 +41,8 @@ router.get('/activities', async (req, res, next) => {
         projectNames: a.projectIds.map((id) => projectById.get(id)?.name).filter(Boolean)
       }));
 
-    res.render('activities', {
-      title: 'Activity',
-      activities: sorted,
-      currentUserId: user ? user.id : null,
-      typeChoices: crm.schema.tables.activities.typeChoices,
-    });
+    res.render('activities', { title: 'Activity', activities: sorted });
   } catch (err) {
-    next(err);
-  }
-});
-
-// "Log activity" — pick a company, then continue to that company's activity form
-router.get('/activities/new', async (req, res, next) => {
-  try {
-    const companies = await crm.listCompanies(req.session.user);
-    companies.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    res.render('activity-new-global', { title: 'Log activity', companies });
-  } catch (err) { next(err); }
-});
-
-// Quick actions from the list: mark done, or push the due date out a week.
-// Only touches result/status_date or due_date — never attendees/projects.
-router.post('/activities/:id/quick', async (req, res, next) => {
-  const wantsJson = (req.get('accept') || '').includes('application/json');
-  try {
-    const user = req.session.user;
-    const { action } = req.body;
-    const accessible = await crm.listActivities(user);
-    const current = accessible.find((a) => a.id === req.params.id);
-    if (!current) {
-      return wantsJson ? res.status(404).json({ error: 'Activity not found' }) : res.redirect('/activities');
-    }
-
-    let updated;
-    if (action === 'done') {
-      updated = await crm.completeActivity(current.id);
-      // Same notification rule as the edit form: first time it becomes Completed
-      if (current.result !== 'Completed') {
-        try {
-          const participants = await crm.listActivityParticipants(current.id);
-          if (participants.length) {
-            const detail = await crm.getActivityDetail(current.id);
-            await sendActivityConfirmationEmails({ activity: detail, participants });
-          }
-        } catch (emailErr) {
-          console.error('[activities] Email send error:', emailErr.message);
-        }
-      }
-    } else if (action === 'snooze') {
-      const d = new Date();
-      d.setDate(d.getDate() + 7);
-      updated = await crm.rescheduleActivity(current.id, d.toISOString().slice(0, 10));
-    } else {
-      return wantsJson ? res.status(400).json({ error: 'Unknown action' }) : res.redirect('/activities');
-    }
-
-    if (wantsJson) {
-      return res.json({ id: updated.id, result: updated.result, statusDate: updated.statusDate, dueDate: updated.dueDate });
-    }
-    res.redirect('/activities');
-  } catch (err) {
-    if (wantsJson) return res.status(500).json({ error: 'Could not update activity' });
     next(err);
   }
 });
