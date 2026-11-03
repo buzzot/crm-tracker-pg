@@ -1,0 +1,46 @@
+<div class="al al-narrow">
+  <a href="/activities" class="al-back"><i class="bi bi-arrow-left" aria-hidden="true"></i>Activity</a>
+  <header class="al-header">
+    <div>
+      <h1 class="al-title">New activity</h1>
+      <p class="al-sub">Activities belong to a company. Choose one to continue.</p>
+    </div>
+  </header>
+
+  <label class="al-search al-search-block">
+    <i class="bi bi-search" aria-hidden="true"></i>
+    <input type="search" id="coSearch" placeholder="Search companies" autocomplete="off" aria-label="Search companies" autofocus>
+  </label>
+
+  <div class="al-pick" id="coList">
+    <% companies.forEach(c => { %>
+      <a href="/companies/<%= c.id %>/activities/new" class="al-pick-row" data-name="<%= (c.name || '').toLowerCase() %>">
+        <span class="al-pick-avatar" aria-hidden="true"><%= (c.name || '?').trim().charAt(0).toUpperCase() %></span>
+        <span class="al-pick-name"><%= c.name %></span>
+        <% if (c.status) { %><span class="al-muted"><%= c.status %></span><% } %>
+        <i class="bi bi-chevron-right al-pick-arrow" aria-hidden="true"></i>
+      </a>
+    <% }) %>
+    <div class="al-empty" id="coNone" <%= companies.length ? 'hidden' : '' %>>
+      <%- companies.length ? 'No companies match your search.' : 'No companies yet. <a class="al-link-btn" href="/companies/new">Add a company</a> first.' %>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var input = document.getElementById('coSearch');
+  var rows = Array.prototype.slice.call(document.querySelectorAll('.al-pick-row'));
+  var none = document.getElementById('coNone');
+  input.addEventListener('input', function () {
+    var q = input.value.trim().toLowerCase(), n = 0;
+    rows.forEach(function (r) { var on = !q || r.dataset.name.indexOf(q) !== -1; r.hidden = !on; if (on) n++; });
+    if (rows.length) none.hidden = n > 0;
+  });
+  input.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var first = rows.find(function (r) { return !r.hidden; });
+    if (first) { e.preventDefault(); location.href = first.href; }
+  });
+})();
+</script>

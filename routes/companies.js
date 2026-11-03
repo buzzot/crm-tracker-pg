@@ -256,7 +256,8 @@ router.post('/companies/:id/activities', async (req, res, next) => {
     if (!Array.isArray(projectIds)) projectIds = [projectIds];
     let participantIds = req.body.participantIds || [];
     if (!Array.isArray(participantIds)) participantIds = [participantIds];
-    const activity = await crm.createActivity({ name, companyId: req.params.id, type, dueDate, details, regarding, result, attendeeIds, projectIds });
+    const ownerId = req.session.user ? req.session.user.id : null;
+    const activity = await crm.createActivity({ name, companyId: req.params.id, ownerId, type, dueDate, details, regarding, result, attendeeIds, projectIds });
     if (participantIds.length) {
       await crm.setActivityParticipants(activity.id, participantIds);
     }

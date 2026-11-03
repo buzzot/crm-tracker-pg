@@ -500,13 +500,26 @@ async function getActivity(id) {
   return r.rows[0] ? mapActivity(r.rows[0]) : null;
 }
 
-async function createActivity({ name, type, date, dueDate, details, companyId, ownerId, groupId }) {
-  const r = await query(
-    `INSERT INTO activities (name, type, date, due_date, details, company_id, owner_id, group_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [name, type || null, date || null, dueDate || null, details || null, companyId, ownerId, groupId]
-  );
-  return getActivity(r.rows[0].id);
+async function createActivity({ name, type, date, dueDate, details, regarding, result, companyId, ownerId, groupId, attendeeIds, projectIds }) {
+  // Previously only 8 columns were stored: result, regarding, attendees and linked
+  // projects entered on the form were silently dropped. Persist them all.
+  const id = await transaction(async (client) => {
+    const r = await client.query(
+      `INSERT INTO activities (name, type, date, due_date, details, regarding, result, status_date, company_id, owner_id, group_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7, CASE WHEN $7::text IS NOT NULL THEN NOW() ELSE NULL END, $8,$9,$10) RETURNING id`,
+      [name, type || null, date || null, dueDate || null, details || null, regarding || null, result || null,
+       companyId || null, ownerId || null, groupId || null]
+    );
+    const newId = r.rows[0].id;
+    for (const cid of [].concat(attendeeIds || []).filter(Boolean)) {
+      await client.query('INSERT INTO activity_contacts (activity_id, contact_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [newId, cid]);
+    }
+    for (const pid of [].concat(projectIds || []).filter(Boolean)) {
+      await client.query('INSERT INTO activity_projects (activity_id, project_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [newId, pid]);
+    }
+    return newId;
+  });
+  return getActivity(id);
 }
 
 async function updateActivity(id, { name, type, dueDate, details, regarding, result, attendeeIds, projectIds, participantIds }) {
@@ -536,6 +549,13 @@ async function updateActivity(id, { name, type, dueDate, details, regarding, res
     }
     await setActivityParticipants(id, participantIds || [], client);
   });
+  return getActivity(id);
+}
+
+// Mark an activity Completed without touching attendees/projects/participants
+// (updateActivity rewrites all of those, so it can't be used for a one-click action).
+async function completeActivity(id) {
+  await query(`UPDATE activities SET result='Completed', status_date=NOW(), updated_at=NOW() WHERE id=$1`, [id]);
   return getActivity(id);
 }
 
@@ -1662,6 +1682,7 @@ module.exports = {
   getActivity,
   createActivity,
   updateActivity,
+  completeActivity,
   deleteActivity,
   getActivityDetail,
   listActivityParticipants,

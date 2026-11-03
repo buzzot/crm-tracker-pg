@@ -1,128 +1,109 @@
-<div class="pnew-page">
-  <a href="/companies/<%= company.id %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= company.name %></a>
-
-  <div class="pnew-badge"><i class="bi bi-activity"></i> New activity</div>
-  <h1 class="pnew-hero">Log an <em>activity</em></h1>
-  <p class="pnew-hero-sub">Record a call, meeting, email, or other touchpoint for <%= company.name %>.</p>
+<%
+  const _arr = v => [].concat(v || []).map(String);
+  const _att = _arr(values.attendeeIds), _prj = _arr(values.projectIds), _par = _arr(values.participantIds);
+%>
+<div class="al al-form-page">
+  <a href="/companies/<%= company.id %>" class="al-back"><i class="bi bi-arrow-left" aria-hidden="true"></i><%= company.name %></a>
+  <header class="al-header">
+    <div>
+      <h1 class="al-title">New activity</h1>
+      <p class="al-sub">For <a href="/companies/<%= company.id %>" class="al-co"><%= company.name %></a></p>
+    </div>
+  </header>
 
   <% if (error) { %>
-    <div class="alert alert-danger mb-3"><%= error %></div>
+    <div class="al-alert" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><%= error %></div>
   <% } %>
 
-  <form action="/companies/<%= company.id %>/activities" method="POST">
-    <div class="pnew-grid">
+  <form action="/companies/<%= company.id %>/activities" method="POST" class="al-form">
 
-      <div class="pnew-main">
-
-        <div class="pnew-card">
-          <h2 class="pnew-card-title">Identity</h2>
-          <p class="pnew-card-sub">What this activity is and when it happened.</p>
-
-          <div class="mb-3">
-            <label class="pnew-field-label" for="activityName">Activity name <span class="pnew-required">*</span></label>
-            <input type="text" name="name" id="activityName" class="pnew-input" value="<%= values.name || '' %>" required autofocus placeholder="e.g. Intro call with CEO">
-          </div>
-
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="pnew-field-label" for="activityType"><i class="bi bi-tag"></i> Type</label>
-              <select name="type" id="activityType" class="pnew-select">
-                <option value="">— Select —</option>
-                <% typeChoices.forEach(opt => { %>
-                  <option value="<%= opt %>" <%= values.type === opt ? 'selected' : '' %>><%= opt %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label class="pnew-field-label" for="activityDueDate"><i class="bi bi-calendar-check"></i> Complete before <span class="text-muted fw-normal">(optional)</span></label>
-              <input type="date" name="dueDate" id="activityDueDate" class="pnew-input" value="<%= values.dueDate || '' %>">
-            </div>
-          </div>
-        </div>
-
-        <div class="pnew-card">
-          <h2 class="pnew-card-title">People & projects</h2>
-          <p class="pnew-card-sub">Who was involved and what project this relates to.</p>
-
-          <div class="mb-3">
-            <label class="pnew-field-label" for="activityAttendees"><i class="bi bi-people"></i> Attendees</label>
-            <select name="attendeeIds" id="activityAttendees" class="pnew-select" multiple size="4">
-              <% persons.forEach(p => { %>
-                <option value="<%= p.id %>"><%= p.fullName %></option>
-              <% }) %>
-            </select>
-            <p class="pnew-help mt-1">Hold Ctrl / Cmd to select more than one.</p>
-          </div>
-
-          <div class="mb-3">
-            <label class="pnew-field-label" for="activityProjects"><i class="bi bi-kanban"></i> Related project(s)</label>
-            <select name="projectIds" id="activityProjects" class="pnew-select" multiple size="4">
-              <% projects.forEach(p => { %>
-                <option value="<%= p.id %>"><%= p.name %></option>
-              <% }) %>
-            </select>
-            <p class="pnew-help mt-1">Hold Ctrl / Cmd to select more than one.</p>
-          </div>
-
-          <% if (typeof teamUsers !== 'undefined' && teamUsers.length) { %>
-          <div class="mb-0">
-            <label class="pnew-field-label" for="activityParticipants"><i class="bi bi-people-fill"></i> Team participants <span class="text-muted fw-normal" style="font-size:0.75rem;">(notified by email when confirmed)</span></label>
-            <select name="participantIds" id="activityParticipants" class="pnew-select" multiple size="<%= Math.min(teamUsers.length, 5) %>">
-              <% teamUsers.forEach(u => { %>
-                <option value="<%= u.id %>"><%= u.name %><% if (u.title) { %> — <%= u.title %><% } %></option>
-              <% }) %>
-            </select>
-            <p class="pnew-help mt-1">Hold Ctrl / Cmd to select more than one.</p>
-          </div>
-          <% } %>
-        </div>
-
-        <div class="pnew-card">
-          <h2 class="pnew-card-title">Outcome</h2>
-          <p class="pnew-card-sub">Result and any notes from this activity.</p>
-
-          <div class="row g-3 mb-3">
-            <div class="col-md-6">
-              <label class="pnew-field-label" for="activityResult"><i class="bi bi-flag"></i> Result</label>
-              <select name="result" id="activityResult" class="pnew-select">
-                <option value="">— Select —</option>
-                <% resultChoices.forEach(opt => { %>
-                  <option value="<%= opt %>" <%= values.result === opt ? 'selected' : '' %>><%= opt %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label class="pnew-field-label" for="activityRegarding"><i class="bi bi-clock"></i> Regarding (date/time)</label>
-              <input type="datetime-local" name="regarding" id="activityRegarding" class="pnew-input" value="<%= values.regarding || '' %>">
-            </div>
-          </div>
-
-          <div class="mb-0">
-            <label class="pnew-field-label" for="activityDetails"><i class="bi bi-card-text"></i> Details / notes</label>
-            <textarea name="details" id="activityDetails" class="pnew-input pnew-textarea" rows="4" placeholder="Summary of what was discussed…"><%= values.details || '' %></textarea>
-          </div>
-        </div>
-
-        <div class="d-flex gap-2">
-          <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save activity</button>
-          <a href="/companies/<%= company.id %>" class="pnew-btn-cancel">Cancel</a>
-        </div>
-
+    <section class="al-fs">
+      <h2 class="al-fs-title">Activity</h2>
+      <div class="al-field">
+        <label for="fName">Title <span class="al-req" aria-hidden="true">*</span></label>
+        <input type="text" name="name" id="fName" class="al-input" required minlength="3" maxlength="200"
+               value="<%= values.name || '' %>" placeholder="Intro call with plant manager about Q1 order" autofocus>
+        <p class="al-hint">Describe what happened or what needs to happen.</p>
       </div>
-
-      <div class="pnew-aside">
-        <div class="pnew-tip-card">
-          <i class="bi bi-lightbulb"></i>
-          <div class="pnew-tip-title">Activity types</div>
-          <div class="pnew-tip-text">Use Call, Email, Meeting, Demo, or LinkedIn to categorise your touchpoints and filter them later in the Activity feed.</div>
+      <div class="al-row-fields">
+        <div class="al-field al-w-sm">
+          <label for="fTypeSel">Type</label>
+          <select name="type" id="fTypeSel" class="al-input">
+            <option value="">Select</option>
+            <% typeChoices.forEach(opt => { %><option value="<%= opt %>" <%= values.type === opt ? 'selected' : '' %>><%= opt %></option><% }) %>
+          </select>
         </div>
-        <div class="pnew-tip-card">
-          <i class="bi bi-kanban"></i>
-          <div class="pnew-tip-title">Link a project</div>
-          <div class="pnew-tip-text">Linking an activity to a project keeps the full history of client interactions visible from the project page.</div>
+        <div class="al-field al-w-sm">
+          <label for="fDue">Follow up by <span class="al-opt">optional</span></label>
+          <input type="date" name="dueDate" id="fDue" class="al-input" value="<%= values.dueDate || '' %>">
+        </div>
+        <div class="al-field al-w-md">
+          <label for="fRegarding">Happened at <span class="al-opt">optional</span></label>
+          <input type="datetime-local" name="regarding" id="fRegarding" class="al-input" value="<%= values.regarding || '' %>">
         </div>
       </div>
+    </section>
 
+    <section class="al-fs">
+      <h2 class="al-fs-title">Linked records</h2>
+
+      <fieldset class="al-field">
+        <legend>Contacts</legend>
+        <% if (persons.length) { %>
+          <div class="al-checks">
+            <% persons.forEach(p => { %>
+              <label class="al-checkpill"><input type="checkbox" name="attendeeIds" value="<%= p.id %>" <%= _att.includes(String(p.id)) ? 'checked' : '' %>><span><%= p.fullName %></span></label>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <p class="al-hint">No contacts at <%= company.name %> yet. <a href="/companies/<%= company.id %>/contacts/new" class="al-link-btn">Add a contact</a></p>
+        <% } %>
+      </fieldset>
+
+      <fieldset class="al-field">
+        <legend>Projects</legend>
+        <% if (projects.length) { %>
+          <div class="al-checks">
+            <% projects.forEach(p => { %>
+              <label class="al-checkpill"><input type="checkbox" name="projectIds" value="<%= p.id %>" <%= _prj.includes(String(p.id)) ? 'checked' : '' %>><span><%= p.name %></span></label>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <p class="al-hint">No projects for this company.</p>
+        <% } %>
+      </fieldset>
+
+      <% if (typeof teamUsers !== 'undefined' && teamUsers.length) { %>
+        <fieldset class="al-field">
+          <legend>Share with team <span class="al-opt">they're emailed when it's completed</span></legend>
+          <div class="al-checks">
+            <% teamUsers.forEach(u => { %>
+              <label class="al-checkpill" <% if (u.title) { %>title="<%= u.title %>"<% } %>><input type="checkbox" name="participantIds" value="<%= u.id %>" <%= _par.includes(String(u.id)) ? 'checked' : '' %>><span><%= u.name %></span></label>
+            <% }) %>
+          </div>
+        </fieldset>
+      <% } %>
+    </section>
+
+    <section class="al-fs">
+      <h2 class="al-fs-title">Outcome and notes</h2>
+      <div class="al-field al-w-md">
+        <label for="fResult">Outcome <span class="al-opt">optional</span></label>
+        <select name="result" id="fResult" class="al-input">
+          <option value="">No outcome yet</option>
+          <% resultChoices.forEach(opt => { %><option value="<%= opt %>" <%= values.result === opt ? 'selected' : '' %>><%= opt %></option><% }) %>
+        </select>
+        <p class="al-hint">Only "Completed" closes the activity. Other outcomes keep it open.</p>
+      </div>
+      <div class="al-field">
+        <label for="fDetails">Notes</label>
+        <textarea name="details" id="fDetails" class="al-input al-textarea" rows="5" placeholder="What was discussed, next steps"><%= values.details || '' %></textarea>
+      </div>
+    </section>
+
+    <div class="al-form-actions">
+      <button type="submit" class="al-btn al-btn-primary"><i class="bi bi-check2" aria-hidden="true"></i>Save activity</button>
+      <a href="/companies/<%= company.id %>" class="al-btn">Cancel</a>
     </div>
   </form>
 </div>

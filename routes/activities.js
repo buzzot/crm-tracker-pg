@@ -38,11 +38,86 @@ router.get('/activities', async (req, res, next) => {
       .map((a) => ({
         ...a,
         companyNames: a.companyIds.map((id) => companyById.get(id)?.name).filter(Boolean),
-        projectNames: a.projectIds.map((id) => projectById.get(id)?.name).filter(Boolean)
+        projectNames: a.projectIds.map((id) => projectById.get(id)?.name).filter(Boolean),
+        projectLinks: a.projectIds
+          .map((id) => ({ id, name: projectById.get(id)?.name || null }))
+          .filter((p) => p.name),
       }));
 
-    res.render('activities', { title: 'Activity', activities: sorted });
+    res.render('activities', {
+      title: 'Activity',
+      activities: sorted,
+      currentUserId: user ? user.id : null,
+      typeChoices: crm.schema.tables.activities.typeChoices,
+    });
   } catch (err) {
+    next(err);
+  }
+});
+
+// "New activity" — activities belong to a company, so pick one first,
+// then continue to the existing company activity form.
+router.get('/activities/new', async (req, res, next) => {
+  try {
+    const companies = await crm.listCompanies(req.session.user);
+    companies.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    res.render('activity-new-global', { title: 'New activity', companies });
+  } catch (err) { next(err); }
+});
+
+// Only return activities the user is allowed to see (same rule as the list)
+async function findAccessible(user, id) {
+  const list = await crm.listActivities(user);
+  return list.find((a) => a.id === id) || null;
+}
+
+// Side drawer on the Activity list — server-rendered fragment, no layout
+router.get('/activities/:id/panel', async (req, res, next) => {
+  try {
+    const user = req.session.user;
+    const allowed = await findAccessible(user, req.params.id);
+    if (!allowed) return res.status(404).send('<div class="ad-error">This activity is not available.</div>');
+    const [activity, projects, companies] = await Promise.all([
+      crm.getActivityDetail(req.params.id),
+      crm.listProjects(user),
+      crm.listCompanies(user),
+    ]);
+    if (!activity || !activity.name) return res.status(404).send('<div class="ad-error">This activity is not available.</div>');
+    const projectById = new Map(projects.map((p) => [p.id, p]));
+    const companyId = (activity.companyIds || [])[0] || null;
+    res.render('partials/activity-drawer', {
+      layout: false,
+      activity,
+      companyId,
+      companyName: (activity.companyNames || [])[0] || companies.find((c) => c.id === companyId)?.name || null,
+      linkedProjects: (activity.projectIds || []).map((id) => projectById.get(id) || { id, name: null }),
+    });
+  } catch (err) { next(err); }
+});
+
+// One-click "Mark complete" from the list or drawer
+router.post('/activities/:id/complete', async (req, res, next) => {
+  const wantsJson = (req.get('accept') || '').includes('application/json');
+  try {
+    const current = await findAccessible(req.session.user, req.params.id);
+    if (!current) return wantsJson ? res.status(404).json({ error: 'Activity not found' }) : res.redirect('/activities');
+    const updated = await crm.completeActivity(current.id);
+    // Same notification rule as the edit form: only on the first transition to Completed
+    if (current.result !== 'Completed') {
+      try {
+        const participants = await crm.listActivityParticipants(current.id);
+        if (participants.length) {
+          const detail = await crm.getActivityDetail(current.id);
+          await sendActivityConfirmationEmails({ activity: detail, participants });
+        }
+      } catch (emailErr) {
+        console.error('[activities] Email send error:', emailErr.message);
+      }
+    }
+    if (wantsJson) return res.json({ id: updated.id, result: updated.result, statusDate: updated.statusDate });
+    res.redirect('/activities');
+  } catch (err) {
+    if (wantsJson) return res.status(500).json({ error: 'Could not update activity' });
     next(err);
   }
 });

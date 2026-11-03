@@ -1,0 +1,111 @@
+<%
+  const done = activity.result === 'Completed';
+  const typeIcon = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-people', Demo: 'bi-easel' }[activity.type] || 'bi-clock-history';
+  function fmtDay(s) {
+    if (!s) return null;
+    const d = new Date(String(s).slice(0, 10) + 'T00:00:00');
+    return isNaN(d) ? null : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function ago(v) {
+    if (!v) return '';
+    const t = new Date(v).getTime(); if (isNaN(t)) return '';
+    const m = Math.floor((Date.now() - t) / 60000);
+    if (m < 2) return 'just now'; if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+    const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
+    return new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  const created = activity.createdAt ? new Date(activity.createdAt).toISOString().slice(0, 10) : null;
+  const history = (activity.comments || []).slice(0, 5);   // newest first from the API
+  const files = activity.files || [];
+  const attendees = activity.attendees || [];
+  const participants = activity.participants || [];
+%>
+<div class="ad" data-activity-id="<%= activity.id %>" data-done="<%= done ? 1 : 0 %>">
+  <div class="ad-head">
+    <div class="ad-kicker"><i class="bi <%= typeIcon %>" aria-hidden="true"></i><%= activity.type || 'Activity' %></div>
+    <h2 class="ad-title" id="adTitle"><%= activity.name %></h2>
+    <% if (companyId) { %>
+      <a href="/companies/<%= companyId %>" class="ad-company"><i class="bi bi-building" aria-hidden="true"></i><%= companyName || 'Company' %></a>
+    <% } %>
+    <div class="ad-status-row">
+      <span class="ad-status <%= done ? 'is-done' : 'is-open' %>"><span class="ad-dot" aria-hidden="true"></span><%= done ? 'Completed' : 'Open' %></span>
+      <% if (activity.result && !done) { %><span class="ad-outcome">Outcome: <%= activity.result %></span><% } %>
+      <% if (!done && activity.dueDate) { %><span class="ad-due" data-due="<%= activity.dueDate %>"></span><% } %>
+    </div>
+  </div>
+
+  <div class="ad-actions">
+    <% if (!done) { %>
+      <button type="button" class="ad-btn ad-btn-primary" data-ad-complete="<%= activity.id %>"><i class="bi bi-check2"></i>Mark complete</button>
+    <% } %>
+    <a class="ad-btn" href="/activities/<%= activity.id %>?edit=1"><i class="bi bi-pencil"></i>Edit</a>
+    <% if (companyId) { %>
+      <a class="ad-btn" href="/companies/<%= companyId %>/activities/new"><i class="bi bi-arrow-return-right"></i>Log follow-up</a>
+    <% } %>
+    <a class="ad-btn ad-btn-ghost" href="/activities/<%= activity.id %>" title="Open full record"><i class="bi bi-box-arrow-up-right"></i><span class="visually-hidden">Open full record</span></a>
+  </div>
+
+  <dl class="ad-fields">
+    <dt>Owner</dt><dd><%= activity.ownerName || '—' %></dd>
+    <dt>Contacts</dt>
+    <dd><%= attendees.length ? attendees.map(a => a.name || 'Unknown contact').join(', ') : '—' %></dd>
+    <dt>Date</dt><dd><%= fmtDay(activity.date) || fmtDay(created) || '—' %><% if (!activity.date && created) { %> <span class="ad-muted">(created)</span><% } %></dd>
+    <dt>Due date</dt><dd><%= fmtDay(activity.dueDate) || '—' %></dd>
+    <dt><%= done ? 'Completed' : 'Last update' %></dt><dd><%= fmtDay(activity.statusDate) || '—' %></dd>
+    <dt>Projects</dt>
+    <dd>
+      <% if (linkedProjects.length) { %>
+        <% linkedProjects.forEach((p, i) => { %><a href="/projects/<%= p.id %>" class="ad-link"><%= p.name || 'Project' %></a><%= i < linkedProjects.length - 1 ? ', ' : '' %><% }) %>
+      <% } else { %>—<% } %>
+    </dd>
+    <% if (participants.length) { %>
+      <dt>Shared with</dt><dd><%= participants.map(p => p.name).join(', ') %></dd>
+    <% } %>
+  </dl>
+
+  <section class="ad-section">
+    <h3 class="ad-h">Notes</h3>
+    <% if (activity.details) { %>
+      <div class="ad-notes"><%= activity.details %></div>
+    <% } else { %>
+      <p class="ad-muted">No notes yet.</p>
+    <% } %>
+  </section>
+
+  <% if (files.length) { %>
+    <section class="ad-section">
+      <h3 class="ad-h">Attachments <span class="ad-n"><%= files.length %></span></h3>
+      <ul class="ad-files">
+        <% files.forEach(f => { %>
+          <li><a href="<%= f.url %>" target="_blank" rel="noopener" class="ad-link"><i class="bi bi-paperclip" aria-hidden="true"></i><%= f.filename %></a></li>
+        <% }) %>
+      </ul>
+    </section>
+  <% } %>
+
+  <section class="ad-section">
+    <h3 class="ad-h">Communication <span class="ad-n"><%= (activity.comments || []).length %></span></h3>
+    <% if (!history.length) { %>
+      <p class="ad-muted">No emails or comments yet.</p>
+    <% } else { %>
+      <ul class="ad-history">
+        <% history.forEach(c => { const isEmail = c.type === 'email'; %>
+          <li>
+            <span class="ad-h-icon <%= isEmail ? 'is-email' : '' %>" title="<%= isEmail ? 'Email received' : 'Comment' %>">
+              <i class="bi <%= isEmail ? 'bi-envelope-arrow-down' : 'bi-chat-left-text' %>" aria-hidden="true"></i>
+            </span>
+            <div class="ad-h-body">
+              <div class="ad-h-meta"><strong><%= c.author %></strong> <span class="ad-muted"><%= isEmail ? 'email received' : 'comment' %> &middot; <%= ago(c.postedAt) %></span></div>
+              <% if (isEmail && c.emailSubject) { %><div class="ad-h-subj"><%= c.emailSubject %></div><% } %>
+              <div class="ad-h-text"><%= (c.comment || '').slice(0, 220) %><%= (c.comment || '').length > 220 ? '…' : '' %></div>
+            </div>
+          </li>
+        <% }) %>
+      </ul>
+      <% if ((activity.comments || []).length > history.length) { %>
+        <a href="/activities/<%= activity.id %>" class="ad-link ad-more">View all <%= activity.comments.length %> on the activity page</a>
+      <% } %>
+    <% } %>
+  </section>
+</div>

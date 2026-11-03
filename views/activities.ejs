@@ -1,165 +1,470 @@
-<div class="pnew-page">
+<%
+  const _rows = activities.map(a => ({
+    id: a.id,
+    name: a.name || '',
+    type: a.type || '',
+    result: a.result || '',
+    date: a.date || '',
+    dueDate: a.dueDate || '',
+    statusDate: a.statusDate || '',
+    createdAt: a.createdAt ? new Date(a.createdAt).toISOString().slice(0, 10) : '',
+    companyId: (a.companyIds || [])[0] || '',
+    companyName: (a.companyNames || [])[0] || '',
+    projects: a.projectLinks || [],
+    ownerId: a.ownerId || '',
+    ownerName: a.ownerName || '',
+  }));
+  // Escape for safe embedding inside <script>
+  const _json = JSON.stringify(_rows)
+    .replace(/</g, '\\u003c')
+    .split(String.fromCharCode(0x2028)).join('\\u2028')
+    .split(String.fromCharCode(0x2029)).join('\\u2029');
+%>
 
-  <div class="projects-page-header" style="margin-bottom:0.75rem;">
+<div class="al" id="activityList">
+
+  <header class="al-header">
     <div>
-      <h1 class="projects-page-title">Activity</h1>
-      <div class="projects-page-subtitle">
-        <%= activities.length %> activit<%= activities.length === 1 ? 'y' : 'ies' %> logged
-      </div>
+      <h1 class="al-title">Activity</h1>
+      <p class="al-sub" id="alSummary"><%= activities.length %> activities</p>
     </div>
-    <div class="projects-page-actions">
-      <div class="projects-search-wrap">
-        <i class="bi bi-search"></i>
-        <input type="text" id="activitySearch" placeholder="Search...">
-      </div>
-    </div>
+    <a href="/activities/new" class="al-btn al-btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i>New activity</a>
+  </header>
+
+  <div class="al-tabs" role="tablist" aria-label="Activity status">
+    <button type="button" class="al-tab" role="tab" data-tab="all">All <span class="al-tab-n" data-n="all"></span></button>
+    <button type="button" class="al-tab" role="tab" data-tab="open">Open <span class="al-tab-n" data-n="open"></span></button>
+    <button type="button" class="al-tab" role="tab" data-tab="completed">Completed <span class="al-tab-n" data-n="completed"></span></button>
   </div>
 
-  <div class="act-filter-row">
-    <button class="dash-filter-btn active" data-filter="all">All <span class="act-filter-badge" id="badgeAll"><%= activities.length %></span></button>
-    <button class="dash-filter-btn" data-filter="open">Open <span class="act-filter-badge" id="badgeOpen"></span></button>
-    <button class="dash-filter-btn" data-filter="completed">Completed <span class="act-filter-badge" id="badgeCompleted"></span></button>
-  </div>
+  <!-- Toolbar: search, filters and sort together -->
+  <div class="al-toolbar">
+    <label class="al-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input type="search" id="fQ" placeholder="Search activities" autocomplete="off" aria-label="Search activities">
+    </label>
+    <select id="fType" class="al-select" aria-label="Type">
+      <option value="">Type</option>
+      <% typeChoices.forEach(t => { %><option value="<%= t %>"><%= t %></option><% }) %>
+    </select>
+    <select id="fCompany" class="al-select" aria-label="Company"><option value="">Company</option></select>
+    <select id="fOwner" class="al-select" aria-label="Owner"><option value="">Owner</option><option value="me">Me</option></select>
 
-  <div class="pnew-card act-list-card">
-    <% if (activities.length === 0) { %>
-      <div class="act-list-empty">No activity logged yet.</div>
-    <% } %>
-    <% activities.forEach((a, idx) => { %>
-      <%
-        const _isCompleted = (a.result || '').toLowerCase() === 'completed' || (a.type || '').toLowerCase() === 'completed';
-        const t = (a.type || '').toLowerCase();
-        const icon = t.includes('call') ? 'bi-telephone' : t.includes('email') ? 'bi-envelope' : t.includes('linkedin') ? 'bi-linkedin' : (t.includes('meet') || t.includes('demo')) ? 'bi-people' : 'bi-clock-history';
-        const iconBg = t.includes('call') ? 'act-icon-blue' : t.includes('email') ? 'act-icon-purple' : t.includes('linkedin') ? 'act-icon-blue' : 'act-icon-gray';
-
-        // Progress bar
-        const _today = new Date(); _today.setHours(0,0,0,0);
-        let barState = 'planned', barWidth = 0, barText = '';
-
-        if (_isCompleted) {
-          barState = 'done'; barWidth = 100;
-          const _doneDate = a.statusDate ? new Date(a.statusDate + 'T00:00:00') : null;
-          barText = 'DONE ' + (_doneDate ? _doneDate.toLocaleDateString(undefined, {month:'short', day:'numeric'}) : '');
-        } else if (a.dueDate) {
-          const _due = new Date(a.dueDate + 'T00:00:00');
-          const _daysUntil = Math.floor((_due - _today) / 86400000);
-          if (_daysUntil < 0) {
-            barState = 'overdue'; barWidth = 50;
-            barText = 'OVERDUE ' + Math.abs(_daysUntil) + 'd';
-          } else {
-            const _hasAction = a.statusDate && a.statusDate !== a.date && new Date(a.statusDate) > new Date(a.date);
-            if (_hasAction) {
-              const _daysAgo = Math.max(1, Math.floor((_today - new Date(a.statusDate + 'T00:00:00')) / 86400000));
-              barState = 'inprogress';
-              barWidth = Math.min(85, Math.max(20, Math.round((_daysAgo / 45) * 85)));
-              barText = _daysAgo + ' DAYS AGO';
-            } else {
-              barText = _daysUntil === 0 ? 'DUE TODAY' : 'DUE IN ' + _daysUntil + 'd';
-            }
-          }
-        } else {
-          const _hasAction = a.statusDate && a.statusDate !== a.date && new Date(a.statusDate) > new Date(a.date);
-          if (_hasAction) {
-            const _daysAgo = Math.max(1, Math.floor((_today - new Date(a.statusDate + 'T00:00:00')) / 86400000));
-            barState = 'inprogress';
-            barWidth = Math.min(85, Math.max(20, Math.round((_daysAgo / 45) * 85)));
-            barText = _daysAgo + ' DAYS AGO';
-          } else {
-            barText = '—';
-          }
-        }
-
-        // Due chip
-        let dueChipLabel = '', dueChipCls = '';
-        if (!_isCompleted && a.dueDate) {
-          const _due2 = new Date(a.dueDate + 'T00:00:00');
-          const _days2 = Math.floor((_due2 - _today) / 86400000);
-          if (_days2 < 0) { dueChipLabel = 'Overdue'; dueChipCls = 'due-overdue'; }
-          else if (_days2 === 0) { dueChipLabel = 'Due today'; dueChipCls = 'due-soon'; }
-          else if (_days2 <= 3) {
-            dueChipLabel = 'Due ' + _due2.toLocaleDateString(undefined, {month:'short', day:'numeric'});
-            dueChipCls = 'due-soon';
-          }
-        }
-      %>
-      <div class="act-list-row<%= idx === 0 ? ' act-list-row-first' : '' %>"
-           data-search="<%= [a.name, a.type, a.result, (a.companyNames||[]).join(' '), (a.projectNames||[]).join(' ')].join(' ').toLowerCase() %>"
-           data-state="<%= _isCompleted ? 'completed' : 'open' %>">
-
-        <div class="act-list-icon-wrap">
-          <div class="act-list-icon <%= iconBg %>"><i class="bi <%= icon %>"></i></div>
-        </div>
-
-        <div class="act-list-body">
-          <div class="act-list-top">
-            <a href="/activities/<%= a.id %>" class="act-list-name <%= _isCompleted ? 'act-list-name-done' : '' %>"><%= a.name || '(untitled)' %></a>
-            <div class="act-bar-wrap flex-shrink-0">
-              <div class="act-bar-track">
-                <% if (barWidth === 0) { %>
-                  <div style="width:100%;display:flex;align-items:center;padding:0 7px;">
-                    <span class="act-bar-label act-bar-label-muted"><%= barText %></span>
-                  </div>
-                <% } else { %>
-                  <div class="act-bar-fill act-bar-<%= barState %>" style="width:<%= barWidth %>%;<%= barState === 'done' ? 'border-radius:9px;' : '' %>">
-                    <span class="act-bar-label"><%= barText %></span>
-                  </div>
-                <% } %>
-              </div>
-            </div>
-          </div>
-
-          <div class="act-list-meta">
-            <% if (a.companyIds && a.companyIds[0]) { %>
-              <a href="/companies/<%= a.companyIds[0] %>" class="act-meta-company"><i class="bi bi-building"></i> <%= (a.companyNames||[]).join(', ') %></a>
-            <% } %>
-            <% if (a.type) { %><span class="act-meta-pill"><%= a.type %></span><% } %>
-            <% if (a.projectNames && a.projectNames.length) { %>
-              <span class="act-meta-pill"><i class="bi bi-diagram-3"></i> <%= a.projectNames.join(', ') %></span>
-            <% } %>
-            <% if (dueChipLabel) { %><span class="due-chip <%= dueChipCls %>"><%= dueChipLabel %></span><% } %>
-            <% if (_isCompleted) { %><span class="act-meta-pill act-meta-pill-done"><i class="bi bi-check-circle-fill"></i> Completed</span><% } else if (a.result) { %><span class="act-meta-pill"><%= a.result %></span><% } %>
+    <div class="dropdown">
+      <button type="button" class="al-select al-more" id="fMoreBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+        More filters <span class="al-more-n" id="fMoreN" hidden></span>
+      </button>
+      <div class="dropdown-menu al-pop" aria-labelledby="fMoreBtn">
+        <label class="al-pop-field">
+          <span>Project</span>
+          <select id="fProject" class="al-select"><option value="">Any project</option></select>
+        </label>
+        <div class="al-pop-field">
+          <span>Due between</span>
+          <div class="al-range">
+            <input type="date" id="fFrom" class="al-date" aria-label="Due from">
+            <span class="al-muted">to</span>
+            <input type="date" id="fTo" class="al-date" aria-label="Due to">
           </div>
         </div>
-
+        <label class="al-check"><input type="checkbox" id="fOverdue"> Overdue only</label>
       </div>
-    <% }) %>
+    </div>
+
+    <div class="al-sort">
+      <label for="fSort" class="al-muted">Sort</label>
+      <select id="fSort" class="al-select" aria-label="Sort by">
+        <option value="due">Due date</option>
+        <option value="recent">Latest activity</option>
+        <option value="completed">Completion date</option>
+        <option value="name">Activity</option>
+        <option value="company">Company</option>
+      </select>
+      <button type="button" class="al-icon-btn" id="fDir" aria-label="Toggle sort direction"><i class="bi bi-sort-down-alt"></i></button>
+    </div>
   </div>
 
+  <div class="al-chips" id="alChips" hidden></div>
+
+  <!-- Table -->
+  <div class="al-table" role="table" aria-label="Activities" aria-rowcount="-1">
+    <div class="al-thead" role="row">
+      <button type="button" role="columnheader" class="al-th" data-sort="name">Activity <i class="bi" aria-hidden="true"></i></button>
+      <button type="button" role="columnheader" class="al-th" data-sort="company">Company <i class="bi" aria-hidden="true"></i></button>
+      <span role="columnheader" class="al-th al-col-type">Type</span>
+      <span role="columnheader" class="al-th">Status / outcome</span>
+      <button type="button" role="columnheader" class="al-th" data-sort="due">Due <i class="bi" aria-hidden="true"></i></button>
+      <span role="columnheader" class="al-th al-th-actions"><span class="visually-hidden">Actions</span></span>
+    </div>
+    <div id="alBody" role="rowgroup">
+      <% for (let i = 0; i < 6; i++) { %>
+        <div class="al-row al-skel" aria-hidden="true"><span><i></i><i class="s"></i></span><span><i></i></span><span class="al-col-type"><i></i></span><span><i></i></span><span><i></i></span><span></span></div>
+      <% } %>
+    </div>
+    <div class="al-empty" id="alEmpty" hidden></div>
+    <div class="al-foot" id="alFoot" hidden>
+      <span id="alShowing"></span>
+      <button type="button" class="al-link-btn" id="alMore">Show more</button>
+    </div>
+  </div>
 </div>
+
+<!-- Detail drawer -->
+<div class="al-backdrop" id="alBackdrop" hidden></div>
+<aside class="al-drawer" id="alDrawer" role="dialog" aria-modal="true" aria-labelledby="adTitle" hidden tabindex="-1">
+  <button type="button" class="al-drawer-close" id="alDrawerClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+  <div id="alDrawerBody"></div>
+</aside>
+
+<div class="al-toast" id="alToast" role="status" aria-live="polite" hidden></div>
 
 <script>
 (function () {
-  const list = document.querySelector('.act-list-card');
-  const rows = list ? Array.from(list.querySelectorAll('.act-list-row')) : [];
-  const searchInput = document.getElementById('activitySearch');
-  const filterBtns = document.querySelectorAll('.act-filter-btn, .dash-filter-btn[data-filter]');
-  let currentFilter = 'all';
+  var DATA = <%- _json %>;
+  var ME = <%- JSON.stringify(currentUserId || '') %>;
+  var PAGE = 25;
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var ICON = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-people', Demo: 'bi-easel' };
+  var DEFAULT_SORT = { open: ['due', 'asc'], completed: ['completed', 'desc'], all: ['recent', 'desc'] };
 
-  // Count badges
-  const openCount = rows.filter(r => r.dataset.state === 'open').length;
-  const completedCount = rows.filter(r => r.dataset.state === 'completed').length;
-  const b = id => document.getElementById(id);
-  if (b('badgeOpen')) b('badgeOpen').textContent = openCount;
-  if (b('badgeCompleted')) b('badgeCompleted').textContent = completedCount;
+  // Local calendar date (user's timezone), compared by whole days
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var S = { tab: 'open', q: '', type: '', company: '', owner: '', project: '', from: '', to: '', overdue: false, sort: '', dir: '', open: '' };
+  var limit = PAGE;
 
-  function applyFilters() {
-    const q = (searchInput ? searchInput.value : '').toLowerCase();
-    rows.forEach(row => {
-      const matchSearch = (row.dataset.search || '').includes(q);
-      const matchFilter = currentFilter === 'all' || row.dataset.state === currentFilter;
-      row.style.display = (matchSearch && matchFilter) ? '' : 'none';
+  // ── helpers ────────────────────────────────────────────────────────────────
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function day(s) { var p = (s || '').slice(0, 10).split('-'); return p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]) : null; }
+  function diff(s) { var d = day(s); return d ? Math.round((d - today) / 86400000) : null; }
+  function fmt(s, withYear) { var d = day(s); if (!d) return ''; return MONTHS[d.getMonth()] + ' ' + d.getDate() + (withYear || d.getFullYear() !== today.getFullYear() ? ', ' + d.getFullYear() : ''); }
+  function done(a) { return a.result === 'Completed'; }                       // only "Completed" closes an activity
+  function overdue(a) { var n = diff(a.dueDate); return !done(a) && n !== null && n < 0; }
+  function recentKey(a) { return a.statusDate || a.date || a.createdAt || ''; }
+
+  function dueHtml(a) {
+    if (done(a)) return '<span class="al-due is-done">Completed</span><span class="al-l2">' + esc(fmt(a.statusDate) || '') + '</span>';
+    var n = diff(a.dueDate);
+    if (n === null) return '<span class="al-muted">No due date</span>';
+    var label, cls = '';
+    if (n < 0)        { label = (-n) + 'd overdue'; cls = 'is-overdue'; }
+    else if (n === 0) { label = 'Due today'; cls = 'is-today'; }
+    else if (n === 1) { label = 'Due tomorrow'; }
+    else if (n <= 7)  { label = 'In ' + n + ' days'; }
+    else              { label = 'Due ' + fmt(a.dueDate); }
+    return '<span class="al-due ' + cls + '">' + label + '</span><span class="al-l2">' + esc(fmt(a.dueDate, true)) + '</span>';
+  }
+
+  function rowHtml(a) {
+    var isDone = done(a);
+    var proj = a.projects.map(function (p) { return p.name; }).join(', ');
+    return '<div class="al-row' + (isDone ? ' is-done' : '') + '" role="row" tabindex="0" data-id="' + a.id + '" aria-label="' + esc(a.name) + '">' +
+      '<span class="al-c-name" role="cell">' +
+        '<span class="al-name" title="' + esc(a.name) + '">' + esc(a.name || '(untitled)') + '</span>' +
+        (proj ? '<span class="al-l2"><i class="bi bi-folder2" aria-hidden="true"></i> ' + esc(proj) + '</span>' : '') +
+      '</span>' +
+      '<span role="cell">' + (a.companyId ? '<a class="al-co" href="/companies/' + a.companyId + '">' + esc(a.companyName) + '</a>' : '<span class="al-muted">&mdash;</span>') + '</span>' +
+      '<span role="cell" class="al-col-type al-type">' + (a.type ? '<i class="bi ' + (ICON[a.type] || 'bi-clock-history') + '" aria-hidden="true"></i>' + esc(a.type) : '<span class="al-muted">&mdash;</span>') + '</span>' +
+      '<span role="cell" class="al-c-status">' +
+        '<span class="al-status ' + (isDone ? 'is-done' : '') + '"><span class="al-dot" aria-hidden="true"></span>' + (isDone ? 'Completed' : 'Open') + '</span>' +
+        '<span class="al-l2">' + (a.result && !isDone ? esc(a.result) : (isDone ? '' : 'No outcome yet')) + '</span>' +
+      '</span>' +
+      '<span role="cell" class="al-c-due">' + dueHtml(a) + '</span>' +
+      '<span role="cell" class="al-c-actions">' +
+        (isDone ? '' : '<button type="button" class="al-icon-btn" data-complete="' + a.id + '" title="Mark complete" aria-label="Mark ' + esc(a.name) + ' complete"><i class="bi bi-check2"></i></button>') +
+        '<a class="al-icon-btn" href="/activities/' + a.id + '" title="Open full record" aria-label="Open ' + esc(a.name) + '"><i class="bi bi-box-arrow-up-right"></i></a>' +
+      '</span>' +
+    '</div>';
+  }
+
+  // ── filter + sort ──────────────────────────────────────────────────────────
+  function passes(a, ignoreTab) {
+    if (!ignoreTab) {
+      if (S.tab === 'open' && done(a)) return false;
+      if (S.tab === 'completed' && !done(a)) return false;
+    }
+    if (S.type && a.type !== S.type) return false;
+    if (S.company && a.companyId !== S.company) return false;
+    if (S.owner === 'me' ? a.ownerId !== ME : (S.owner && a.ownerId !== S.owner)) return false;
+    if (S.project && !a.projects.some(function (p) { return p.id === S.project; })) return false;
+    if (S.overdue && !overdue(a)) return false;
+    if (S.from && (!a.dueDate || a.dueDate < S.from)) return false;
+    if (S.to && (!a.dueDate || a.dueDate > S.to)) return false;
+    if (S.q) {
+      var hay = [a.name, a.companyName, a.type, a.result, a.ownerName].concat(a.projects.map(function (p) { return p.name; })).join(' ').toLowerCase();
+      if (hay.indexOf(S.q.toLowerCase()) === -1) return false;
+    }
+    return true;
+  }
+
+  function sortList(list) {
+    var key = S.sort || DEFAULT_SORT[S.tab][0];
+    var dir = (S.dir || (S.sort ? (key === 'name' || key === 'company' || key === 'due' ? 'asc' : 'desc') : DEFAULT_SORT[S.tab][1])) === 'asc' ? 1 : -1;
+    function cmpStr(x, y) { return x.localeCompare(y, undefined, { sensitivity: 'base' }); }
+    return list.sort(function (a, b) {
+      var r;
+      if (key === 'due') {
+        // empty due dates always last, regardless of direction
+        if (!a.dueDate && !b.dueDate) r = 0;
+        else if (!a.dueDate) return 1;
+        else if (!b.dueDate) return -1;
+        else r = a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0;
+      }
+      else if (key === 'completed') r = (a.statusDate || '').localeCompare(b.statusDate || '');
+      else if (key === 'recent') r = recentKey(a).localeCompare(recentKey(b));
+      else if (key === 'name') r = cmpStr(a.name, b.name);
+      else if (key === 'company') {
+        if (!a.companyName && b.companyName) return 1;
+        if (a.companyName && !b.companyName) return -1;
+        r = cmpStr(a.companyName, b.companyName);
+      }
+      return (r * dir) || recentKey(b).localeCompare(recentKey(a));
     });
   }
 
-  document.querySelectorAll('.dash-filter-btn[data-filter]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.dash-filter-btn[data-filter]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentFilter = btn.dataset.filter;
-      applyFilters();
+  // ── render ─────────────────────────────────────────────────────────────────
+  function render() {
+    var base = DATA.filter(function (a) { return passes(a, true); });
+    var list = sortList(base.filter(function (a) { return passes(a); }));
+    var shown = list.slice(0, limit);
+
+    $('alBody').innerHTML = shown.map(rowHtml).join('');
+    var filtering = S.q || S.type || S.company || S.owner || S.project || S.from || S.to || S.overdue;
+    $('alEmpty').hidden = list.length > 0;
+    $('alEmpty').innerHTML = filtering
+      ? 'No activities match these filters. <button type="button" class="al-link-btn" data-clear>Clear filters</button>'
+      : ({ open: 'No open activities. Everything is followed up.', completed: 'No completed activities yet.', all: 'No activities yet. <a class="al-link-btn" href="/activities/new">Log the first one</a>' })[S.tab];
+    $('alFoot').hidden = list.length <= PAGE;
+    $('alShowing').textContent = 'Showing ' + shown.length + ' of ' + list.length;
+    $('alMore').hidden = shown.length >= list.length;
+
+    // Counts follow the filters, so tabs and table always agree
+    var n = { all: base.length, open: 0, completed: 0 }, od = 0;
+    base.forEach(function (a) { if (done(a)) n.completed++; else { n.open++; if (overdue(a)) od++; } });
+    document.querySelectorAll('[data-n]').forEach(function (el) { el.textContent = n[el.getAttribute('data-n')]; });
+    $('alSummary').innerHTML = n.all + ' ' + (n.all === 1 ? 'activity' : 'activities') + ' &middot; ' + n.open + ' open' +
+      (od ? ' &middot; <span class="al-red">' + od + ' overdue</span>' : '') + (filtering ? ' &middot; filtered' : '');
+
+    document.querySelectorAll('.al-tab').forEach(function (t) {
+      var on = t.getAttribute('data-tab') === S.tab;
+      t.classList.toggle('is-active', on); t.setAttribute('aria-selected', on);
+    });
+
+    // Sort indicators
+    var key = S.sort || DEFAULT_SORT[S.tab][0];
+    var dir = S.dir || (S.sort ? ((key === 'name' || key === 'company' || key === 'due') ? 'asc' : 'desc') : DEFAULT_SORT[S.tab][1]);
+    $('fSort').value = key;
+    $('fDir').innerHTML = '<i class="bi ' + (dir === 'asc' ? 'bi-sort-up-alt' : 'bi-sort-down') + '"></i>';
+    $('fDir').setAttribute('aria-label', 'Sort direction: ' + (dir === 'asc' ? 'ascending' : 'descending'));
+    document.querySelectorAll('.al-th[data-sort]').forEach(function (th) {
+      var on = th.getAttribute('data-sort') === key;
+      th.classList.toggle('is-sorted', on);
+      th.setAttribute('aria-sort', on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      th.querySelector('i').className = 'bi ' + (on ? (dir === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down') : '');
+    });
+
+    renderChips();
+    writeUrl();
+  }
+
+  function renderChips() {
+    var chips = [];
+    function label(sel, v) { var o = $(sel).querySelector('option[value="' + CSS.escape(v) + '"]'); return o ? o.textContent : v; }
+    if (S.q)       chips.push(['q', 'Search: ' + S.q]);
+    if (S.type)    chips.push(['type', 'Type: ' + S.type]);
+    if (S.company) chips.push(['company', 'Company: ' + label('fCompany', S.company)]);
+    if (S.owner)   chips.push(['owner', 'Owner: ' + label('fOwner', S.owner)]);
+    if (S.project) chips.push(['project', 'Project: ' + label('fProject', S.project)]);
+    if (S.from || S.to) chips.push(['range', 'Due ' + (S.from ? 'from ' + fmt(S.from, true) : '') + (S.from && S.to ? ' ' : '') + (S.to ? 'to ' + fmt(S.to, true) : '')]);
+    if (S.overdue) chips.push(['overdue', 'Overdue only']);
+    var el = $('alChips');
+    el.hidden = !chips.length;
+    el.innerHTML = chips.map(function (c) {
+      return '<span class="al-chip">' + esc(c[1]) + '<button type="button" data-unset="' + c[0] + '" aria-label="Remove filter ' + esc(c[1]) + '"><i class="bi bi-x"></i></button></span>';
+    }).join('') + (chips.length ? '<button type="button" class="al-link-btn" data-clear>Clear filters</button>' : '');
+    var more = (S.project ? 1 : 0) + ((S.from || S.to) ? 1 : 0) + (S.overdue ? 1 : 0);
+    $('fMoreN').hidden = !more; $('fMoreN').textContent = more;
+  }
+
+  // ── URL state (survives opening a record and coming back) ─────────────────
+  var KEYS = ['tab', 'q', 'type', 'company', 'owner', 'project', 'from', 'to', 'overdue', 'sort', 'dir', 'open'];
+  function writeUrl() {
+    var p = new URLSearchParams();
+    KEYS.forEach(function (k) {
+      var v = S[k];
+      if (k === 'tab' && v === 'open') return;
+      if (v === true) v = '1';
+      if (v) p.set(k, v);
+    });
+    var qs = p.toString();
+    try { history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '')); } catch (e) {}
+  }
+  function readUrl() {
+    var p = new URLSearchParams(location.search);
+    KEYS.forEach(function (k) { if (p.has(k)) S[k] = k === 'overdue' ? p.get(k) === '1' : p.get(k); });
+    if (!DEFAULT_SORT[S.tab]) S.tab = 'open';
+  }
+  function syncControls() {
+    $('fQ').value = S.q; $('fType').value = S.type; $('fCompany').value = S.company; $('fOwner').value = S.owner;
+    $('fProject').value = S.project; $('fFrom').value = S.from; $('fTo').value = S.to; $('fOverdue').checked = S.overdue;
+  }
+
+  // ── options for selects ────────────────────────────────────────────────────
+  (function fillOptions() {
+    var cos = {}, owners = {}, projects = {};
+    DATA.forEach(function (a) {
+      if (a.companyId) cos[a.companyId] = a.companyName;
+      if (a.ownerId && a.ownerId !== ME) owners[a.ownerId] = a.ownerName || 'Unknown';
+      a.projects.forEach(function (p) { projects[p.id] = p.name; });
+    });
+    function add(sel, map) {
+      Object.keys(map).sort(function (x, y) { return (map[x] || '').localeCompare(map[y] || ''); })
+        .forEach(function (id) { $(sel).insertAdjacentHTML('beforeend', '<option value="' + esc(id) + '">' + esc(map[id]) + '</option>'); });
+    }
+    add('fCompany', cos); add('fOwner', owners); add('fProject', projects);
+  })();
+
+  // ── events ─────────────────────────────────────────────────────────────────
+  function set(k, v) { S[k] = v; limit = PAGE; render(); }
+  document.querySelectorAll('.al-tab').forEach(function (t) {
+    t.addEventListener('click', function () { S.tab = t.getAttribute('data-tab'); S.sort = ''; S.dir = ''; limit = PAGE; render(); });
+  });
+  var qTimer;
+  $('fQ').addEventListener('input', function (e) { clearTimeout(qTimer); qTimer = setTimeout(function () { set('q', e.target.value.trim()); }, 120); });
+  $('fType').addEventListener('change', function (e) { set('type', e.target.value); });
+  $('fCompany').addEventListener('change', function (e) { set('company', e.target.value); });
+  $('fOwner').addEventListener('change', function (e) { set('owner', e.target.value); });
+  $('fProject').addEventListener('change', function (e) { set('project', e.target.value); });
+  $('fFrom').addEventListener('change', function (e) { set('from', e.target.value); });
+  $('fTo').addEventListener('change', function (e) { set('to', e.target.value); });
+  $('fOverdue').addEventListener('change', function (e) { set('overdue', e.target.checked); });
+  $('fSort').addEventListener('change', function (e) { S.sort = e.target.value; S.dir = ''; render(); });
+  $('fDir').addEventListener('click', function () {
+    var key = S.sort || DEFAULT_SORT[S.tab][0];
+    var cur = S.dir || (S.sort ? ((key === 'name' || key === 'company' || key === 'due') ? 'asc' : 'desc') : DEFAULT_SORT[S.tab][1]);
+    S.sort = key; S.dir = cur === 'asc' ? 'desc' : 'asc'; render();
+  });
+  document.querySelectorAll('.al-th[data-sort]').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var k = th.getAttribute('data-sort'), curKey = S.sort || DEFAULT_SORT[S.tab][0];
+      if (k === curKey) $('fDir').click(); else { S.sort = k; S.dir = ''; render(); }
     });
   });
+  $('alMore').addEventListener('click', function () { limit += PAGE; render(); });
 
-  if (searchInput) searchInput.addEventListener('input', applyFilters);
+  document.addEventListener('click', function (e) {
+    var unset = e.target.closest('[data-unset]');
+    if (unset) {
+      var k = unset.getAttribute('data-unset');
+      if (k === 'range') { S.from = S.to = ''; } else S[k] = k === 'overdue' ? false : '';
+      syncControls(); limit = PAGE; render(); return;
+    }
+    if (e.target.closest('[data-clear]')) {
+      S.q = S.type = S.company = S.owner = S.project = S.from = S.to = ''; S.overdue = false;
+      syncControls(); limit = PAGE; render(); return;
+    }
+    var c = e.target.closest('[data-complete], [data-ad-complete]');
+    if (c) { e.preventDefault(); e.stopPropagation(); complete(c.getAttribute('data-complete') || c.getAttribute('data-ad-complete'), c); }
+  });
+
+  $('alBody').addEventListener('click', function (e) {
+    if (e.target.closest('a, button')) return;
+    var r = e.target.closest('.al-row[data-id]');
+    if (r) openDrawer(r.getAttribute('data-id'));
+  });
+  $('alBody').addEventListener('keydown', function (e) {
+    var r = e.target.closest('.al-row[data-id]');
+    if (!r || e.target !== r) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDrawer(r.getAttribute('data-id')); }
+    if (e.key === 'ArrowDown' && r.nextElementSibling) { e.preventDefault(); r.nextElementSibling.focus(); }
+    if (e.key === 'ArrowUp' && r.previousElementSibling) { e.preventDefault(); r.previousElementSibling.focus(); }
+  });
+
+  // ── complete ───────────────────────────────────────────────────────────────
+  function complete(id, btn) {
+    var a = DATA.find(function (x) { return x.id === id; });
+    if (!a || done(a)) return;
+    if (btn) btn.disabled = true;
+    fetch('/activities/' + encodeURIComponent(id) + '/complete', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }, body: '{}'
+    })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+      .then(function (res) {
+        a.result = res.result || 'Completed';
+        a.statusDate = res.statusDate || a.statusDate;
+        render();
+        if (S.open === id) loadDrawer(id);
+        toast('Marked complete');
+      })
+      .catch(function () { if (btn) btn.disabled = false; toast("Couldn't update the activity. Try again.", true); });
+  }
+
+  var tTimer;
+  function toast(msg, err) {
+    var t = $('alToast'); t.textContent = msg; t.classList.toggle('is-error', !!err); t.hidden = false;
+    clearTimeout(tTimer); tTimer = setTimeout(function () { t.hidden = true; }, 2600);
+  }
+
+  // ── drawer ─────────────────────────────────────────────────────────────────
+  var lastFocus = null;
+  var SKELETON = '<div class="ad ad-loading" aria-busy="true"><i class="w40"></i><i class="w80 h"></i><i class="w50"></i><i class="w100 b"></i><i class="w70"></i><i class="w90"></i><i class="w60"></i></div>';
+
+  function openDrawer(id) {
+    lastFocus = document.activeElement;
+    S.open = id; writeUrl();
+    $('alBackdrop').hidden = false; $('alDrawer').hidden = false;
+    document.body.classList.add('al-lock');
+    document.querySelectorAll('.al-row.is-current').forEach(function (r) { r.classList.remove('is-current'); });
+    var row = document.querySelector('.al-row[data-id="' + CSS.escape(id) + '"]'); if (row) row.classList.add('is-current');
+    loadDrawer(id);
+    $('alDrawer').focus();
+  }
+  function loadDrawer(id) {
+    $('alDrawerBody').innerHTML = SKELETON;
+    fetch('/activities/' + encodeURIComponent(id) + '/panel', { credentials: 'same-origin' })
+      .then(function (r) { return r.text().then(function (t) { return r.ok ? t : Promise.reject(t); }); })
+      .then(function (html) {
+        if (S.open !== id) return;
+        $('alDrawerBody').innerHTML = html;
+        var due = $('alDrawerBody').querySelector('[data-due]');
+        if (due) {
+          var n = diff(due.getAttribute('data-due'));
+          due.textContent = n < 0 ? (-n) + 'd overdue' : n === 0 ? 'Due today' : n === 1 ? 'Due tomorrow' : 'Due ' + fmt(due.getAttribute('data-due'));
+          due.className = 'ad-due' + (n < 0 ? ' is-overdue' : n === 0 ? ' is-today' : '');
+        }
+      })
+      .catch(function (msg) {
+        if (S.open !== id) return;
+        $('alDrawerBody').innerHTML = '<div class="ad-error"><p>' + (typeof msg === 'string' && msg.indexOf('ad-error') !== -1 ? 'This activity is not available.' : "Couldn't load this activity.") + '</p>' +
+          '<button type="button" class="ad-btn" id="adRetry"><i class="bi bi-arrow-clockwise"></i>Retry</button></div>';
+        var rb = $('adRetry'); if (rb) rb.addEventListener('click', function () { loadDrawer(id); });
+      });
+  }
+  function closeDrawer() {
+    if ($('alDrawer').hidden) return;
+    S.open = ''; writeUrl();
+    $('alBackdrop').hidden = true; $('alDrawer').hidden = true;
+    document.body.classList.remove('al-lock');
+    if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  }
+  $('alDrawerClose').addEventListener('click', closeDrawer);
+  $('alBackdrop').addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !$('alDrawer').hidden) { closeDrawer(); return; }
+    if (e.key === 'Tab' && !$('alDrawer').hidden) {
+      var f = $('alDrawer').querySelectorAll('a[href], button:not([disabled]), [tabindex="0"]');
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+
+  // ── init ───────────────────────────────────────────────────────────────────
+  readUrl();
+  syncControls();
+  render();
+  if (S.open && DATA.some(function (a) { return a.id === S.open; })) openDrawer(S.open); else if (S.open) { S.open = ''; writeUrl(); }
 })();
 </script>

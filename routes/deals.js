@@ -114,7 +114,7 @@ router.post('/deals/:id/activities', async (req, res, next) => {
     const { name, type, date, details, regarding, result } = req.body;
     const deal = await crm.getDeal(req.params.id);
     const companyId = (deal.companyIds || [])[0] || null;
-    await crm.createActivity({ name, companyId, dealId: req.params.id, type, date, details, regarding, result });
+    await crm.createActivity({ name, companyId, ownerId: req.session.user ? req.session.user.id : null, type, date, details, regarding, result });
     res.redirect(`/deals/${req.params.id}`);
   } catch (err) {
     try {
