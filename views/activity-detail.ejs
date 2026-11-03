@@ -17,7 +17,9 @@
 
   function fmtDateShort(str) {
     if (!str) return '—';
-    return new Date(str + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const d = str instanceof Date ? str : new Date(String(str).includes('T') ? str : str + 'T00:00:00');
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   const noteAvatarClasses = ['note-avatar-blue', 'note-avatar-purple', 'note-avatar-gray'];
@@ -103,7 +105,7 @@
         </a>
       <% } %>
       <% if (activity.date || activity.createdAt) { %>
-        <span class="adp-meta-chip adp-meta-muted"><i class="bi bi-calendar3"></i> <%= fmtDateShort(activity.date || (activity.createdAt ? activity.createdAt.split('T')[0] : null)) %></span>
+        <span class="adp-meta-chip adp-meta-muted"><i class="bi bi-calendar3"></i> <%= fmtDateShort(activity.date || activity.createdAt) %></span>
       <% } %>
     </div>
   </div>
