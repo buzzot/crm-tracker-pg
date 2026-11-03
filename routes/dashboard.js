@@ -155,6 +155,36 @@ router.get('/', async (req, res, next) => {
       return { ...c, contextLabel, contextLink, contextType, timeAgo: timeAgo(c.postedAt) };
     });
 
+    // ── Dashboard extras ──────────────────────────────────────────────────────
+    const todayDate = new Date(); todayDate.setHours(0, 0, 0, 0);
+
+    const overdueCount = allMappedActivities.filter((a) => {
+      if (!a.dueDate || a.result === 'Completed') return false;
+      return new Date(a.dueDate + 'T00:00:00') < todayDate;
+    }).length;
+
+    const needsAttention = allMappedActivities
+      .filter((a) => {
+        if (!a.dueDate || a.result === 'Completed') return false;
+        const diff = Math.floor((new Date(a.dueDate + 'T00:00:00') - todayDate) / 86400000);
+        return diff <= 3;
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+      .slice(0, 7);
+
+    const companyUpdatesMap = {};
+    for (const c of recentComments) {
+      if (!c.activityIds || !c.activityIds[0]) continue;
+      const act = activityById.get(c.activityIds[0]);
+      if (!act || !act.companyIds || !act.companyIds.length) continue;
+      const cid = act.companyIds[0];
+      const cname = companyById.get(cid)?.name;
+      if (!cname) continue;
+      if (!companyUpdatesMap[cid]) companyUpdatesMap[cid] = { companyId: cid, companyName: cname, comments: [] };
+      if (companyUpdatesMap[cid].comments.length < 2) companyUpdatesMap[cid].comments.push(c);
+    }
+    const accountUpdates = Object.values(companyUpdatesMap).slice(0, 5);
+
     res.render('dashboard', {
       title: 'Dashboard',
       isRdUser: false,
@@ -162,7 +192,10 @@ router.get('/', async (req, res, next) => {
       stats: { companyCount: companies.length, openDealCount, openPipelineTotal, wonTotal },
       board,
       allActivities: allMappedActivities,
-      recentComments
+      recentComments,
+      overdueCount,
+      needsAttention,
+      accountUpdates,
     });
   } catch (err) {
     next(err);

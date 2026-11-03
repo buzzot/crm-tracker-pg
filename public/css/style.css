@@ -3611,3 +3611,46 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer; transition: background 0.12s;
 }
 .task-people-check:hover { background: var(--crm-muted); }
+
+/* ---- KPI cards (Sales dashboard) ----------------------------------------- */
+.kpi-card {
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.kpi-card:hover {
+  box-shadow: 0 2px 12px oklch(0.55 0.2 258 / 0.12);
+  border-color: oklch(0.55 0.2 258 / 0.3);
+}
+.kpi-card .card-body { padding: 1rem 1.2rem; }
+.kpi-card-danger { border-color: oklch(0.55 0.22 25 / 0.35); }
+.kpi-card-danger:hover { box-shadow: 0 2px 12px oklch(0.55 0.22 25 / 0.15); border-color: oklch(0.55 0.22 25 / 0.5); }
+.kpi-icon {
+  width: 34px; height: 34px;
+  border-radius: 0.55rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+}
+.kpi-icon-blue   { background: #e7eefc; color: var(--crm-accent); }
+.kpi-icon-purple { background: #f1ecfe; color: var(--crm-violet); }
+.kpi-icon-red    { background: #fbe5e7; color: #c23b4a; }
+.kpi-icon-gray   { background: #eef0f3; color: var(--crm-muted-fg); }
+.kpi-icon-teal   { background: #e3f6fb; color: #1a8aa3; }
+.kpi-value {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--crm-fg);
+}
+.kpi-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--crm-muted-fg);
+  margin-top: 0.1rem;
+}
+.kpi-sub {
+  font-size: 0.72rem;
+  color: var(--crm-muted-fg);
+  margin-top: 0.05rem;
+}

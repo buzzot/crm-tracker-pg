@@ -130,75 +130,186 @@
 
 <% } else { %>
 
-<div class="mb-4">
-  <div class="text-muted small"><%= new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) %> &middot; Welcome back</div>
-  <h1 class="display-headline mb-0">Your <em>pipeline</em> today</h1>
+<%
+  function fmtSalesDate(str) {
+    if (!str) return '—';
+    const d = new Date(str + 'T00:00:00');
+    if (isNaN(d)) return str;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  const salesToday = new Date(); salesToday.setHours(0,0,0,0);
+  function salesDiff(dateStr) {
+    if (!dateStr) return null;
+    return Math.floor((new Date(dateStr + 'T00:00:00') - salesToday) / 86400000);
+  }
+%>
+
+<!-- ── Section 1: Header ──────────────────────────────────────────────────── -->
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+  <div>
+    <div class="text-muted small"><%= new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) %> &middot; Sales Overview</div>
+    <h1 class="display-headline mb-0">Sales <em>overview</em></h1>
+  </div>
+  <a href="/activities/new" class="btn btn-primary btn-sm" style="white-space:nowrap; margin-top:0.6rem; padding:0.45rem 1rem;">
+    <i class="bi bi-plus-lg"></i> New Activity
+  </a>
 </div>
 
-<div class="row g-3 mb-4">
+<!-- ── Section 2: KPI Cards ──────────────────────────────────────────────── -->
+<div class="row g-3 mb-3">
   <div class="col-6 col-lg-3">
-    <div class="card stat-card h-100">
-      <div class="card-body">
-        <div class="stat-icon stat-icon-blue"><i class="bi bi-building"></i></div>
-        <div class="stat-value"><%= stats.companyCount %></div>
-        <div class="stat-label">Companies</div>
+    <a href="/pipeline" class="text-decoration-none">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="kpi-icon kpi-icon-blue"><i class="bi bi-graph-up-arrow"></i></div>
+          <div class="kpi-value">$<%= stats.openPipelineTotal.toLocaleString() %></div>
+          <div class="kpi-label">Open Pipeline</div>
+          <div class="kpi-sub"><%= stats.openDealCount %> active deal<%= stats.openDealCount !== 1 ? 's' : '' %></div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-3">
+    <a href="/pipeline" class="text-decoration-none">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="kpi-icon kpi-icon-purple"><i class="bi bi-briefcase"></i></div>
+          <div class="kpi-value"><%= stats.openDealCount %></div>
+          <div class="kpi-label">Active Deals</div>
+          <div class="kpi-sub"><%= board.filter(b => !b.stage.startsWith('Closed')).length %> pipeline stages</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-3">
+    <a href="/activities" class="text-decoration-none">
+      <div class="card kpi-card h-100<%= overdueCount > 0 ? ' kpi-card-danger' : '' %>">
+        <div class="card-body">
+          <div class="kpi-icon kpi-icon-<%= overdueCount > 0 ? 'red' : 'gray' %>"><i class="bi bi-exclamation-triangle"></i></div>
+          <div class="kpi-value<%= overdueCount > 0 ? ' text-danger' : '' %>"><%= overdueCount %></div>
+          <div class="kpi-label">Overdue Follow-ups</div>
+          <div class="kpi-sub"><%= overdueCount === 0 ? 'All caught up!' : 'Need attention now' %></div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-3">
+    <a href="/companies" class="text-decoration-none">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="kpi-icon kpi-icon-teal"><i class="bi bi-building"></i></div>
+          <div class="kpi-value"><%= stats.companyCount %></div>
+          <div class="kpi-label">Companies</div>
+          <div class="kpi-sub">Total accounts</div>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<!-- ── Section 3: Needs Attention + Pipeline Summary ─────────────────────── -->
+<div class="row g-3 mb-3">
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          <span class="dashboard-card-title">Needs Attention</span>
+          <% if (needsAttention.length) { %>
+            <span style="font-size:0.7rem; font-weight:700; padding:0.15rem 0.55rem; border-radius:999px; background:#fbe5e7; color:#c23b4a;"><%= needsAttention.length %></span>
+          <% } %>
+        </div>
+        <a href="/activities" style="font-size:0.78rem; font-weight:600; color:var(--crm-accent); text-decoration:none;">View all <i class="bi bi-arrow-up-right"></i></a>
+      </div>
+      <div class="card-body p-0">
+        <% if (!needsAttention.length) { %>
+          <div style="padding:2.5rem; text-align:center; color:var(--crm-muted-fg);">
+            <i class="bi bi-check2-circle" style="font-size:2rem; display:block; margin-bottom:0.4rem; color:var(--crm-success);"></i>
+            Nothing overdue or due soon — great work!
+          </div>
+        <% } else { %>
+          <% needsAttention.forEach((a, idx) => { %>
+            <%
+              const diff = salesDiff(a.dueDate);
+              const isOD = diff !== null && diff < 0;
+              const isTdy = diff === 0;
+              let badge = '', bbg = '', bfg = '';
+              if (isOD)       { badge = Math.abs(diff) + 'd overdue'; bbg = '#fbe5e7'; bfg = '#c23b4a'; }
+              else if (isTdy) { badge = 'Due today';                  bbg = '#fff3cd'; bfg = '#856404'; }
+              else if (diff !== null) { badge = 'Due ' + fmtSalesDate(a.dueDate); bbg = '#e7eefc'; bfg = '#2b5fb8'; }
+              const barColor = isOD ? '#c23b4a' : isTdy ? '#c8910b' : 'var(--crm-accent)';
+            %>
+            <div onclick="location.href='/activities/<%= a.id %>'"
+              style="display:flex; align-items:center; gap:0.75rem; padding:0.65rem 1rem; border-bottom:<%= idx < needsAttention.length-1 ? '1px solid var(--crm-border)' : 'none' %>; cursor:pointer;"
+              onmouseover="this.style.background='var(--crm-muted)'" onmouseout="this.style.background=''">
+              <div style="width:3px; align-self:stretch; border-radius:4px; background:<%= barColor %>; flex-shrink:0;"></div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-weight:600; font-size:0.875rem; color:var(--crm-fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><%= a.name || '(untitled)' %></div>
+                <div style="font-size:0.75rem; color:var(--crm-muted-fg); margin-top:0.1rem;">
+                  <% if (a.companyNames && a.companyNames.length) { %><i class="bi bi-building" style="opacity:0.55;"></i> <%= a.companyNames[0] %><% if (a.type) { %> &middot; <% } %><% } %><%= a.type || '' %>
+                </div>
+              </div>
+              <% if (badge) { %>
+                <span style="display:inline-block; padding:0.18rem 0.6rem; border-radius:999px; font-size:0.7rem; font-weight:700; white-space:nowrap; background:<%= bbg %>; color:<%= bfg %>;"><%= badge %></span>
+              <% } %>
+            </div>
+          <% }) %>
+        <% } %>
       </div>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card h-100">
-      <div class="card-body">
-        <div class="stat-icon stat-icon-purple"><i class="bi bi-briefcase"></i></div>
-        <div class="stat-value"><%= stats.openDealCount %></div>
-        <div class="stat-label">Open Deals</div>
+
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <span class="dashboard-card-title">Pipeline</span>
+          <div class="dashboard-card-subtitle">
+            <%= board.reduce((s,c) => s+c.deals.length, 0) %> deals &middot; $<%= board.reduce((s,c) => s+c.total, 0).toLocaleString() %>
+          </div>
+        </div>
+        <a href="/pipeline" class="btn btn-sm btn-light-pill">Full view <i class="bi bi-arrow-right"></i></a>
       </div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card h-100">
       <div class="card-body">
-        <div class="stat-icon stat-icon-blue"><i class="bi bi-graph-up-arrow"></i></div>
-        <div class="stat-value">$<%= stats.openPipelineTotal.toLocaleString() %></div>
-        <div class="stat-label">Open Pipeline</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card h-100">
-      <div class="card-body">
-        <div class="stat-icon stat-icon-gold"><i class="bi bi-trophy"></i></div>
-        <div class="stat-value">$<%= stats.wonTotal.toLocaleString() %></div>
-        <div class="stat-label">Closed Won</div>
+        <% const maxStageTotal = Math.max(1, ...board.map(c => c.total)); %>
+        <% board.forEach(col => { %>
+          <div class="stage-row">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <div class="d-flex align-items-center">
+                <span class="stage-dot stage-dot-<%= col.stage.replace(/\s+/g,'') %>"></span>
+                <span class="stage-name"><%= col.stage %></span>
+                <span class="stage-count-pill ms-2"><%= col.deals.length %></span>
+              </div>
+              <div class="stage-total"><%= col.total > 0 ? '$' + col.total.toLocaleString() : '—' %></div>
+            </div>
+            <div class="stage-track">
+              <div class="stage-fill stage-fill-<%= col.stage.replace(/\s+/g,'') %>" style="width:<%= Math.round((col.total/maxStageTotal)*100) %>%"></div>
+            </div>
+          </div>
+        <% }) %>
       </div>
     </div>
   </div>
 </div>
 
+<!-- ── Section 4: Recent Activity + Account Updates ──────────────────────── -->
 <div class="row g-3">
   <div class="col-lg-8">
     <div class="card h-100">
       <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div>
-          <span class="dashboard-card-title">Recent activity</span>
-          <span class="live-dot ms-2"><span class="dot"></span>Live</span>
+        <div class="d-flex align-items-center gap-2">
+          <span class="dashboard-card-title">Recent Activity</span>
+          <span class="live-dot"><span class="dot"></span>Live</span>
         </div>
         <div class="dash-filter-tabs" id="activityFilterTabs">
           <button class="dash-filter-btn active" data-filter="open">Open</button>
           <button class="dash-filter-btn" data-filter="completed">Completed</button>
-          <button class="dash-filter-btn" data-filter="urgent">High urgency</button>
+          <button class="dash-filter-btn" data-filter="urgent">Urgent</button>
         </div>
       </div>
-      <div class="dash-act-header">
-        <span class="dash-act-header-title">Activity</span>
-        <div class="dash-act-dates flex-shrink-0">
-          <div class="dash-act-col"><span class="dash-act-col-label">Updated</span></div>
-          <div class="dash-act-col"><span class="dash-act-col-label">Due</span></div>
-        </div>
+      <div id="activityList" style="min-height:100px;">
+        <div style="padding:1rem 1.25rem; color:var(--crm-muted-fg); font-size:0.875rem;">Loading…</div>
       </div>
-      <div class="card-body activity-timeline" id="activityTimeline">
-        <div class="text-muted small">Loading...</div>
-      </div>
-      <div class="card-body pt-0">
+      <div style="padding:0.65rem 1rem; border-top:1px solid var(--crm-border);">
         <a href="/activities" class="btn-view-all">View all activity <i class="bi bi-arrow-up-right"></i></a>
       </div>
     </div>
@@ -208,98 +319,66 @@
   (function() {
     var ALL = <%- JSON.stringify(allActivities) %>;
     var today = new Date(); today.setHours(0,0,0,0);
-    var yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
 
     function fmtDate(str) {
       if (!str) return '';
-      var d = new Date(str + 'T00:00:00');
-      d.setHours(0,0,0,0);
-      if (d.getTime() === today.getTime()) return 'Today';
-      if (d.getTime() === yesterday.getTime()) return 'Yesterday';
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      var d = new Date(str + 'T00:00:00'); d.setHours(0,0,0,0);
+      var diff = Math.floor((d - today) / 86400000);
+      if (diff === 0)  return 'Today';
+      if (diff === -1) return 'Yesterday';
+      return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
     }
-
-    function isCompleted(a) {
-      return (a.result || '').toLowerCase() === 'completed' || (a.type || '').toLowerCase() === 'completed';
-    }
-
+    function isCompleted(a) { return (a.result||'').toLowerCase() === 'completed'; }
     function daysUntilDue(a) {
       if (!a.dueDate) return Infinity;
-      var d = new Date(a.dueDate + 'T00:00:00');
-      return Math.floor((d - today) / 86400000);
+      return Math.floor((new Date(a.dueDate+'T00:00:00') - today) / 86400000);
     }
-
-    function getIcon(type) {
-      var t = (type || '').toLowerCase();
-      if (t.includes('call')) return {icon:'bi-telephone', color:'tl-blue'};
-      if (t.includes('email')) return {icon:'bi-envelope', color:'tl-purple'};
-      if (t.includes('linkedin')) return {icon:'bi-linkedin', color:'tl-blue'};
-      if (t.includes('meet') || t.includes('demo')) return {icon:'bi-people', color:'tl-gray'};
-      return {icon:'bi-clock-history', color:'tl-gray'};
+    function typeIcon(type) {
+      var t = (type||'').toLowerCase();
+      if (t.includes('call'))   return 'bi-telephone';
+      if (t.includes('email'))  return 'bi-envelope';
+      if (t.includes('linkedin')) return 'bi-linkedin';
+      if (t.includes('meet')||t.includes('demo')) return 'bi-people';
+      return 'bi-clock-history';
     }
-
     function renderItem(a) {
-      var ic = getIcon(a.type);
-      var statusDateStr = a.statusDate ? fmtDate(a.statusDate) : (a.date ? fmtDate(a.date) : '—');
       var days = daysUntilDue(a);
-      var dueLabel, dueCls;
+      var dueHtml = '';
       if (a.dueDate) {
-        dueCls = days < 0 ? 'due-overdue' : days <= 2 ? 'due-soon' : 'due-ok';
-        dueLabel = days < 0 ? 'Overdue' : days === 0 ? 'Due today' : fmtDate(a.dueDate);
+        var cls = days < 0 ? 'due-overdue' : days <= 2 ? 'due-soon' : 'due-ok';
+        var lbl = days < 0 ? 'Overdue' : days === 0 ? 'Due today' : fmtDate(a.dueDate);
+        dueHtml = '<span class="due-chip '+cls+'">'+lbl+'</span>';
+      } else {
+        var upd = fmtDate(a.statusDate||a.date);
+        dueHtml = upd ? '<span style="font-size:0.72rem; color:var(--crm-muted-fg);">'+upd+'</span>' : '';
       }
-      var meta = [];
-      if (a.companyNames && a.companyNames.length) meta.push('<span>' + a.companyNames.join(', ') + '</span>');
-      if (a.type) meta.push('<span>' + (meta.length ? '· ' : '') + a.type + '</span>');
-      if (a.result) meta.push('<span>' + (meta.length ? '· ' : '') + a.result + '</span>');
-      return '<div class="timeline-item">' +
-        '<div class="timeline-icon ' + ic.color + '"><i class="bi ' + ic.icon + '"></i></div>' +
-        '<div class="timeline-body">' +
-          '<div class="dash-act-row">' +
-            '<a href="/activities/' + a.id + '" class="timeline-name table-link">' + (a.name || '(untitled)') + '</a>' +
-            '<span class="dash-act-leader"></span>' +
-            '<div class="dash-act-dates flex-shrink-0">' +
-              '<div class="dash-act-col">' +
-                '<span class="dash-act-col-val">' + statusDateStr + '</span>' +
-              '</div>' +
-              '<div class="dash-act-col">' +
-                (a.dueDate
-                  ? '<span class="due-chip ' + dueCls + '">' + dueLabel + '</span>'
-                  : '<span class="dash-act-col-val dash-act-empty">—</span>') +
-              '</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="timeline-meta">' + meta.join(' ') + '</div>' +
-        '</div></div>';
+      var co = (a.companyNames && a.companyNames.length) ? a.companyNames[0] : '';
+      var meta = [co, a.type, a.result].filter(Boolean).join(' · ');
+      return '<div style="display:flex;align-items:center;gap:0.65rem;padding:0.6rem 1rem;border-bottom:1px solid var(--crm-border);">' +
+        '<i class="bi '+typeIcon(a.type)+'" style="color:var(--crm-accent);font-size:0.95rem;flex-shrink:0;width:18px;text-align:center;"></i>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<a href="/activities/'+a.id+'" style="font-weight:600;font-size:0.875rem;color:var(--crm-fg);text-decoration:none;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(a.name||'(untitled)')+'</a>' +
+          (meta ? '<div style="font-size:0.72rem;color:var(--crm-muted-fg);">'+meta+'</div>' : '') +
+        '</div>' +
+        '<div style="flex-shrink:0;">'+dueHtml+'</div>' +
+      '</div>';
     }
-
-    function sortDate(a) { return a.statusDate || a.date || ''; }
     function render(filter) {
       var list;
-      if (filter === 'open') {
-        list = ALL.filter(function(a){ return !isCompleted(a); })
-          .sort(function(a,b){ return new Date(sortDate(b)) - new Date(sortDate(a)); })
-          .slice(0, 15);
-      } else if (filter === 'completed') {
-        list = ALL.filter(function(a){ return isCompleted(a); })
-          .sort(function(a,b){ return new Date(sortDate(b)) - new Date(sortDate(a)); })
-          .slice(0, 15);
+      var sortDesc = function(a,b){ return new Date(b.statusDate||b.date||0)-new Date(a.statusDate||a.date||0); };
+      if (filter==='open') {
+        list = ALL.filter(function(a){ return !isCompleted(a); }).sort(sortDesc).slice(0,12);
+      } else if (filter==='completed') {
+        list = ALL.filter(function(a){ return isCompleted(a); }).sort(sortDesc).slice(0,12);
       } else {
-        // High urgency: open, has dueDate, and dueDate is within 7 days (or overdue)
-        list = ALL.filter(function(a){
-          if (isCompleted(a) || !a.dueDate) return false;
-          return daysUntilDue(a) <= 7;
-        })
-          .sort(function(a,b){ return daysUntilDue(a) - daysUntilDue(b); })
-          .slice(0, 15);
+        list = ALL.filter(function(a){ return !isCompleted(a) && a.dueDate && daysUntilDue(a)<=7; })
+          .sort(function(a,b){ return daysUntilDue(a)-daysUntilDue(b); }).slice(0,12);
       }
-      var el = document.getElementById('activityTimeline');
-      if (!list.length) {
-        el.innerHTML = '<div class="text-muted small">No activities.</div>';
-      } else {
-        el.innerHTML = list.map(renderItem).join('');
-      }
+      var el = document.getElementById('activityList');
+      el.innerHTML = list.length
+        ? list.map(renderItem).join('')
+        : '<div style="padding:2rem;text-align:center;color:var(--crm-muted-fg);font-size:0.875rem;">No activities.</div>';
     }
-
     document.getElementById('activityFilterTabs').addEventListener('click', function(e) {
       var btn = e.target.closest('.dash-filter-btn');
       if (!btn) return;
@@ -307,74 +386,46 @@
       btn.classList.add('active');
       render(btn.dataset.filter);
     });
-
     render('open');
   })();
   </script>
 
-  <div class="col-lg-4 d-flex flex-column gap-3">
-
-    <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div>
-          <span class="dashboard-card-title">Pipeline by stage</span>
-          <div class="dashboard-card-subtitle">
-            <%= board.reduce((s, c) => s + c.deals.length, 0) %> deals &middot; $<%= board.reduce((s, c) => s + c.total, 0).toLocaleString() %> total value
-          </div>
-        </div>
-        <a href="/pipeline" class="btn btn-sm btn-light-pill">Open full pipeline <i class="bi bi-arrow-right"></i></a>
-      </div>
-      <div class="card-body">
-        <% const maxTotal = Math.max(1, ...board.map(c => c.total)); %>
-        <% board.forEach(col => { %>
-          <div class="stage-row">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-              <div class="d-flex align-items-center">
-                <span class="stage-dot stage-dot-<%= col.stage.replace(/\s+/g,'') %>"></span>
-                <span class="stage-name"><%= col.stage %></span>
-                <span class="stage-count-pill ms-2"><%= col.deals.length %> deal<%= col.deals.length === 1 ? '' : 's' %></span>
-              </div>
-              <div class="stage-total"><%= col.total > 0 ? '$' + col.total.toLocaleString() : '$0' %></div>
-            </div>
-            <div class="stage-track">
-              <div class="stage-fill stage-fill-<%= col.stage.replace(/\s+/g,'') %>" style="width: <%= Math.round((col.total / maxTotal) * 100) %>%"></div>
-            </div>
-          </div>
-        <% }) %>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span class="dashboard-card-title">Recent comments</span>
-        <span class="live-dot ms-2"><span class="dot"></span>Live</span>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <span class="dashboard-card-title">Account Updates</span>
+        <div class="dashboard-card-subtitle">Latest activity by company</div>
       </div>
       <div class="card-body p-0">
-        <% if (!recentComments.length) { %>
-          <div class="dash-cmt-empty">No comments yet.</div>
-        <% } %>
-        <% recentComments.forEach(c => { %>
-          <div class="dash-cmt-row">
-            <div class="dash-cmt-avatar"><%= (c.author || '?').trim().charAt(0).toUpperCase() %></div>
-            <div class="dash-cmt-body">
-              <div class="dash-cmt-header">
-                <span class="dash-cmt-author"><%= c.author || 'Unknown' %></span>
-                <% if (c.type === 'email') { %><span class="dash-cmt-email-badge"><i class="bi bi-envelope-fill"></i></span><% } %>
-                <span class="dash-cmt-time"><%= c.timeAgo %></span>
-              </div>
-              <div class="dash-cmt-preview"><%= (c.comment || c.emailSubject || '').slice(0, 90) %><%= (c.comment || c.emailSubject || '').length > 90 ? '…' : '' %></div>
-              <% if (c.contextLink) { %>
-                <a href="<%= c.contextLink %>" class="dash-cmt-context">
-                  <i class="bi bi-<%= c.contextType === 'task' ? 'diagram-3' : c.contextType === 'project' ? 'folder2' : c.contextType === 'deal' ? 'currency-dollar' : 'clock-history' %>"></i>
-                  <%= c.contextLabel %>
-                </a>
-              <% } %>
+        <% if (!accountUpdates || !accountUpdates.length) { %>
+          <div class="dash-cmt-empty">No recent account activity.</div>
+        <% } else { %>
+          <% accountUpdates.forEach((group, gi) => { %>
+            <div style="padding:0.75rem 1rem; border-bottom:<%= gi < accountUpdates.length-1 ? '1px solid var(--crm-border)' : 'none' %>;">
+              <a href="/companies/<%= group.companyId %>" style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.8rem; font-weight:700; color:var(--crm-fg); text-decoration:none; margin-bottom:0.4rem;">
+                <i class="bi bi-building" style="color:var(--crm-accent); font-size:0.75rem;"></i>
+                <%= group.companyName %>
+              </a>
+              <% group.comments.forEach(c => { %>
+                <div style="display:flex; gap:0.5rem; margin-top:0.3rem;">
+                  <div class="dash-cmt-avatar" style="width:22px; height:22px; font-size:0.65rem; flex-shrink:0;"><%= (c.author||'?').trim().charAt(0).toUpperCase() %></div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:baseline; gap:0.35rem;">
+                      <span class="dash-cmt-author"><%= c.author||'Unknown' %></span>
+                      <span class="dash-cmt-time"><%= c.timeAgo %></span>
+                    </div>
+                    <div class="dash-cmt-preview"><%= (c.comment||c.emailSubject||'').slice(0,80) %><%= (c.comment||c.emailSubject||'').length>80?'…':'' %></div>
+                    <% if (c.contextLink) { %>
+                      <a href="<%= c.contextLink %>" class="dash-cmt-context"><i class="bi bi-clock-history" style="font-size:0.65rem;"></i> <%= c.contextLabel %></a>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
             </div>
-          </div>
-        <% }) %>
+          <% }) %>
+        <% } %>
       </div>
     </div>
-
   </div>
 </div>
 
