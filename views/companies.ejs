@@ -63,7 +63,14 @@
           onclick="window.location='/companies/<%= c.id %>'">
           <td data-label="Company">
             <div class="company-name-cell">
-              <span class="company-avatar <%= avatarColor(i) %>"><%= initials(c.name) %></span>
+              <% if (c.logo) { %>
+                <span class="company-avatar has-logo" data-initials="<%= initials(c.name) %>" data-color="<%= avatarColor(i) %>">
+                  <img src="<%= c.logo %>" alt="" loading="lazy" decoding="async"
+                       onerror="var s=this.parentNode;s.className='company-avatar '+s.dataset.color;s.textContent=s.dataset.initials;">
+                </span>
+              <% } else { %>
+                <span class="company-avatar <%= avatarColor(i) %>"><%= initials(c.name) %></span>
+              <% } %>
               <div class="company-name-block">
                 <div class="company-name"><%= c.name %></div>
                 <div class="company-website-sub"><%= c.web || 'No website on file' %></div>
