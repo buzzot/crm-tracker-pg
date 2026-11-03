@@ -3794,3 +3794,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .sd-ra-row { grid-template-columns: 28px minmax(0, 1fr) auto; }
   .sd-ra-type { display: none; }
 }
+
+/* Sales dashboard: columns stack independently so panels sit directly under each other */
+.sd-col { display: flex; flex-direction: column; gap: var(--sd-gap); min-width: 0; }
+@media (max-width: 1199.98px) {
+  /* Single column: flatten and order Needs attention → Pipeline → Recent → Updates */
+  .sd-col { display: contents; }
+  .sd-grid { gap: var(--sd-gap); }
+  .sd-o1 { order: 1; } .sd-o2 { order: 2; } .sd-o3 { order: 3; } .sd-o4 { order: 4; }
+}

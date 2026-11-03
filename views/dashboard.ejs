@@ -212,11 +212,11 @@
     </a>
   </section>
 
-  <!-- ── 3. Primary workspace ────────────────────────────────────────────── -->
+  <!-- ── 3. Workspace: two independent columns (no row gaps) ─────────────── -->
   <div class="sd-grid">
-
+    <div class="sd-col">
     <!-- Needs attention -->
-    <section class="sd-panel" id="needs-attention" aria-labelledby="naTitle">
+    <section class="sd-panel sd-o1" id="needs-attention" aria-labelledby="naTitle">
       <div class="sd-panel-head">
         <div>
           <h2 class="sd-panel-title" id="naTitle">Needs attention</h2>
@@ -280,8 +280,45 @@
       </div>
     </section>
 
+    <!-- Recent activity -->
+    <section class="sd-panel sd-o3" aria-labelledby="raTitle">
+      <div class="sd-panel-head">
+        <div>
+          <h2 class="sd-panel-title" id="raTitle">Recent activity</h2>
+          <div class="sd-panel-sub">Latest logged calls, emails and meetings</div>
+        </div>
+        <a href="/activities" class="sd-link">View all <i class="bi bi-arrow-right"></i></a>
+      </div>
+      <ul class="sd-list" id="raList">
+        <% recentActivities.forEach(a => { %>
+          <li class="sd-ra-row" data-mine="<%= a.mine ? 1 : 0 %>">
+            <span class="sd-kind sd-kind-activity"><i class="bi <%= sdTypeIcon[a.type] || 'bi-clock-history' %>"></i></span>
+            <div class="sd-ra-main">
+              <a href="/activities/<%= a.id %>" class="sd-row-title"><%= a.title || '(untitled)' %></a>
+              <div class="sd-row-meta">
+                <% if (a.companyId) { %>
+                  <a href="/companies/<%= a.companyId %>" class="sd-meta-link"><%= a.companyName %></a>
+                <% } else { %>
+                  <span>No company</span>
+                <% } %>
+                <% if (a.result) { %><span class="sd-dot">&middot;</span><span><%= a.result %></span><% } %>
+              </div>
+            </div>
+            <span class="sd-ra-type"><%= a.type || 'Other' %></span>
+            <time class="sd-ra-date" datetime="<%= a.occurred %>" data-rel-date><%= a.occurred %></time>
+          </li>
+        <% }) %>
+      </ul>
+      <div class="sd-empty" id="raEmpty" hidden>
+        <i class="bi bi-clock-history"></i>
+        <div>No activity logged yet.</div>
+      </div>
+    </section>
+    </div>
+
+    <div class="sd-col">
     <!-- Pipeline summary -->
-    <section class="sd-panel" aria-labelledby="plTitle">
+    <section class="sd-panel sd-o2" aria-labelledby="plTitle">
       <div class="sd-panel-head">
         <div>
           <h2 class="sd-panel-title" id="plTitle">Pipeline</h2>
@@ -334,48 +371,9 @@
         <div><span class="sd-pl-dot" style="background: var(--crm-stage-lost);"></span>Lost <strong><%= lost.count %></strong></div>
       </div>
     </section>
-  </div>
-
-  <!-- ── 4. Secondary information ───────────────────────────────────────── -->
-  <div class="sd-grid">
-
-    <!-- Recent activity -->
-    <section class="sd-panel" aria-labelledby="raTitle">
-      <div class="sd-panel-head">
-        <div>
-          <h2 class="sd-panel-title" id="raTitle">Recent activity</h2>
-          <div class="sd-panel-sub">Latest logged calls, emails and meetings</div>
-        </div>
-        <a href="/activities" class="sd-link">View all <i class="bi bi-arrow-right"></i></a>
-      </div>
-      <ul class="sd-list" id="raList">
-        <% recentActivities.forEach(a => { %>
-          <li class="sd-ra-row" data-mine="<%= a.mine ? 1 : 0 %>">
-            <span class="sd-kind sd-kind-activity"><i class="bi <%= sdTypeIcon[a.type] || 'bi-clock-history' %>"></i></span>
-            <div class="sd-ra-main">
-              <a href="/activities/<%= a.id %>" class="sd-row-title"><%= a.title || '(untitled)' %></a>
-              <div class="sd-row-meta">
-                <% if (a.companyId) { %>
-                  <a href="/companies/<%= a.companyId %>" class="sd-meta-link"><%= a.companyName %></a>
-                <% } else { %>
-                  <span>No company</span>
-                <% } %>
-                <% if (a.result) { %><span class="sd-dot">&middot;</span><span><%= a.result %></span><% } %>
-              </div>
-            </div>
-            <span class="sd-ra-type"><%= a.type || 'Other' %></span>
-            <time class="sd-ra-date" datetime="<%= a.occurred %>" data-rel-date><%= a.occurred %></time>
-          </li>
-        <% }) %>
-      </ul>
-      <div class="sd-empty" id="raEmpty" hidden>
-        <i class="bi bi-clock-history"></i>
-        <div>No activity logged yet.</div>
-      </div>
-    </section>
 
     <!-- Latest account updates -->
-    <section class="sd-panel" aria-labelledby="auTitle">
+    <section class="sd-panel sd-o4" aria-labelledby="auTitle">
       <div class="sd-panel-head">
         <div>
           <h2 class="sd-panel-title" id="auTitle">Account updates</h2>
@@ -421,6 +419,7 @@
         </ul>
       <% } %>
     </section>
+    </div>
   </div>
 </div>
 
