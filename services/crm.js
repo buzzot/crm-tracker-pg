@@ -710,6 +710,8 @@ function mapDeal(row) {
     name: row.name,
     stage: row.stage || null,
     amount: parseFloat(row.amount) || 0,
+    // true when an amount was actually entered (lets UI tell "$0" apart from "no value")
+    amountSet: row.amount !== null && row.amount !== undefined && row.amount !== '' && !isNaN(parseFloat(row.amount)),
     companyId: row.company_id || null,
     companyIds: row.company_id ? [row.company_id] : [],
     companyName: row.company_name || null,

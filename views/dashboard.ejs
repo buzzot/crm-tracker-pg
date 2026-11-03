@@ -129,253 +129,399 @@
 </div>
 
 <% } else { %>
+<%
+  // ── Sales dashboard helpers ────────────────────────────────────────────────
+  function sdMoney(n) {
+    n = Number(n) || 0;
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M';
+    if (n >= 1e4) return '$' + Math.round(n / 1e3) + 'K';
+    return '$' + n.toLocaleString('en-US');
+  }
+  function sdMoneyFull(n) { return '$' + (Number(n) || 0).toLocaleString('en-US'); }
+  function sdPlural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
 
-<div class="mb-4">
-  <div class="text-muted small"><%= new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) %> &middot; Welcome back</div>
-  <h1 class="display-headline mb-0">Your <em>pipeline</em> today</h1>
-</div>
+  const sdStageColor = {
+    'Prospecting':            'var(--crm-stage-prospecting)',
+    'Qualification':          'var(--crm-stage-qualification)',
+    'Needs Analysis':         'var(--crm-stage-needs)',
+    'Proposal / Price Quote': 'var(--crm-stage-proposal)',
+    'Negotiation':            'var(--crm-violet)',
+  };
+  const sdTypeIcon = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-people', Demo: 'bi-easel' };
+  const sdTaskStatusCls = { 'To Do': 'sd-pill-neutral', 'In Progress': 'sd-pill-info', 'Blocked': 'sd-pill-warn' };
+  const sdOpenCount = openStages.reduce((s, b) => s + b.count, 0);
+%>
 
-<div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card h-100">
-      <div class="card-body">
-        <div class="stat-icon stat-icon-blue"><i class="bi bi-building"></i></div>
-        <div class="stat-value"><%= stats.companyCount %></div>
-        <div class="stat-label">Companies</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card h-100">
-      <div class="card-body">
-        <div class="stat-icon stat-icon-purple"><i class="bi bi-briefcase"></i></div>
-        <div class="stat-value"><%= stats.openDealCount %></div>
-        <div class="stat-label">Open Deals</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card h-100">
-      <div class="card-body">
-        <div class="stat-icon stat-icon-blue"><i class="bi bi-graph-up-arrow"></i></div>
-        <div class="stat-value">$<%= stats.openPipelineTotal.toLocaleString() %></div>
-        <div class="stat-label">Open Pipeline</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card h-100">
-      <div class="card-body">
-        <div class="stat-icon stat-icon-gold"><i class="bi bi-trophy"></i></div>
-        <div class="stat-value">$<%= stats.wonTotal.toLocaleString() %></div>
-        <div class="stat-label">Closed Won</div>
-      </div>
-    </div>
-  </div>
-</div>
+<div class="sd" data-scope="<%= canToggleScope ? 'team' : 'all' %>" id="salesDashboard">
 
-<div class="row g-3">
-  <div class="col-lg-8">
-    <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <!-- ── 1. Header ───────────────────────────────────────────────────────── -->
+  <header class="sd-header">
+    <div class="sd-header-text">
+      <div class="sd-eyebrow"><%= new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) %></div>
+      <h1 class="sd-title">Sales overview</h1>
+      <p class="sd-subtitle">Overdue work and this week's follow-ups first, then pipeline and account news.</p>
+    </div>
+    <div class="sd-header-actions">
+      <% if (canToggleScope) { %>
+        <div class="sd-segment" role="group" aria-label="Show items for">
+          <button type="button" class="sd-segment-btn" data-scope-btn="mine" aria-pressed="false">My items</button>
+          <button type="button" class="sd-segment-btn is-active" data-scope-btn="team" aria-pressed="true">All team</button>
+        </div>
+      <% } %>
+      <div class="dropdown">
+        <button class="sd-btn sd-btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-plus-lg"></i> Create
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end sd-menu">
+          <li><a class="dropdown-item" href="/tasks/new"><i class="bi bi-check2-square"></i> Task</a></li>
+          <li><a class="dropdown-item" href="/companies/new"><i class="bi bi-building"></i> Company</a></li>
+          <li><a class="dropdown-item" href="/projects/new"><i class="bi bi-folder2"></i> Project</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><span class="dropdown-item-text sd-menu-hint">Log activities and deals from a company page</span></li>
+        </ul>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── 2. KPI summary ──────────────────────────────────────────────────── -->
+  <section class="sd-kpis" aria-label="Key metrics">
+    <a class="sd-kpi" href="/pipeline">
+      <div class="sd-kpi-top"><span class="sd-kpi-label">Open pipeline</span><i class="bi bi-graph-up-arrow sd-kpi-icon"></i></div>
+      <div class="sd-kpi-value" title="<%= sdMoneyFull(stats.openPipelineTotal) %>"><%= sdMoney(stats.openPipelineTotal) %></div>
+      <div class="sd-kpi-sub">
+        across <%= sdPlural(stats.openDealCount, 'open deal') %><% if (stats.openNoValueCount) { %> &middot; <span class="sd-warn-text"><%= stats.openNoValueCount %> without value</span><% } %>
+      </div>
+    </a>
+
+    <a class="sd-kpi" href="/pipeline">
+      <div class="sd-kpi-top"><span class="sd-kpi-label">Active deals</span><i class="bi bi-briefcase sd-kpi-icon"></i></div>
+      <div class="sd-kpi-value"><%= stats.openDealCount %></div>
+      <div class="sd-kpi-sub">Won <%= stats.wonCount %> &middot; <span title="<%= sdMoneyFull(stats.wonTotal) %>"><%= sdMoney(stats.wonTotal) %></span> &middot; Lost <%= stats.lostCount %></div>
+    </a>
+
+    <a class="sd-kpi" href="#needs-attention" id="kpiOverdue">
+      <div class="sd-kpi-top"><span class="sd-kpi-label">Overdue follow-ups</span><i class="bi bi-exclamation-circle sd-kpi-icon"></i></div>
+      <div class="sd-kpi-value" id="kpiOverdueValue">&ndash;</div>
+      <div class="sd-kpi-sub" id="kpiOverdueSub">tasks and activity follow-ups</div>
+    </a>
+
+    <a class="sd-kpi" href="/companies">
+      <div class="sd-kpi-top"><span class="sd-kpi-label">Companies</span><i class="bi bi-building sd-kpi-icon"></i></div>
+      <div class="sd-kpi-value"><%= stats.companyCount %></div>
+      <div class="sd-kpi-sub"><%= sdPlural(stats.clientCount, 'client') %> &middot; <%= sdPlural(stats.prospectCount, 'prospect') %></div>
+    </a>
+  </section>
+
+  <!-- ── 3. Primary workspace ────────────────────────────────────────────── -->
+  <div class="sd-grid">
+
+    <!-- Needs attention -->
+    <section class="sd-panel" id="needs-attention" aria-labelledby="naTitle">
+      <div class="sd-panel-head">
         <div>
-          <span class="dashboard-card-title">Recent activity</span>
-          <span class="live-dot ms-2"><span class="dot"></span>Live</span>
+          <h2 class="sd-panel-title" id="naTitle">Needs attention</h2>
+          <div class="sd-panel-sub" id="naSummary">Overdue and due in the next 7 days</div>
         </div>
-        <div class="dash-filter-tabs" id="activityFilterTabs">
-          <button class="dash-filter-btn active" data-filter="open">Open</button>
-          <button class="dash-filter-btn" data-filter="completed">Completed</button>
-          <button class="dash-filter-btn" data-filter="urgent">High urgency</button>
-        </div>
-      </div>
-      <div class="dash-act-header">
-        <span class="dash-act-header-title">Activity</span>
-        <div class="dash-act-dates flex-shrink-0">
-          <div class="dash-act-col"><span class="dash-act-col-label">Updated</span></div>
-          <div class="dash-act-col"><span class="dash-act-col-label">Due</span></div>
+        <div class="sd-panel-links">
+          <a href="/tasks" class="sd-link">Tasks</a>
+          <a href="/activities" class="sd-link">Activities</a>
         </div>
       </div>
-      <div class="card-body activity-timeline" id="activityTimeline">
-        <div class="text-muted small">Loading...</div>
-      </div>
-      <div class="card-body pt-0">
-        <a href="/activities" class="btn-view-all">View all activity <i class="bi bi-arrow-up-right"></i></a>
-      </div>
-    </div>
-  </div>
 
-  <script>
-  (function() {
-    var ALL = <%- JSON.stringify(allActivities) %>;
-    var today = new Date(); today.setHours(0,0,0,0);
-    var yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-
-    function fmtDate(str) {
-      if (!str) return '';
-      var d = new Date(str + 'T00:00:00');
-      d.setHours(0,0,0,0);
-      if (d.getTime() === today.getTime()) return 'Today';
-      if (d.getTime() === yesterday.getTime()) return 'Yesterday';
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    }
-
-    function isCompleted(a) {
-      return (a.result || '').toLowerCase() === 'completed' || (a.type || '').toLowerCase() === 'completed';
-    }
-
-    function daysUntilDue(a) {
-      if (!a.dueDate) return Infinity;
-      var d = new Date(a.dueDate + 'T00:00:00');
-      return Math.floor((d - today) / 86400000);
-    }
-
-    function getIcon(type) {
-      var t = (type || '').toLowerCase();
-      if (t.includes('call')) return {icon:'bi-telephone', color:'tl-blue'};
-      if (t.includes('email')) return {icon:'bi-envelope', color:'tl-purple'};
-      if (t.includes('linkedin')) return {icon:'bi-linkedin', color:'tl-blue'};
-      if (t.includes('meet') || t.includes('demo')) return {icon:'bi-people', color:'tl-gray'};
-      return {icon:'bi-clock-history', color:'tl-gray'};
-    }
-
-    function renderItem(a) {
-      var ic = getIcon(a.type);
-      var statusDateStr = a.statusDate ? fmtDate(a.statusDate) : (a.date ? fmtDate(a.date) : '—');
-      var days = daysUntilDue(a);
-      var dueLabel, dueCls;
-      if (a.dueDate) {
-        dueCls = days < 0 ? 'due-overdue' : days <= 2 ? 'due-soon' : 'due-ok';
-        dueLabel = days < 0 ? 'Overdue' : days === 0 ? 'Due today' : fmtDate(a.dueDate);
-      }
-      var meta = [];
-      if (a.companyNames && a.companyNames.length) meta.push('<span>' + a.companyNames.join(', ') + '</span>');
-      if (a.type) meta.push('<span>' + (meta.length ? '· ' : '') + a.type + '</span>');
-      if (a.result) meta.push('<span>' + (meta.length ? '· ' : '') + a.result + '</span>');
-      return '<div class="timeline-item">' +
-        '<div class="timeline-icon ' + ic.color + '"><i class="bi ' + ic.icon + '"></i></div>' +
-        '<div class="timeline-body">' +
-          '<div class="dash-act-row">' +
-            '<a href="/activities/' + a.id + '" class="timeline-name table-link">' + (a.name || '(untitled)') + '</a>' +
-            '<span class="dash-act-leader"></span>' +
-            '<div class="dash-act-dates flex-shrink-0">' +
-              '<div class="dash-act-col">' +
-                '<span class="dash-act-col-val">' + statusDateStr + '</span>' +
-              '</div>' +
-              '<div class="dash-act-col">' +
-                (a.dueDate
-                  ? '<span class="due-chip ' + dueCls + '">' + dueLabel + '</span>'
-                  : '<span class="dash-act-col-val dash-act-empty">—</span>') +
-              '</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="timeline-meta">' + meta.join(' ') + '</div>' +
-        '</div></div>';
-    }
-
-    function sortDate(a) { return a.statusDate || a.date || ''; }
-    function render(filter) {
-      var list;
-      if (filter === 'open') {
-        list = ALL.filter(function(a){ return !isCompleted(a); })
-          .sort(function(a,b){ return new Date(sortDate(b)) - new Date(sortDate(a)); })
-          .slice(0, 15);
-      } else if (filter === 'completed') {
-        list = ALL.filter(function(a){ return isCompleted(a); })
-          .sort(function(a,b){ return new Date(sortDate(b)) - new Date(sortDate(a)); })
-          .slice(0, 15);
-      } else {
-        // High urgency: open, has dueDate, and dueDate is within 7 days (or overdue)
-        list = ALL.filter(function(a){
-          if (isCompleted(a) || !a.dueDate) return false;
-          return daysUntilDue(a) <= 7;
-        })
-          .sort(function(a,b){ return daysUntilDue(a) - daysUntilDue(b); })
-          .slice(0, 15);
-      }
-      var el = document.getElementById('activityTimeline');
-      if (!list.length) {
-        el.innerHTML = '<div class="text-muted small">No activities.</div>';
-      } else {
-        el.innerHTML = list.map(renderItem).join('');
-      }
-    }
-
-    document.getElementById('activityFilterTabs').addEventListener('click', function(e) {
-      var btn = e.target.closest('.dash-filter-btn');
-      if (!btn) return;
-      document.querySelectorAll('.dash-filter-btn').forEach(function(b){ b.classList.remove('active'); });
-      btn.classList.add('active');
-      render(btn.dataset.filter);
-    });
-
-    render('open');
-  })();
-  </script>
-
-  <div class="col-lg-4 d-flex flex-column gap-3">
-
-    <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div>
-          <span class="dashboard-card-title">Pipeline by stage</span>
-          <div class="dashboard-card-subtitle">
-            <%= board.reduce((s, c) => s + c.deals.length, 0) %> deals &middot; $<%= board.reduce((s, c) => s + c.total, 0).toLocaleString() %> total value
-          </div>
-        </div>
-        <a href="/pipeline" class="btn btn-sm btn-light-pill">Open full pipeline <i class="bi bi-arrow-right"></i></a>
-      </div>
-      <div class="card-body">
-        <% const maxTotal = Math.max(1, ...board.map(c => c.total)); %>
-        <% board.forEach(col => { %>
-          <div class="stage-row">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-              <div class="d-flex align-items-center">
-                <span class="stage-dot stage-dot-<%= col.stage.replace(/\s+/g,'') %>"></span>
-                <span class="stage-name"><%= col.stage %></span>
-                <span class="stage-count-pill ms-2"><%= col.deals.length %> deal<%= col.deals.length === 1 ? '' : 's' %></span>
+      <ul class="sd-list" id="naList">
+        <% attention.forEach(item => { %>
+          <li class="sd-na-row" data-due="<%= item.due %>" data-mine="<%= item.mine ? 1 : 0 %>" data-kind="<%= item.kind %>">
+            <span class="sd-na-bar" aria-hidden="true"></span>
+            <span class="sd-kind sd-kind-<%= item.kind %>" title="<%= item.kind === 'task' ? 'Task' : 'Activity follow-up' %>">
+              <i class="bi <%= item.kind === 'task' ? 'bi-check2-square' : (sdTypeIcon[item.context] || 'bi-arrow-repeat') %>"></i>
+            </span>
+            <div class="sd-na-main">
+              <a href="<%= item.link %>" class="sd-row-title"><%= item.title || '(untitled)' %></a>
+              <div class="sd-row-meta">
+                <span class="sd-kind-label"><%= item.kind === 'task' ? 'Task' : 'Follow-up' %></span>
+                <% if (item.companyId) { %>
+                  <span class="sd-dot">&middot;</span><a href="/companies/<%= item.companyId %>" class="sd-meta-link"><%= item.companyName %></a>
+                <% } %>
+                <% if (item.kind === 'task' && item.context) { %>
+                  <span class="sd-dot">&middot;</span><span class="sd-truncate"><%= item.context %></span>
+                <% } %>
+                <% if (item.kind === 'activity' && item.status) { %>
+                  <span class="sd-dot">&middot;</span><span>Last outcome: <%= item.status %></span>
+                <% } %>
               </div>
-              <div class="stage-total"><%= col.total > 0 ? '$' + col.total.toLocaleString() : '$0' %></div>
             </div>
-            <div class="stage-track">
-              <div class="stage-fill stage-fill-<%= col.stage.replace(/\s+/g,'') %>" style="width: <%= Math.round((col.total / maxTotal) * 100) %>%"></div>
-            </div>
-          </div>
-        <% }) %>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span class="dashboard-card-title">Recent comments</span>
-        <span class="live-dot ms-2"><span class="dot"></span>Live</span>
-      </div>
-      <div class="card-body p-0">
-        <% if (!recentComments.length) { %>
-          <div class="dash-cmt-empty">No comments yet.</div>
-        <% } %>
-        <% recentComments.forEach(c => { %>
-          <div class="dash-cmt-row">
-            <div class="dash-cmt-avatar"><%= (c.author || '?').trim().charAt(0).toUpperCase() %></div>
-            <div class="dash-cmt-body">
-              <div class="dash-cmt-header">
-                <span class="dash-cmt-author"><%= c.author || 'Unknown' %></span>
-                <% if (c.type === 'email') { %><span class="dash-cmt-email-badge"><i class="bi bi-envelope-fill"></i></span><% } %>
-                <span class="dash-cmt-time"><%= c.timeAgo %></span>
-              </div>
-              <div class="dash-cmt-preview"><%= (c.comment || c.emailSubject || '').slice(0, 90) %><%= (c.comment || c.emailSubject || '').length > 90 ? '…' : '' %></div>
-              <% if (c.contextLink) { %>
-                <a href="<%= c.contextLink %>" class="dash-cmt-context">
-                  <i class="bi bi-<%= c.contextType === 'task' ? 'diagram-3' : c.contextType === 'project' ? 'folder2' : c.contextType === 'deal' ? 'currency-dollar' : 'clock-history' %>"></i>
-                  <%= c.contextLabel %>
-                </a>
+            <span class="sd-due" data-due-label><%= item.due %></span>
+            <span class="sd-na-status">
+              <% if (item.kind === 'task') { %>
+                <span class="sd-pill <%= sdTaskStatusCls[item.status] || 'sd-pill-neutral' %>"><%= item.status %></span>
+              <% } else { %>
+                <span class="sd-pill sd-pill-neutral">Open</span>
               <% } %>
-            </div>
-          </div>
+            </span>
+            <span class="sd-na-actions">
+              <% if (item.kind === 'task') { %>
+                <form action="/tasks/<%= item.id %>/complete" method="POST" class="m-0" onsubmit="return confirm('Mark this task as completed?')">
+                  <button type="submit" class="sd-btn sd-btn-ghost" aria-label="Complete task: <%= item.title %>"><i class="bi bi-check2"></i><span class="sd-hide-sm"> Complete</span></button>
+                </form>
+              <% } else { %>
+                <a href="<%= item.link %>" class="sd-btn sd-btn-ghost" aria-label="Log update for <%= item.title %>"><i class="bi bi-pencil"></i><span class="sd-hide-sm"> Update</span></a>
+              <% } %>
+            </span>
+          </li>
         <% }) %>
+      </ul>
+      <div class="sd-empty" id="naEmpty" hidden>
+        <i class="bi bi-check2-circle"></i>
+        <div><strong>You're all caught up.</strong> Nothing overdue or due in the next 7 days.</div>
       </div>
-    </div>
+      <div class="sd-panel-foot" id="naFoot" hidden>
+        <span id="naMoreText"></span>
+        <button type="button" class="sd-link sd-link-btn" id="naToggleAll" aria-expanded="false">Show all</button>
+      </div>
+    </section>
 
+    <!-- Pipeline summary -->
+    <section class="sd-panel" aria-labelledby="plTitle">
+      <div class="sd-panel-head">
+        <div>
+          <h2 class="sd-panel-title" id="plTitle">Pipeline</h2>
+          <div class="sd-panel-sub"><%= sdPlural(sdOpenCount, 'open deal') %> &middot; <span title="<%= sdMoneyFull(stats.openPipelineTotal) %>"><%= sdMoney(stats.openPipelineTotal) %></span></div>
+        </div>
+        <a href="/pipeline" class="sd-link">View pipeline <i class="bi bi-arrow-right"></i></a>
+      </div>
+
+      <% if (!sdOpenCount) { %>
+        <div class="sd-empty">
+          <i class="bi bi-funnel"></i>
+          <div>No open deals yet. <a href="/pipeline" class="sd-link">Go to pipeline</a></div>
+        </div>
+      <% } else { %>
+        <div class="sd-pl-bar" role="img" aria-label="Open deals by stage">
+          <% openStages.filter(s => s.count).forEach(s => { %>
+            <span style="flex: <%= s.count %>; background: <%= sdStageColor[s.stage] || 'var(--crm-muted-fg)' %>;" title="<%= s.stage %>: <%= s.count %>"></span>
+          <% }) %>
+        </div>
+        <div class="sd-pl-caption">Share of open deals by stage</div>
+      <% } %>
+
+      <ul class="sd-pl-list">
+        <% openStages.forEach(s => { %>
+          <li class="sd-pl-row <%= s.count ? '' : 'is-empty' %>">
+            <span class="sd-pl-dot" style="background: <%= sdStageColor[s.stage] || 'var(--crm-muted-fg)' %>;"></span>
+            <span class="sd-pl-name"><%= s.stage %></span>
+            <span class="sd-pl-count" aria-label="<%= sdPlural(s.count, 'deal') %>"><%= s.count %></span>
+            <span class="sd-pl-value">
+              <% if (!s.count) { %>
+                <span class="sd-muted">&mdash;</span>
+              <% } else if (s.count === s.noValue) { %>
+                <span class="sd-muted" title="No amount entered on these deals">No value</span>
+              <% } else { %>
+                <span title="<%= sdMoneyFull(s.total) %>"><%= sdMoney(s.total) %></span>
+              <% } %>
+              <% if (s.count && s.noValue && s.count !== s.noValue) { %>
+                <span class="sd-pl-note sd-warn-text"><%= s.noValue %> without value</span>
+              <% } %>
+              <% if (s.zeroValue) { %>
+                <span class="sd-pl-note"><%= s.zeroValue %> at $0</span>
+              <% } %>
+            </span>
+          </li>
+        <% }) %>
+      </ul>
+
+      <div class="sd-pl-closed">
+        <div><span class="sd-pl-dot" style="background: var(--crm-stage-won);"></span>Won <strong><%= won.count %></strong> <span class="sd-muted" title="<%= sdMoneyFull(won.total) %>">&middot; <%= sdMoney(won.total) %></span></div>
+        <div><span class="sd-pl-dot" style="background: var(--crm-stage-lost);"></span>Lost <strong><%= lost.count %></strong></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ── 4. Secondary information ───────────────────────────────────────── -->
+  <div class="sd-grid">
+
+    <!-- Recent activity -->
+    <section class="sd-panel" aria-labelledby="raTitle">
+      <div class="sd-panel-head">
+        <div>
+          <h2 class="sd-panel-title" id="raTitle">Recent activity</h2>
+          <div class="sd-panel-sub">Latest logged calls, emails and meetings</div>
+        </div>
+        <a href="/activities" class="sd-link">View all <i class="bi bi-arrow-right"></i></a>
+      </div>
+      <ul class="sd-list" id="raList">
+        <% recentActivities.forEach(a => { %>
+          <li class="sd-ra-row" data-mine="<%= a.mine ? 1 : 0 %>">
+            <span class="sd-kind sd-kind-activity"><i class="bi <%= sdTypeIcon[a.type] || 'bi-clock-history' %>"></i></span>
+            <div class="sd-ra-main">
+              <a href="/activities/<%= a.id %>" class="sd-row-title"><%= a.title || '(untitled)' %></a>
+              <div class="sd-row-meta">
+                <% if (a.companyId) { %>
+                  <a href="/companies/<%= a.companyId %>" class="sd-meta-link"><%= a.companyName %></a>
+                <% } else { %>
+                  <span>No company</span>
+                <% } %>
+                <% if (a.result) { %><span class="sd-dot">&middot;</span><span><%= a.result %></span><% } %>
+              </div>
+            </div>
+            <span class="sd-ra-type"><%= a.type || 'Other' %></span>
+            <time class="sd-ra-date" datetime="<%= a.occurred %>" data-rel-date><%= a.occurred %></time>
+          </li>
+        <% }) %>
+      </ul>
+      <div class="sd-empty" id="raEmpty" hidden>
+        <i class="bi bi-clock-history"></i>
+        <div>No activity logged yet.</div>
+      </div>
+    </section>
+
+    <!-- Latest account updates -->
+    <section class="sd-panel" aria-labelledby="auTitle">
+      <div class="sd-panel-head">
+        <div>
+          <h2 class="sd-panel-title" id="auTitle">Account updates</h2>
+          <div class="sd-panel-sub">Latest comments and received emails, by account</div>
+        </div>
+      </div>
+      <% if (!accountUpdates.length) { %>
+        <div class="sd-empty">
+          <i class="bi bi-chat-left-text"></i>
+          <div>No recent comments or emails.</div>
+        </div>
+      <% } else { %>
+        <ul class="sd-au-list">
+          <% accountUpdates.forEach(g => { %>
+            <li class="sd-au-group">
+              <div class="sd-au-head">
+                <i class="bi <%= g.icon %> sd-au-icon"></i>
+                <a href="<%= g.link %>" class="sd-au-title"><%= g.title %></a>
+                <span class="sd-au-count"><%= sdPlural(g.total, 'update') %></span>
+                <span class="sd-au-time"><%= g.timeAgo %></span>
+              </div>
+              <% g.threads.forEach(t => { %>
+                <div class="sd-au-thread">
+                  <span class="sd-au-type sd-au-type-<%= t.type %>" title="<%= t.type === 'email' ? 'Email received' : 'Internal comment' %>">
+                    <i class="bi <%= t.type === 'email' ? 'bi-envelope-arrow-down' : 'bi-chat-left-text' %>"></i>
+                    <span class="visually-hidden"><%= t.type === 'email' ? 'Email received' : 'Internal comment' %></span>
+                  </span>
+                  <div class="sd-au-body">
+                    <div class="sd-au-line"><strong><%= t.author %></strong> <span class="sd-au-text"><%= t.text %></span></div>
+                    <div class="sd-au-ctx">
+                      <a href="<%= t.link %>" class="sd-meta-link"><%= t.label %></a>
+                      <% if (t.more) { %><span class="sd-dot">&middot;</span><span>+<%= t.more %> earlier</span><% } %>
+                      <span class="sd-dot">&middot;</span><span><%= t.timeAgo %></span>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+              <% if (g.hiddenThreads) { %>
+                <a href="<%= g.link %>" class="sd-au-more">+<%= g.hiddenThreads %> more conversation<%= g.hiddenThreads === 1 ? '' : 's' %></a>
+              <% } %>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
   </div>
 </div>
+
+<script>
+(function () {
+  var root = document.getElementById('salesDashboard');
+  if (!root) return;
+
+  var LIMIT = 7, UPCOMING_DAYS = 7;
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var expanded = false;
+
+  function parseDay(s) { var p = (s || '').split('-'); return p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]) : null; }
+  function daysFromToday(s) { var d = parseDay(s); return d ? Math.round((d - today) / 86400000) : null; }
+  function shortDate(d) { return MONTHS[d.getMonth()] + ' ' + d.getDate() + (d.getFullYear() !== today.getFullYear() ? ', ' + d.getFullYear() : ''); }
+
+  // Relative dates for recent activity
+  root.querySelectorAll('[data-rel-date]').forEach(function (el) {
+    var n = daysFromToday(el.getAttribute('datetime'));
+    if (n === null) return;
+    el.textContent = n === 0 ? 'Today' : n === -1 ? 'Yesterday' : shortDate(parseDay(el.getAttribute('datetime')));
+  });
+
+  // Due labels for Needs attention
+  var naRows = Array.prototype.slice.call(root.querySelectorAll('.sd-na-row'));
+  naRows.forEach(function (row) {
+    var n = daysFromToday(row.dataset.due);
+    row._days = n;
+    var chip = row.querySelector('[data-due-label]');
+    var cls, text, aria;
+    if (n < 0)       { cls = 'is-overdue'; text = (-n) + 'd overdue'; aria = 'Overdue by ' + (-n) + ' day' + (n === -1 ? '' : 's'); }
+    else if (n === 0){ cls = 'is-today';   text = 'Due today';  aria = 'Due today'; }
+    else if (n === 1){ cls = 'is-soon';    text = 'Tomorrow';   aria = 'Due tomorrow'; }
+    else             { cls = 'is-soon';    text = shortDate(parseDay(row.dataset.due)); aria = 'Due ' + text; }
+    chip.textContent = text;
+    chip.className = 'sd-due ' + cls;
+    chip.setAttribute('aria-label', aria);
+    row.classList.add(cls);
+  });
+
+  function inScope(row, scope) { return scope !== 'mine' || row.dataset.mine === '1'; }
+
+  function apply(scope) {
+    // Needs attention: overdue + due within window, overdue first (rows are pre-sorted by due date)
+    var candidates = naRows.filter(function (r) { return inScope(r, scope) && r._days !== null && r._days <= UPCOMING_DAYS; });
+    var overdue = candidates.filter(function (r) { return r._days < 0; });
+    var shown = expanded ? candidates : candidates.slice(0, LIMIT);
+    naRows.forEach(function (r) { r.hidden = shown.indexOf(r) === -1; });
+    document.getElementById('naEmpty').hidden = candidates.length > 0;
+
+    var upcoming = candidates.length - overdue.length;
+    document.getElementById('naSummary').textContent = candidates.length
+      ? overdue.length + ' overdue \u00b7 ' + upcoming + ' due in the next 7 days'
+      : 'Overdue and due in the next 7 days';
+
+    var foot = document.getElementById('naFoot');
+    foot.hidden = candidates.length <= LIMIT;
+    document.getElementById('naMoreText').textContent = expanded
+      ? 'Showing all ' + candidates.length
+      : 'Showing ' + Math.min(LIMIT, candidates.length) + ' of ' + candidates.length;
+    var tgl = document.getElementById('naToggleAll');
+    tgl.textContent = expanded ? 'Show fewer' : 'Show all';
+    tgl.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+
+    // Overdue KPI follows the same scope
+    var oTasks = overdue.filter(function (r) { return r.dataset.kind === 'task'; }).length;
+    var oActs  = overdue.length - oTasks;
+    document.getElementById('kpiOverdueValue').textContent = overdue.length;
+    document.getElementById('kpiOverdueSub').textContent =
+      oTasks + ' task' + (oTasks === 1 ? '' : 's') + ' \u00b7 ' + oActs + ' activit' + (oActs === 1 ? 'y' : 'ies');
+    document.getElementById('kpiOverdue').classList.toggle('is-danger', overdue.length > 0);
+
+    // Recent activity
+    var raRows = Array.prototype.slice.call(root.querySelectorAll('.sd-ra-row'));
+    var raShown = raRows.filter(function (r) { return inScope(r, scope); }).slice(0, LIMIT);
+    raRows.forEach(function (r) { r.hidden = raShown.indexOf(r) === -1; });
+    document.getElementById('raEmpty').hidden = raShown.length > 0;
+  }
+
+  var scope = root.dataset.scope;
+  try { var saved = localStorage.getItem('sdScope'); if (saved && root.querySelector('[data-scope-btn]')) scope = saved; } catch (e) {}
+
+  function setScope(s) {
+    scope = s;
+    root.querySelectorAll('[data-scope-btn]').forEach(function (b) {
+      var on = b.dataset.scopeBtn === s;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    try { localStorage.setItem('sdScope', s); } catch (e) {}
+    apply(s);
+  }
+
+  root.querySelectorAll('[data-scope-btn]').forEach(function (b) {
+    b.addEventListener('click', function () { setScope(b.dataset.scopeBtn); });
+  });
+  document.getElementById('naToggleAll').addEventListener('click', function () { expanded = !expanded; apply(scope); });
+
+  if (root.querySelector('[data-scope-btn]')) setScope(scope); else apply(scope);
+})();
+</script>
 
 <% } %>
