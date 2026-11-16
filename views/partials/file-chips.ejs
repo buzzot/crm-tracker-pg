@@ -1,0 +1,23 @@
+<%
+  // locals: files (array of {id, filename, url, contentType, sizeBytes}), canDelete (bool)
+  const _files = (typeof files !== 'undefined' && files) || [];
+  const _canDel = typeof canDelete !== 'undefined' ? !!canDelete : !!(typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'Admin');
+  const _kind = f => {
+    const t = String(f.contentType || ''), n = String(f.filename || '').toLowerCase();
+    if (/^image\//.test(t) || /\.(png|jpe?g|gif|webp|bmp)$/.test(n)) return 'image';
+    if (/pdf/.test(t) || /\.pdf$/.test(n)) return 'pdf';
+    return 'file';
+  };
+  const _icon = { image: 'bi-image', pdf: 'bi-file-earmark-pdf', file: 'bi-paperclip' };
+  const _size = b => !b ? '' : b < 1024 ? b + ' B' : b < 1048576 ? Math.round(b / 1024) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+%>
+<% if (_files.length) { %>
+<div class="fc-list">
+  <% _files.forEach(f => { const k = _kind(f); %>
+    <span class="fc fc-<%= k %>" data-fc-url="<%= f.url %>" data-fc-kind="<%= k %>" data-fc-name="<%= f.filename %>" data-fc-size="<%= _size(f.sizeBytes) %>">
+      <a href="<%= f.url %>" target="_blank" rel="noopener" class="fc-link"><i class="bi <%= _icon[k] %>" aria-hidden="true"></i><span class="fc-name"><%= f.filename %></span></a>
+      <% if (_canDel && f.id) { %><button type="button" class="fc-x" data-fc-del="<%= f.id %>" aria-label="Remove <%= f.filename %>" title="Remove attachment"><i class="bi bi-x"></i></button><% } %>
+    </span>
+  <% }) %>
+</div>
+<% } %>

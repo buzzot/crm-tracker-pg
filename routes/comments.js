@@ -47,6 +47,22 @@ router.post('/comments/:id/delete', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Admin: remove an attachment that isn't relevant (e.g. email signature images)
+router.post('/attachments/:id/delete', async (req, res, next) => {
+  const wantsJson = (req.get('accept') || '').includes('application/json');
+  try {
+    if (!isAdmin(req)) return wantsJson ? res.status(403).json({ ok: false, error: 'Only admins can remove attachments.' }) : res.status(403).render('error', { title: 'Forbidden', message: 'Only admins can remove attachments.' });
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).json({ ok: false, error: 'Attachment not found.' });
+    const row = await crm.deleteAttachment(req.params.id);
+    if (!row) return wantsJson ? res.status(404).json({ ok: false, error: 'Attachment not found.' }) : res.redirect(req.get('referer') || '/');
+    if (wantsJson) return res.json({ ok: true });
+    res.redirect(req.get('referer') || '/');
+  } catch (err) {
+    if (wantsJson) return res.status(500).json({ ok: false, error: 'Could not remove the attachment.' });
+    next(err);
+  }
+});
+
 async function formatHandler(req, res) {
   try {
     const result = await cleanNow(req.params.id);

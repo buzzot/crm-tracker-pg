@@ -271,3 +271,51 @@ function initCompanySearch() {
     });
   });
 }
+
+// ── File chips: hover preview + admin remove ────────────────────────────────
+(function () {
+  if (window.__fileChips) return; window.__fileChips = true;
+  var pop = null, timer = null, current = null;
+  function esc(t) { return String(t || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function hide() { clearTimeout(timer); current = null; if (pop) pop.hidden = true; }
+  function place(chip) {
+    var r = chip.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+    var left = Math.min(Math.max(8, r.left), window.innerWidth - pw - 8);
+    var top = r.top - ph - 8 < 8 ? r.bottom + 8 : r.top - ph - 8;
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  }
+  function show(chip) {
+    if (!pop) { pop = document.createElement('div'); pop.className = 'fc-pop'; pop.hidden = true; document.body.appendChild(pop); }
+    var k = chip.dataset.fcKind, url = chip.dataset.fcUrl, name = chip.dataset.fcName, size = chip.dataset.fcSize;
+    var body = k === 'image' ? '<img src="' + esc(url) + '" alt="">'
+      : k === 'pdf' ? '<iframe src="' + esc(url) + '#toolbar=0&view=FitH" title="' + esc(name) + '"></iframe>'
+      : '<div class="fc-pop-file"><i class="bi bi-file-earmark"></i></div>';
+    pop.innerHTML = '<div class="fc-pop-media fc-pop-' + k + '">' + body + '</div><div class="fc-pop-meta"><span>' + esc(name) + '</span>' + (size ? '<b>' + esc(size) + '</b>' : '') + '</div>';
+    pop.hidden = false; place(chip);
+    var img = pop.querySelector('img'); if (img) img.onload = function () { if (current === chip) place(chip); };
+  }
+  document.addEventListener('mouseover', function (e) {
+    var chip = e.target.closest && e.target.closest('.fc');
+    if (!chip || chip === current) return;
+    if (e.target.closest('.fc-x')) return;
+    current = chip; clearTimeout(timer);
+    timer = setTimeout(function () { if (current === chip) show(chip); }, 250);
+  });
+  document.addEventListener('mouseout', function (e) {
+    var chip = e.target.closest && e.target.closest('.fc');
+    if (chip && (!e.relatedTarget || !chip.contains(e.relatedTarget))) hide();
+  });
+  document.addEventListener('scroll', hide, true);
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-fc-del]'); if (!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    var chip = btn.closest('.fc'), name = chip ? chip.dataset.fcName : 'this file';
+    if (!confirm('Remove "' + name + '"? This deletes the file and can\'t be undone.')) return;
+    hide(); chip.classList.add('is-removing'); btn.disabled = true;
+    fetch('/attachments/' + btn.dataset.fcDel + '/delete', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'Failed'); }); })
+      .then(function () { var list = chip.parentElement; chip.remove(); if (list && !list.children.length) list.remove(); })
+      .catch(function (err) { chip.classList.remove('is-removing'); btn.disabled = false; alert(err.message || 'Could not remove the attachment.'); });
+  });
+})();

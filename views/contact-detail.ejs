@@ -188,13 +188,7 @@
               <% if (c.link) { %>
                 <a href="<%= c.link %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-link-45deg"></i><%= c.link %></a>
               <% } %>
-              <% if (c.attachments && c.attachments.length) { %>
-                <div class="d-flex flex-wrap gap-2 mt-2">
-                  <% c.attachments.forEach(file => { %>
-                    <a href="<%= file.url %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-paperclip"></i><%= file.filename %></a>
-                  <% }) %>
-                </div>
-              <% } %>
+              <%- include('partials/file-chips', { files: c.attachments }) %>
             </div>
           </div>
         <% }) %>

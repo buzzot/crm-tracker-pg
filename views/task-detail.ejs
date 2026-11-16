@@ -224,11 +224,7 @@
                 </div>
                 <div class="note-bubble note-email-bubble">
                   <div class="note-text" style="white-space:pre-wrap;"><%= c.comment %></div>
-                  <% if (c.attachments && c.attachments.length) { %>
-                    <div class="d-flex flex-wrap gap-2 mt-2">
-                      <% c.attachments.forEach(f => { %><a href="<%= f.url %>" target="_blank" class="note-link-chip"><i class="bi bi-paperclip"></i><%= f.filename %></a><% }) %>
-                    </div>
-                  <% } %>
+                  <%- include('partials/file-chips', { files: c.attachments }) %>
                 </div>
               </div>
             <% } else { %>
@@ -240,11 +236,7 @@
                 </div>
                 <div class="note-bubble">
                   <div class="note-text"><%= c.comment %></div>
-                  <% if (c.attachments && c.attachments.length) { %>
-                    <div class="d-flex flex-wrap gap-2 mt-2">
-                      <% c.attachments.forEach(f => { %><a href="<%= f.url %>" target="_blank" class="note-link-chip"><i class="bi bi-paperclip"></i><%= f.filename %></a><% }) %>
-                    </div>
-                  <% } %>
+                  <%- include('partials/file-chips', { files: c.attachments }) %>
                 </div>
               </div>
             <% } %>
@@ -271,11 +263,7 @@
               <div class="note-bubble">
                 <% if (r.category) { %><span class="pnew-badge" style="margin:0 0 0.35rem;"><%= r.category %></span><% } %>
                 <% if (r.details) { %><div class="note-text"><%= r.details %></div><% } %>
-                <% if (r.attachments && r.attachments.length) { %>
-                  <div class="d-flex flex-wrap gap-2 mt-2">
-                    <% r.attachments.forEach(f => { %><a href="<%= f.url %>" target="_blank" class="note-link-chip"><i class="bi bi-paperclip"></i><%= f.filename %></a><% }) %>
-                  </div>
-                <% } %>
+                <%- include('partials/file-chips', { files: r.attachments }) %>
               </div>
             </div>
           <% }) %>

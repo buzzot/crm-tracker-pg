@@ -1428,8 +1428,9 @@ function mapComment(row) {
     author: row.user_name || row.author_name || 'Unknown',
     authorId: row.author_id,
     type: row.type || 'comment',
-    emailSubject: row.email_subject || null,
-    link: (isEmail || manual || String(row.link || '').startsWith(MANUAL_PREFIX)) ? null : (row.link || null),
+    // Older inbound emails stored the subject only in link as "EMAILSUBJ:<subject>"
+    emailSubject: row.email_subject || (String(row.link || '').startsWith('EMAILSUBJ:') ? row.link.slice(10) : null),
+    link: (isEmail || manual || /^(MANUAL:|EMAILSUBJ:)/.test(String(row.link || ''))) ? null : (row.link || null),
     entityType: row.entity_type,
     entityId: row.entity_id,
     // Map to old field names so routes work unchanged
@@ -1820,6 +1821,19 @@ async function companiesOverview(ids) {
   return out;
 }
 
+async function getAttachment(id) {
+  const r = await query('SELECT * FROM attachments WHERE id=$1', [id]);
+  return r.rows[0] || null;
+}
+async function deleteAttachment(id) {
+  const r = await query('DELETE FROM attachments WHERE id=$1 RETURNING storage_path, entity_type, entity_id', [id]);
+  const row = r.rows[0];
+  if (row && row.storage_path && !/^https?:/i.test(row.storage_path)) {
+    try { await storage.deleteFile(row.storage_path); } catch (e) { console.error('[attachments] storage delete failed:', e.message); }
+  }
+  return row || null;
+}
+
 async function companyLogos(ids) {
   const list = [...new Set((ids || []).filter(Boolean))];
   if (!list.length) return {};
@@ -2016,6 +2030,8 @@ module.exports = {
   reopenTask,
   companyLogos,
   companiesOverview,
+  getAttachment,
+  deleteAttachment,
   // Tasks
   listTasks,
   getTask,
