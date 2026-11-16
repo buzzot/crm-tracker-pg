@@ -73,6 +73,7 @@ if (isProd) {
 // Make the logged-in user and email domain available to all views.
 app.use((req, res, next) => {
   res.locals.currentUser = req.session.user || null;
+  res.locals.currentPath = req.path;
   res.locals.emailDomain = process.env.EMAIL_DOMAIN || 'mg.samyoucrm.com';
   // Helper for views: convert a Supabase storage_path to a /media/ URL
   res.locals.mediaUrl = (storagePath) =>
