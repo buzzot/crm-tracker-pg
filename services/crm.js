@@ -1190,6 +1190,14 @@ async function completeTask(id) {
   );
 }
 
+async function reopenTask(id, status) {
+  const next = ['To Do', 'In Progress', 'Blocked'].includes(status) ? status : 'To Do';
+  await query(
+    `UPDATE tasks SET status=$2, completed_at=NULL, updated_at=NOW() WHERE id=$1 AND status='Completed'`,
+    [id, next]
+  );
+}
+
 async function setTaskAuditor(taskId, auditorId) {
   await query('UPDATE tasks SET auditor_id=$2, updated_at=NOW() WHERE id=$1', [taskId, auditorId || null]);
   return getTask(taskId);
@@ -1945,6 +1953,7 @@ module.exports = {
   addProjectComment,
   listProjectsWithSubtasks,
   listProjectsOverview,
+  reopenTask,
   // Tasks
   listTasks,
   getTask,

@@ -1,346 +1,307 @@
 <%
-  function fmtDate(d) {
-    if (!d) return '—';
+  const activeFilter = ['active', 'completed', 'all'].includes(filter) ? filter : 'active';
+  const open = tasks.filter(t => !t.done);
+  const n = {
+    active: open.length, completed: tasks.length - open.length, all: tasks.length,
+    overdue: open.filter(t => t.bucket === 'overdue').length,
+    today: open.filter(t => t.bucket === 'today').length,
+    week: open.filter(t => t.bucket === 'week').length,
+    mine: open.filter(t => t.mine).length,
+  };
+  const sKey = s => String(s || '').replace(/[^A-Za-z0-9]/g, '');
+  function initials(name) {
+    if (!name) return '?';
+    const w = name.trim().split(/\s+/);
+    return (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase();
+  }
+  function fmt(d, withYear) {
+    if (!d) return '';
     const dt = new Date(d + 'T00:00:00');
     if (isNaN(dt)) return d;
-    return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const sameYear = dt.getFullYear() === new Date().getFullYear();
+    return dt.toLocaleDateString('en-US', { weekday: withYear ? undefined : 'short', month: 'short', day: 'numeric', year: sameYear ? undefined : 'numeric' });
   }
-  const today = new Date(); today.setHours(0,0,0,0);
-  function isOverdue(task) {
-    if (!task.deadline || task.status === 'Completed') return false;
-    return new Date(task.deadline + 'T00:00:00') < today;
+  function dueText(t) {
+    if (t.dueDays === null) return { main: 'No date', cls: 'is-none' };
+    if (t.done) return { main: fmt(t.deadline, true), cls: '' };
+    const d = t.dueDays;
+    if (d < 0) return { main: (-d === 1 ? '1 day' : (-d) + ' days') + ' late', sub: fmt(t.deadline, true), cls: 'is-late' };
+    if (d === 0) return { main: 'Today', cls: 'is-today' };
+    if (d === 1) return { main: 'Tomorrow', sub: fmt(t.deadline), cls: 'is-soon' };
+    return { main: fmt(t.deadline), sub: d <= 14 ? 'in ' + d + ' days' : '', cls: '' };
   }
-  const statusColors = {
-    'To Do':       { bg: '#eef0f3', fg: '#5b6172' },
-    'In Progress': { bg: '#e7eefc', fg: '#2b5fb8' },
-    'Completed':   { bg: '#dff5e3', fg: '#1c7a3c' },
-    'Overdue':     { bg: '#fbe5e7', fg: '#c23b4a' },
-  };
-  function statusStyle(task) {
-    const key = isOverdue(task) ? 'Overdue' : (task.status || 'To Do');
-    const c = statusColors[key] || statusColors['To Do'];
-    return `background:${c.bg};color:${c.fg};`;
-  }
-
-  // Status filter
-  const activeFilter = (typeof filter !== 'undefined' ? filter : 'active');
-  let shown = tasks;
-  if (activeFilter === 'active')    shown = tasks.filter(t => t.status !== 'Completed');
-  if (activeFilter === 'completed') shown = tasks.filter(t => t.status === 'Completed');
-
-  // User filter (Admin only)
-  const activeUserId = (typeof filterUserId !== 'undefined' ? filterUserId : '');
-  if (activeUserId) {
-    shown = shown.filter(t =>
-      (t.ownerId && t.ownerId === activeUserId) ||
-      (t.assignees && t.assignees.some(a => a.id === activeUserId))
-    );
-  }
-
-  // Build tab URL helper — preserves userId when set
-  function tabUrl(status) {
-    return '/tasks?status=' + status + (activeUserId ? '&userId=' + encodeURIComponent(activeUserId) : '');
+  function row(t) {
+    const due = dueText(t);
+    const search = [t.name, t.projectName, t.companyName, t.status, t.auditorName, t.people.map(p => p.name).join(' ')].join(' ').toLowerCase();
+    return { due, search };
   }
 %>
 
-<div class="pnew-page">
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h1 class="pnew-hero" style="font-size:1.6rem;">Tasks</h1>
-    <a href="/tasks/new" class="pnew-btn-save"><i class="bi bi-plus-lg me-1"></i>New Task</a>
+<div class="pg tk">
+
+  <div class="pg-header">
+    <div class="pg-heading">
+      <h1 class="pg-title">Tasks</h1>
+      <span class="pg-count"><%= n.active %> open</span>
+    </div>
+    <div class="pg-actions">
+      <a href="/tasks/new" class="pg-btn pg-btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i>New task</a>
+    </div>
   </div>
 
-  <!-- Filter bar: status tabs + optional user dropdown (Admin only) -->
-  <div class="task-filterbar mb-3">
-    <div class="task-filter-tabs">
-      <a href="<%= tabUrl('active') %>"    class="task-filter-tab <%= activeFilter === 'active'    ? 'active' : '' %>">Active <span class="task-count"><%= tasks.filter(t => t.status !== 'Completed').length %></span></a>
-      <a href="<%= tabUrl('completed') %>" class="task-filter-tab <%= activeFilter === 'completed' ? 'active' : '' %>">Completed <span class="task-count"><%= tasks.filter(t => t.status === 'Completed').length %></span></a>
-      <a href="<%= tabUrl('all') %>"       class="task-filter-tab <%= activeFilter === 'all'       ? 'active' : '' %>">All <span class="task-count"><%= tasks.length %></span></a>
-    </div>
-
-    <% if (typeof teamUsers !== 'undefined' && teamUsers.length) { %>
-    <form method="GET" action="/tasks" class="task-user-filter">
-      <input type="hidden" name="status" value="<%= activeFilter %>">
-      <select name="userId" onchange="this.form.submit()" class="task-user-select">
-        <option value="">All members</option>
-        <% teamUsers.forEach(u => { %>
-          <option value="<%= u.id %>" <%= activeUserId === u.id ? 'selected' : '' %>><%= u.name %><% if (u.title) { %> — <%= u.title %><% } %></option>
-        <% }) %>
-      </select>
-      <% if (activeUserId) { %>
-        <a href="/tasks?status=<%= activeFilter %>" class="task-clear-user" title="Clear filter">✕</a>
-      <% } %>
-    </form>
-    <% } %>
+  <!-- At a glance: click to filter -->
+  <div class="tk-glance" role="group" aria-label="Due summary">
+    <button type="button" class="tk-stat is-late" data-bucket="overdue"><b><%= n.overdue %></b><span>Overdue</span></button>
+    <button type="button" class="tk-stat is-today" data-bucket="today"><b><%= n.today %></b><span>Due today</span></button>
+    <button type="button" class="tk-stat" data-bucket="week"><b><%= n.week %></b><span>This week</span></button>
+    <button type="button" class="tk-stat is-mine" data-mine="1"><b><%= n.mine %></b><span>Mine</span></button>
   </div>
 
-  <% if (!shown.length) { %>
-    <div class="pnew-card text-center py-5" style="color: var(--crm-muted-fg);">
-      <i class="bi bi-check2-square" style="font-size:2rem; display:block; margin-bottom:0.5rem;"></i>
-      <% if (activeFilter === 'completed') { %>No completed tasks yet.<% } else { %>No active tasks. <a href="/tasks/new">Create one.</a><% } %>
+  <div class="pg-toolbar">
+    <div class="pg-tabs" id="tkTabs" role="tablist" aria-label="Filter by state">
+      <button type="button" class="pg-tab" role="tab" data-tab="active">Open <span class="pg-tab-n"><%= n.active %></span></button>
+      <button type="button" class="pg-tab" role="tab" data-tab="completed">Completed <span class="pg-tab-n"><%= n.completed %></span></button>
+      <button type="button" class="pg-tab" role="tab" data-tab="all">All <span class="pg-tab-n"><%= n.all %></span></button>
     </div>
-  <% } else { %>
-    <div class="pnew-card p-0" style="overflow:hidden;">
-      <table class="task-list-table">
-        <thead>
-          <tr>
-            <th>Task</th>
-            <th>Project</th>
-            <th>Assigned to</th>
-            <th>Start</th>
-            <th>Deadline</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% shown.forEach(task => { %>
-            <tr onclick="location.href='/tasks/<%= task.id %>'" style="cursor:pointer;" class="<%= isOverdue(task) ? 'task-row-overdue' : '' %>">
-              <td>
-                <div class="task-name-cell">
-                  <span class="task-name"><%= task.name %></span>
-                  <% if (task.auditorName) { %>
-                    <span class="task-auditor-chip"><i class="bi bi-eye"></i> <%= task.auditorName %></span>
-                  <% } %>
-                </div>
-              </td>
-              <td class="task-meta">
-                <% if (task.projectName) { %>
-                  <i class="bi bi-folder2" style="opacity:0.5;"></i> <%= task.projectName %>
-                <% } else { %>—<% } %>
-              </td>
-              <td class="task-meta">
-                <% if (task.assignees && task.assignees.length) { %>
-                  <div class="task-assignee-avatars">
-                    <% task.assignees.slice(0,3).forEach(a => { %>
-                      <span class="task-assignee-av" title="<%= a.name %>"><%= (a.name||'?').charAt(0).toUpperCase() %></span>
-                    <% }) %>
-                    <% if (task.assignees.length > 3) { %><span class="task-assignee-more">+<%= task.assignees.length - 3 %></span><% } %>
-                  </div>
-                <% } else if (task.ownerName) { %>
-                  <div class="task-assignee-avatars">
-                    <span class="task-assignee-av" title="<%= task.ownerName %>" style="background:var(--crm-muted-fg);"><%= task.ownerName.charAt(0).toUpperCase() %></span>
-                    <span style="color:var(--crm-muted-fg); font-size:0.78rem;"><%= task.ownerName %></span>
-                  </div>
-                <% } else { %><span style="color:var(--crm-muted-fg);">—</span><% } %>
-              </td>
-              <td class="task-meta"><%= fmtDate(task.startDate || task.date) %></td>
-              <td class="task-meta <%= isOverdue(task) ? 'task-deadline-overdue' : '' %>">
-                <%= fmtDate(task.deadline) %>
-              </td>
-              <td>
-                <span class="task-status-badge" style="<%= statusStyle(task) %>">
-                  <%= isOverdue(task) ? 'Overdue' : (task.status || 'To Do') %>
+    <label class="pg-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input type="search" id="tkSearch" placeholder="Search tasks, projects, companies, people" autocomplete="off" aria-label="Search tasks">
+    </label>
+  </div>
+
+  <div class="pl-filters">
+    <button type="button" class="pl-chip" id="tkMine" aria-pressed="false"><i class="bi bi-person"></i>Assigned to me <b><%= n.mine %></b></button>
+    <label class="pl-select"><span>Person</span>
+      <select id="tkPerson">
+        <option value="">Everyone</option>
+        <% people.forEach(p => { %><option value="<%= p.id %>" <%= filterUserId === p.id ? 'selected' : '' %>><%= p.name %></option><% }) %>
+      </select></label>
+    <span class="pl-spacer"></span>
+    <label class="pl-select"><span>Group</span>
+      <select id="tkGroup">
+        <option value="due">Due date</option>
+        <option value="project">Project</option>
+        <option value="person">Person</option>
+        <option value="status">Status</option>
+        <option value="none">None</option>
+      </select></label>
+  </div>
+
+  <div class="pl-table-wrap">
+    <table class="tk-table" id="tkTable">
+      <colgroup><col class="tk-c-check"><col><col class="tk-c-who"><col class="tk-c-due"><col class="tk-c-status"></colgroup>
+      <thead><tr><th><span class="visually-hidden">Done</span></th><th>Task</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead>
+      <tbody id="tkBody">
+        <% tasks.forEach(t => { const r = row(t); %>
+          <tr class="tk-row<%= t.done ? ' is-done' : '' %>" data-id="<%= t.id %>" data-done="<%= t.done ? 1 : 0 %>"
+              data-bucket="<%= t.bucket %>" data-mine="<%= t.mine ? 1 : 0 %>" data-search="<%= r.search %>"
+              data-due="<%= t.deadline || '' %>" data-status="<%= t.status %>"
+              data-people="<%= t.people.map(p => p.id).join(',') %>" data-person-name="<%= t.people[0] ? t.people[0].name : '' %>"
+              data-project="<%= t.projectName || '' %>">
+            <td class="tk-check">
+              <button type="button" class="tk-box" aria-label="<%= t.done ? 'Reopen' : 'Mark done' %>: <%= t.name %>" title="<%= t.done ? 'Reopen task' : 'Mark as done' %>"><i class="bi bi-check-lg"></i></button>
+            </td>
+            <td class="tk-main">
+              <a href="/tasks/<%= t.id %>" class="tk-name"><%= t.name || '(untitled)' %></a>
+              <div class="tk-sub">
+                <% if (t.projectName) { %><a href="/projects/<%= t.projectId %>" class="tk-proj"><i class="bi bi-kanban"></i><%= t.projectName %></a><% } else { %><span class="pl-muted">No project</span><% } %>
+                <% if (t.companyName) { %><span class="pl-sep">·</span><a href="/companies/<%= t.companyId %>" class="tk-co"><%= t.companyName %></a><% } %>
+                <% if (t.auditorName) { %><span class="pl-sep">·</span><span title="Reviewer"><i class="bi bi-eye"></i> <%= t.auditorName %></span><% } %>
+              </div>
+            </td>
+            <td>
+              <% if (t.people.length) { %>
+                <span class="tk-who" title="<%= t.people.map(p => p.name).join(', ') %>">
+                  <span class="tk-avs"><% t.people.slice(0, 3).forEach(p => { %><span class="pl-avatar"><%= initials(p.name) %></span><% }) %></span>
+                  <span class="tk-who-name"><%= t.people[0].name %><%= t.people.length > 1 ? ' +' + (t.people.length - 1) : '' %></span>
                 </span>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
+              <% } else { %><span class="pl-muted">Unassigned</span><% } %>
+            </td>
+            <td>
+              <div class="tk-due <%= r.due.cls %>"><%= r.due.main %></div>
+              <% if (r.due.sub) { %><div class="pl-small"><%= r.due.sub %></div><% } %>
+            </td>
+            <td><span class="tk-status tk-status-<%= sKey(t.status) %>"><%= t.status %></span></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <div class="pl-empty" id="tkEmpty" hidden>
+      <i class="bi bi-check2-circle"></i>
+      <p id="tkEmptyText">Nothing here.</p>
+      <button type="button" class="pg-btn" id="tkReset">Clear filters</button>
     </div>
-  <% } %>
+  </div>
 
-  <%
-    // Learning tasks sub-group — Admin only
-    const _ob = typeof onboardingTasks !== 'undefined' ? onboardingTasks : [];
-    let _obShown = _ob;
-    if (activeFilter === 'active')    _obShown = _ob.filter(t => t.status !== 'Completed');
-    if (activeFilter === 'completed') _obShown = _ob.filter(t => t.status === 'Completed');
-    if (activeUserId) _obShown = _obShown.filter(t =>
-      (t.ownerId && t.ownerId === activeUserId) ||
-      (t.assignees && t.assignees.some(a => a.id === activeUserId))
-    );
-  %>
-  <% if (_ob.length > 0) { %>
-    <div class="ob-section">
-      <button class="ob-toggle" id="obToggle" onclick="toggleOb()" aria-expanded="false">
-        <span class="ob-toggle-icon"><i class="bi bi-chevron-right" id="obChevron"></i></span>
-        <i class="bi bi-mortarboard"></i>
-        Learning Tasks
-        <span class="task-count"><%= _obShown.length %></span>
-        <span class="ob-toggle-hint">Onboarding tasks assigned to new users — hidden from main list</span>
-      </button>
-      <div class="ob-body" id="obBody" style="display:none;">
-        <% if (!_obShown.length) { %>
-          <div style="padding:1.5rem; text-align:center; color:var(--crm-muted-fg); font-size:0.85rem;">
-            No learning tasks match the current filter.
-          </div>
-        <% } else { %>
-          <table class="task-list-table">
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Assigned to</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% _obShown.forEach(task => { %>
-                <tr onclick="location.href='/tasks/<%= task.id %>'" style="cursor:pointer;">
-                  <td>
-                    <div class="task-name-cell">
-                      <span class="task-name"><%= task.name %></span>
-                    </div>
-                  </td>
-                  <td class="task-meta">
-                    <% if (task.assignees && task.assignees.length) { %>
-                      <div class="task-assignee-avatars">
-                        <% task.assignees.slice(0,3).forEach(a => { %>
-                          <span class="task-assignee-av" title="<%= a.name %>"><%= (a.name||'?').charAt(0).toUpperCase() %></span>
-                        <% }) %>
-                        <% if (task.assignees.length > 3) { %><span class="task-assignee-more">+<%= task.assignees.length - 3 %></span><% } %>
-                        <span style="font-size:0.78rem; color:var(--crm-muted-fg); margin-left:0.25rem;"><%= task.assignees.map(a=>a.name).join(', ') %></span>
-                      </div>
-                    <% } else { %><span style="color:var(--crm-muted-fg);">—</span><% } %>
-                  </td>
-                  <td>
-                    <span class="task-status-badge" style="<%= statusStyle(task) %>">
-                      <%= task.status || 'To Do' %>
-                    </span>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        <% } %>
-      </div>
-    </div>
+  <% if (onboardingTasks.length) { const obOpen = onboardingTasks.filter(t => !t.done).length; %>
+    <details class="tk-ob">
+      <summary><i class="bi bi-chevron-right tk-ob-chev"></i><i class="bi bi-mortarboard"></i> Learning tasks <span class="pg-tab-n"><%= obOpen %> open · <%= onboardingTasks.length %> total</span><span class="tk-ob-hint">Onboarding tasks for new users, kept out of the main list</span></summary>
+      <ul class="tk-ob-list">
+        <% onboardingTasks.forEach(t => { %>
+          <li class="<%= t.done ? 'is-done' : '' %>">
+            <a href="/tasks/<%= t.id %>"><%= t.name %></a>
+            <span class="pl-muted"><%= t.people.map(p => p.name).join(', ') || 'Unassigned' %></span>
+            <span class="tk-status tk-status-<%= sKey(t.status) %>"><%= t.status %></span>
+          </li>
+        <% }) %>
+      </ul>
+    </details>
   <% } %>
 </div>
 
+<div class="tk-toast" id="tkToast" role="status" aria-live="polite" hidden><span id="tkToastText"></span><button type="button" id="tkUndo">Undo</button></div>
+
 <script>
-function toggleOb() {
-  const body    = document.getElementById('obBody');
-  const chevron = document.getElementById('obChevron');
-  const btn     = document.getElementById('obToggle');
-  const open    = body.style.display === 'none';
-  body.style.display    = open ? '' : 'none';
-  btn.setAttribute('aria-expanded', open);
-  chevron.className     = open ? 'bi bi-chevron-down' : 'bi bi-chevron-right';
-}
+(function () {
+  var body = document.getElementById('tkBody');
+  var rows = Array.prototype.slice.call(body.querySelectorAll('tr.tk-row'));
+  var tabs = document.getElementById('tkTabs'), search = document.getElementById('tkSearch');
+  var mineBtn = document.getElementById('tkMine'), personSel = document.getElementById('tkPerson'), groupSel = document.getElementById('tkGroup');
+  var empty = document.getElementById('tkEmpty'), emptyText = document.getElementById('tkEmptyText');
+  var KEY = 'crm.tasks.view';
+  var st = { tab: 'active', q: '', mine: false, person: '', group: 'due', bucket: '' };
+  try { var saved = JSON.parse(localStorage.getItem(KEY) || '{}'); st.mine = !!saved.mine; st.group = saved.group || 'due'; } catch (e) {}
+  st.tab = <%- JSON.stringify(activeFilter) %>;
+  if (personSel.value) st.person = personSel.value;
+
+  var BUCKETS = [
+    ['overdue', 'Overdue', 'is-late'], ['today', 'Today', 'is-today'], ['week', 'This week', ''],
+    ['later', 'Later', ''], ['none', 'No due date', ''], ['done', 'Completed', 'is-done'],
+  ];
+  var STATUS_ORDER = ['Blocked', 'In Progress', 'To Do', 'Completed'];
+
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function byDue(a, b) { return (a.dataset.due || '9999').localeCompare(b.dataset.due || '9999'); }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ mine: st.mine, group: st.group })); } catch (e) {} }
+  function syncUrl() {
+    var u = new URL(location.href);
+    u.searchParams.set('status', st.tab);
+    if (st.person) u.searchParams.set('userId', st.person); else u.searchParams.delete('userId');
+    history.replaceState(null, '', u);
+  }
+
+  function header(label, count, cls) {
+    var tr = document.createElement('tr'); tr.className = 'tk-group ' + (cls || '');
+    tr.innerHTML = '<td colspan="5"><span>' + esc(label) + '</span><b>' + count + '</b></td>';
+    return tr;
+  }
+
+  function render() {
+    Array.prototype.forEach.call(tabs.children, function (b) { var on = b.dataset.tab === st.tab; b.classList.toggle('is-active', on); b.setAttribute('aria-selected', on); });
+    mineBtn.setAttribute('aria-pressed', st.mine); groupSel.value = st.group; personSel.value = st.person;
+    document.querySelectorAll('.tk-stat').forEach(function (b) {
+      var on = b.dataset.bucket ? st.bucket === b.dataset.bucket : st.mine;
+      b.setAttribute('aria-pressed', on);
+    });
+
+    var q = st.q.trim().toLowerCase();
+    var vis = rows.filter(function (r) {
+      var done = r.dataset.done === '1';
+      var ok = (st.tab === 'all' || (st.tab === 'active' ? !done : done))
+        && (!st.mine || r.dataset.mine === '1')
+        && (!st.person || (',' + r.dataset.people + ',').indexOf(',' + st.person + ',') !== -1)
+        && (!st.bucket || r.dataset.bucket === st.bucket)
+        && (!q || r.dataset.search.indexOf(q) !== -1);
+      r.hidden = !ok; return ok;
+    });
+
+    body.querySelectorAll('tr.tk-group').forEach(function (g) { g.remove(); });
+    var groups = [];
+    if (st.group === 'due') {
+      BUCKETS.forEach(function (b) {
+        var list = vis.filter(function (r) { return r.dataset.bucket === b[0]; }).sort(byDue);
+        if (b[0] === 'done') list.reverse();
+        if (list.length) groups.push({ label: b[1], cls: b[2], rows: list });
+      });
+    } else if (st.group === 'none') {
+      groups.push({ label: null, rows: vis.slice().sort(byDue) });
+    } else {
+      var attr = { project: 'project', person: 'personName', status: 'status' }[st.group];
+      var noKey = { project: 'No project', person: 'Unassigned', status: 'No status' }[st.group];
+      var map = {};
+      vis.forEach(function (r) { var k = r.dataset[attr] || ''; (map[k] = map[k] || []).push(r); });
+      var keys = Object.keys(map).sort(function (a, b) {
+        if (st.group === 'status') return STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b);
+        return !a ? 1 : !b ? -1 : a.localeCompare(b);
+      });
+      keys.forEach(function (k) { groups.push({ label: k || noKey, rows: map[k].sort(byDue) }); });
+    }
+    groups.forEach(function (g) {
+      if (g.label) body.appendChild(header(g.label, g.rows.length, g.cls));
+      g.rows.forEach(function (r) { body.appendChild(r); });
+    });
+    rows.filter(function (r) { return r.hidden; }).forEach(function (r) { body.appendChild(r); });
+
+    empty.hidden = vis.length > 0;
+    document.querySelector('#tkTable thead').hidden = !vis.length;
+    var filtered = q || st.mine || st.person || st.bucket;
+    emptyText.textContent = filtered ? 'No tasks match these filters.' : st.tab === 'completed' ? 'No completed tasks yet.' : 'All clear: no open tasks.';
+    document.getElementById('tkReset').hidden = !filtered;
+    save(); syncUrl();
+  }
+
+  tabs.addEventListener('click', function (e) { var b = e.target.closest('.pg-tab'); if (!b) return; st.tab = b.dataset.tab; if (st.tab !== 'active') st.bucket = ''; render(); });
+  mineBtn.addEventListener('click', function () { st.mine = !st.mine; render(); });
+  personSel.addEventListener('change', function () { st.person = personSel.value; render(); });
+  groupSel.addEventListener('change', function () { st.group = groupSel.value; render(); });
+  var tmr; search.addEventListener('input', function () { clearTimeout(tmr); tmr = setTimeout(function () { st.q = search.value; render(); }, 120); });
+  document.querySelectorAll('.tk-stat').forEach(function (b) {
+    b.addEventListener('click', function () {
+      st.tab = 'active';
+      if (b.dataset.bucket) st.bucket = st.bucket === b.dataset.bucket ? '' : b.dataset.bucket;
+      else st.mine = !st.mine;
+      render();
+    });
+  });
+  document.getElementById('tkReset').addEventListener('click', function () { st.q = ''; st.mine = false; st.person = ''; st.bucket = ''; search.value = ''; render(); });
+
+  // Whole row opens the task (except links/buttons)
+  body.addEventListener('click', function (e) {
+    var box = e.target.closest('.tk-box');
+    if (box) { toggleDone(box.closest('tr')); return; }
+    var tr = e.target.closest('tr.tk-row');
+    if (tr && !e.target.closest('a,button')) {
+      var href = tr.querySelector('.tk-name').href;
+      if (e.metaKey || e.ctrlKey) window.open(href, '_blank'); else location.href = href;
+    }
+  });
+
+  // Complete / reopen inline, with undo
+  var toast = document.getElementById('tkToast'), toastText = document.getElementById('tkToastText'), undoBtn = document.getElementById('tkUndo');
+  var toastTimer, lastRow = null;
+  function post(url, data) {
+    return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data || {}) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'Failed'); return j; }); });
+  }
+  function bucketFor(due) {
+    if (!due) return 'none';
+    var t = new Date(); t.setHours(0, 0, 0, 0);
+    var d = Math.round((new Date(due + 'T00:00:00') - t) / 86400000);
+    var toSun = 7 - ((t.getDay() + 6) % 7);
+    return d < 0 ? 'overdue' : d === 0 ? 'today' : d <= toSun ? 'week' : 'later';
+  }
+  function setDone(tr, done) {
+    tr.dataset.done = done ? '1' : '0';
+    tr.classList.toggle('is-done', done);
+    tr.dataset.bucket = done ? 'done' : (tr.dataset.prevBucket || bucketFor(tr.dataset.due));
+    var pill = tr.querySelector('.tk-status');
+    if (done) { tr.dataset.prevStatus = tr.dataset.status; tr.dataset.status = 'Completed'; pill.className = 'tk-status tk-status-Completed'; pill.textContent = 'Completed'; }
+    else { tr.dataset.status = tr.dataset.prevStatus || 'To Do'; pill.className = 'tk-status tk-status-' + tr.dataset.status.replace(/[^A-Za-z0-9]/g, ''); pill.textContent = tr.dataset.status; }
+  }
+  function showToast(msg, row) {
+    toastText.textContent = msg; lastRow = row; toast.hidden = false; undoBtn.hidden = !row;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.hidden = true; }, 5000);
+  }
+  function toggleDone(tr) {
+    var wasDone = tr.dataset.done === '1';
+    if (!wasDone) tr.dataset.prevBucket = tr.dataset.bucket;
+    setDone(tr, !wasDone);
+    post('/tasks/' + tr.dataset.id + (wasDone ? '/reopen' : '/complete'), wasDone ? { status: tr.dataset.status } : null)
+      .then(function () { showToast(wasDone ? 'Task reopened' : 'Task completed', wasDone ? null : tr); setTimeout(render, 450); })
+      .catch(function () { setDone(tr, wasDone); showToast('Could not update the task. Try again.', null); });
+  }
+  undoBtn.addEventListener('click', function () { if (lastRow) { toast.hidden = true; toggleDone(lastRow); lastRow = null; } });
+
+  render();
+})();
 </script>
-
-<style>
-/* ── Filter bar ── */
-.task-filterbar {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--crm-border);
-}
-.task-filter-tabs { display:flex; gap:0.25rem; border-bottom: none; }
-.task-filter-tab {
-  padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 500;
-  color: var(--crm-muted-fg); text-decoration: none; border-bottom: 2px solid transparent;
-  margin-bottom: -1px; transition: color 0.15s, border-color 0.15s;
-}
-.task-filter-tab:hover { color: var(--crm-fg); }
-.task-filter-tab.active { color: var(--crm-accent); border-bottom-color: var(--crm-accent); }
-.task-count {
-  display: inline-block; background: var(--crm-muted); color: var(--crm-muted-fg);
-  border-radius: 999px; font-size: 0.7rem; font-weight: 700;
-  padding: 0.05rem 0.4rem; margin-left: 0.25rem;
-}
-
-.task-list-table { width:100%; border-collapse:collapse; font-size:0.875rem; }
-.task-list-table thead th {
-  padding: 0.6rem 1rem; font-size: 0.72rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--crm-muted-fg); border-bottom: 1px solid var(--crm-border);
-  background: var(--crm-muted); white-space: nowrap;
-}
-.task-list-table tbody tr { border-bottom: 1px solid var(--crm-border); transition: background 0.12s; }
-.task-list-table tbody tr:last-child { border-bottom: none; }
-.task-list-table tbody tr:hover { background: var(--crm-muted); }
-.task-list-table td { padding: 0.7rem 1rem; vertical-align: middle; }
-.task-row-overdue { background: oklch(0.97 0.015 20); }
-
-.task-name-cell { display:flex; flex-direction:column; gap:0.2rem; }
-.task-name { font-weight:600; color:var(--crm-fg); }
-.task-auditor-chip {
-  display:inline-flex; align-items:center; gap:0.25rem;
-  font-size:0.72rem; color:var(--crm-muted-fg);
-  background:var(--crm-muted); border-radius:999px;
-  padding:0.1rem 0.5rem; width:fit-content;
-}
-.task-meta { font-size:0.82rem; color:var(--crm-muted-fg); white-space:nowrap; }
-.task-deadline-overdue { color: oklch(0.5 0.2 20) !important; font-weight:600; }
-
-.task-assignee-avatars { display:flex; gap:0.2rem; align-items:center; }
-.task-assignee-av {
-  width:24px; height:24px; border-radius:50%;
-  background:var(--crm-accent); color:#fff;
-  display:flex; align-items:center; justify-content:center;
-  font-size:0.7rem; font-weight:700;
-  border: 1px solid var(--crm-bg);
-}
-.task-assignee-more { font-size:0.75rem; color:var(--crm-muted-fg); }
-
-/* ── User filter dropdown ── */
-.task-user-filter {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding-bottom: 0.35rem;
-}
-.task-user-select {
-  border: 1px solid var(--crm-border);
-  border-radius: 7px;
-  padding: 0.3rem 0.65rem;
-  font-size: 0.8rem;
-  color: var(--crm-fg);
-  background: var(--crm-muted);
-  cursor: pointer;
-  outline: none;
-}
-.task-user-select:focus { border-color: var(--crm-accent); }
-.task-clear-user {
-  font-size: 0.75rem;
-  color: var(--crm-muted-fg);
-  text-decoration: none;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-}
-.task-clear-user:hover { color: var(--crm-fg); background: var(--crm-muted); }
-
-.task-status-badge {
-  display:inline-block; padding:0.2rem 0.55rem; border-radius:999px;
-  font-size:0.72rem; font-weight:700; white-space:nowrap;
-}
-
-/* ── Learning Tasks sub-group ── */
-.ob-section {
-  margin-top: 1.25rem;
-  border: 1px solid var(--crm-border);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--crm-card-bg, #fff);
-}
-.ob-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: var(--crm-muted);
-  border: none;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--crm-fg);
-  text-align: left;
-}
-.ob-toggle:hover { background: var(--crm-border); }
-.ob-toggle-icon { display:flex; align-items:center; color:var(--crm-muted-fg); font-size:0.75rem; }
-.ob-toggle-hint {
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--crm-muted-fg);
-  margin-left: auto;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ob-body { border-top: 1px solid var(--crm-border); }
-@media (max-width: 600px) { .ob-toggle-hint { display: none; } }
-</style>

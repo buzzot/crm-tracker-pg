@@ -22,14 +22,35 @@ router.get('/tasks', async (req, res, next) => {
       isAdmin ? crm.listOnboardingTasks() : Promise.resolve([]),
     ]);
 
+    const today = new Date().toISOString().slice(0, 10);
+    const dayMs = 86400000;
+    const weekEnd = new Date(Date.now() + (7 - ((new Date().getDay() + 6) % 7)) * dayMs).toISOString().slice(0, 10); // through Sunday
+    const projById = {}; projects.forEach((p) => { projById[p.id] = p; });
+    const decorate = (t) => {
+      const done = t.status === 'Completed';
+      const dueDays = t.deadline ? Math.round((new Date(t.deadline + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / dayMs) : null;
+      let bucket = 'none';
+      if (done) bucket = 'done';
+      else if (dueDays !== null) bucket = dueDays < 0 ? 'overdue' : dueDays === 0 ? 'today' : t.deadline <= weekEnd ? 'week' : 'later';
+      const proj = t.projectId ? projById[t.projectId] : null;
+      const people = (t.assignees && t.assignees.length) ? t.assignees : (t.ownerId ? [{ id: t.ownerId, name: t.ownerName }] : []);
+      const mine = !!user && (t.ownerId === user.id || (t.assigneeIds || []).includes(user.id) || t.auditorId === user.id);
+      return { ...t, done, dueDays, bucket, people, mine,
+        companyId: proj ? proj.companyId : null, companyName: proj ? proj.companyName : null };
+    };
+    const rows = tasks.map(decorate);
+    const peopleMap = {};
+    rows.forEach((t) => t.people.forEach((p) => { if (p.id) peopleMap[p.id] = p.name; }));
+    teamUsers.forEach((u) => { if (u.isActive !== false) peopleMap[u.id] = u.name; });
+    const people = Object.keys(peopleMap).map((id) => ({ id, name: peopleMap[id] || 'Unknown' })).sort((a, b) => a.name.localeCompare(b.name));
+
     res.render('tasks', {
       title: 'Tasks',
-      tasks,
-      projects,
+      tasks: rows,
       filter,
       filterUserId: userId,
-      teamUsers,
-      onboardingTasks,
+      people,
+      onboardingTasks: onboardingTasks.map(decorate),
       statusChoices: crm.schema.tables.tasks.statusChoices,
     });
   } catch (err) { next(err); }
@@ -210,11 +231,22 @@ router.post('/tasks/:id/records', upload.array('attachment', 5), async (req, res
 
 // ─── Complete task ────────────────────────────────────────────────────────────
 
+const wantsJson = (req) => (req.get('accept') || '').includes('application/json');
+
 router.post('/tasks/:id/complete', async (req, res, next) => {
   try {
     await crm.completeTask(req.params.id);
+    if (wantsJson(req)) return res.json({ ok: true });
     res.redirect(`/tasks/${req.params.id}`);
-  } catch (err) { next(err); }
+  } catch (err) { if (wantsJson(req)) return res.status(500).json({ ok: false, error: 'Could not complete the task.' }); next(err); }
+});
+
+router.post('/tasks/:id/reopen', async (req, res, next) => {
+  try {
+    await crm.reopenTask(req.params.id, req.body && req.body.status);
+    if (wantsJson(req)) return res.json({ ok: true });
+    res.redirect(`/tasks/${req.params.id}`);
+  } catch (err) { if (wantsJson(req)) return res.status(500).json({ ok: false, error: 'Could not reopen the task.' }); next(err); }
 });
 
 // ─── Archive task (Admin only) ────────────────────────────────────────────────
