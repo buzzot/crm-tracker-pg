@@ -1760,6 +1760,42 @@ async function listProjectsWithSubtasks(user) {
     tasks: await listTasks({ projectId: p.id })
   })));
 }
+// Projects list overview: products, company logo, open tasks, task stats, last conversation.
+async function listProjectsOverview(user) {
+  const projects = await listProjects(user);
+  if (!projects.length) return [];
+  const ids = projects.map(p => p.id);
+  const companyIds = [...new Set(projects.map(p => p.companyId).filter(Boolean))];
+  const [prodR, logoR, taskR, lastR] = await Promise.all([
+    query(`SELECT pp.project_id, pr.id, pr.name FROM product_projects pp JOIN products pr ON pr.id = pp.product_id
+           WHERE pp.project_id = ANY($1::uuid[]) ORDER BY pr.name`, [ids]),
+    companyIds.length ? query('SELECT id, logo_url FROM companies WHERE id = ANY($1::uuid[])', [companyIds]) : { rows: [] },
+    query(`${TASK_SELECT} WHERE t.project_id = ANY($1::uuid[])
+             AND (t.is_archived = FALSE OR t.is_archived IS NULL) AND (t.is_onboarding = FALSE OR t.is_onboarding IS NULL)
+           GROUP BY t.id, p.name, p.id, u.name, au2.name, ab.name
+           ORDER BY t.deadline ASC NULLS LAST, t.created_at ASC`, [ids]),
+    query(`SELECT DISTINCT ON (entity_id) entity_id, created_at, type, link, author_name, author_id,
+             (SELECT name FROM users WHERE id = c.author_id) AS author_user
+           FROM comments c WHERE entity_type = 'project' AND entity_id = ANY($1::uuid[])
+           ORDER BY entity_id, created_at DESC`, [ids]),
+  ]);
+  const products = {}, tasks = {}, last = {}, logos = {};
+  prodR.rows.forEach(r => (products[r.project_id] = products[r.project_id] || []).push({ id: r.id, name: r.name }));
+  logoR.rows.forEach(r => { logos[r.id] = toMediaUrl(r.logo_url); });
+  taskR.rows.map(mapTask).forEach(t => (tasks[t.projectId] = tasks[t.projectId] || []).push(t));
+  lastR.rows.forEach(r => {
+    let channel = r.type || 'comment';
+    if (String(r.link || '').startsWith('MANUAL:')) { try { channel = JSON.parse(r.link.slice(7)).ch || channel; } catch (_) { /* ignore */ } }
+    last[r.entity_id] = { at: r.created_at, channel, by: r.author_user || r.author_name || null };
+  });
+  return projects.map(p => ({
+    ...p,
+    companyLogo: p.companyId ? logos[p.companyId] || null : null,
+    products: products[p.id] || [],
+    tasks: tasks[p.id] || [],
+    lastMessage: last[p.id] || null,
+  }));
+}
 async function listProductsWithProjects() {
   const products = await listProducts();
   return products;
@@ -1908,6 +1944,7 @@ module.exports = {
   listProjectComments,
   addProjectComment,
   listProjectsWithSubtasks,
+  listProjectsOverview,
   // Tasks
   listTasks,
   getTask,

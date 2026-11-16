@@ -10,10 +10,47 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 }
 });
 
+// ── Projects list: derived signals for following a project ──────────────────
+const QUIET_DAYS = 14;
+const DAY = 86400000;
+function ymd(d) { return d.toISOString().slice(0, 10); }
+function relDays(iso, today) {
+  if (!iso) return null;
+  return Math.round((new Date(iso + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / DAY);
+}
+function projectHealth(p, user) {
+  const today = ymd(new Date());
+  const status = p.status || 'Active';
+  const tasks = p.tasks || [];
+  const done = tasks.filter((t) => t.status === 'Completed');
+  const open = tasks.filter((t) => t.status !== 'Completed');
+  const overdue = open.filter((t) => t.deadline && t.deadline < today);
+  const blocked = open.filter((t) => t.status === 'Blocked');
+  const nextTask = open.filter((t) => t.deadline).sort((a, b) => a.deadline.localeCompare(b.deadline))[0] || null;
+  const stamps = [p.updatedAt, p.lastMessage && p.lastMessage.at].concat(tasks.map((t) => t.updatedAt)).filter(Boolean).map((d) => new Date(d).getTime());
+  const lastAt = stamps.length ? new Date(Math.max.apply(null, stamps)) : null;
+  const idleDays = lastAt ? Math.floor((Date.now() - lastAt.getTime()) / DAY) : null;
+  const live = status === 'Active';
+  const flags = [];
+  if (live && overdue.length) flags.push('overdue');
+  if (live && blocked.length) flags.push('blocked');
+  if (live && idleDays !== null && idleDays >= QUIET_DAYS) flags.push('quiet');
+  const me = user && user.id;
+  const mine = !!me && (p.ownerId === me || tasks.some((t) => t.ownerId === me || (t.assigneeIds || []).includes(me)));
+  return {
+    ...p,
+    statusLabel: status,
+    taskTotal: tasks.length, taskDone: done.length, openTasks: open,
+    overdueCount: overdue.length, blockedCount: blocked.length,
+    nextTask, nextDueDays: nextTask ? relDays(nextTask.deadline, today) : null,
+    lastAt: lastAt ? lastAt.toISOString() : null, idleDays, flags, mine,
+  };
+}
+
 router.get('/projects', async (req, res, next) => {
   try {
     const user = req.session.user;
-    const projects = await crm.listProjectsWithSubtasks(user);
+    const projects = (await crm.listProjectsOverview(user)).map((p) => projectHealth(p, user));
     res.render('projects', { title: 'Projects', projects });
   } catch (err) {
     next(err);
