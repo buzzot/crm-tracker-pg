@@ -88,8 +88,18 @@
         h += '<tbody>' + b.rows.map(r => '<tr>' + r.map(x => '<td>' + _esc(x) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
       }
     });
-    return h + '</div>';
+    h += '</div>';
+    const shots = Array.isArray(a.screenshots) ? a.screenshots : [];
+    if (shots.length) {
+      h += '<details class="msgv-shots"><summary><i class="bi bi-image" aria-hidden="true"></i>Text read from ' + shots.length + ' screenshot' + (shots.length === 1 ? '' : 's') + ' (original language)</summary>'
+        + shots.map(x => '<div class="msgv-shot"><div class="msgv-shot-name">' + _esc(x.filename) + '</div><div class="msgv-shot-text">' + _esc(x.transcript) + '</div></div>').join('')
+        + '</details>';
+    }
+    if (a.imagesSkipped && a.imagesSkipped.length) h += '<p class="msgv-skip"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>Not read: ' + _esc(a.imagesSkipped.join('; ')) + '</p>';
+    return h;
   }
+  const _IMG = /^image\/(png|jpe?g|gif|webp)$/i;
+  function imageCount(c) { return (c.attachments || []).filter(a => _IMG.test(a.contentType || '')).length; }
   // Body of an email / logged message: clean view + original, or tidied original + clean-up button
   function msgBody(c) {
     const ai = c.manual && c.manual.ai;
@@ -104,13 +114,15 @@
         + '<div class="msgv-orig note-text" data-pane="orig" hidden>' + _esc(orig) + '</div>'
         + '</div>';
     }
+    const imgs = imageCount(c);
     let h = '<div class="msgv" data-msgv>'
       + '<div class="msgv-orig note-text' + (long ? ' is-collapsed' : '') + '" data-orig>' + _esc(orig) + '</div>';
-    if (long) {
+    if (long || imgs) {
       h += '<div class="msgv-actions">'
-        + '<button type="button" class="pj-link-btn" data-expand>Show full message</button>'
-        + '<button type="button" class="msgv-cta" data-ai-clean="' + _esc(c.id) + '"><i class="bi bi-stars" aria-hidden="true"></i>Make it easy to read</button>'
-        + '</div>';
+        + (long ? '<button type="button" class="pj-link-btn" data-expand>Show full message</button>' : '')
+        + '<button type="button" class="msgv-cta" data-ai-clean="' + _esc(c.id) + '"><i class="bi bi-stars" aria-hidden="true"></i>'
+        + (imgs ? (long ? 'Make it easy to read + read screenshot' + (imgs > 1 ? 's' : '') : 'Read screenshot' + (imgs > 1 ? 's' : '') + ' as text') : 'Make it easy to read')
+        + '</button></div>';
     }
     return h + '</div>';
   }

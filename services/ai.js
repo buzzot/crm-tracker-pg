@@ -34,7 +34,7 @@ async function callClaude({ system, user, maxTokens = 900, tool = null, timeoutM
       model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
       max_tokens: maxTokens,
       system,
-      messages: [{ role: 'user', content: user }],
+      messages: [{ role: 'user', content: user }],   // string or [image…, text] blocks
     };
     if (tool) { body.tools = [tool]; body.tool_choice = { type: 'tool', name: tool.name }; }
     const res = await fetch(API_URL, {
@@ -112,7 +112,39 @@ function describeMessage(c) {
   if (m && m.to) head.push(`to: ${m.to}`);
   if (c.emailSubject) head.push(`subject: ${c.emailSubject}`);
   const files = (c.attachments || []).map((a) => a.filename).filter(Boolean);
-  return head.join(' | ') + (files.length ? `\nattachments: ${files.join(', ')}` : '') + '\n' + clip(c.comment, 3500);
+  const shots = (c.manual && c.manual.ai && Array.isArray(c.manual.ai.screenshots)) ? c.manual.ai.screenshots : [];
+  const shotText = shots.map((x) => `\n[text read from screenshot ${x.filename || ''}]\n${clip(x.transcript, 2500)}`).join('');
+  return head.join(' | ') + (files.length ? `\nattachments: ${files.join(', ')}` : '') + '\n' + clip(c.comment, 3500) + shotText;
+}
+
+// ── Images (screenshots) ─────────────────────────────────────────────────────
+const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const MAX_IMAGES = 5;
+const MAX_IMAGE_BYTES = 3.7 * 1024 * 1024;   // API limit is 5 MB per image after base64 encoding
+
+function imageAttachments(c) {
+  return (c.attachments || []).filter((a) => a && a.url && IMAGE_TYPES.has(String(a.contentType || '').toLowerCase()));
+}
+
+// Download images so they can be sent to Claude. Unreadable/oversized ones are listed, not fatal.
+async function loadImages(c) {
+  const list = imageAttachments(c);
+  const images = [], skipped = [];
+  for (const a of list.slice(0, MAX_IMAGES)) {
+    try {
+      const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 20000);
+      const res = await fetch(a.url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+      if (!res.ok) { skipped.push(`${a.filename} (could not download)`); continue; }
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > MAX_IMAGE_BYTES) { skipped.push(`${a.filename} (too large to read, over 3.7 MB)`); continue; }
+      const type = (res.headers.get('content-type') || a.contentType || '').split(';')[0].trim().toLowerCase();
+      images.push({ filename: a.filename, mediaType: IMAGE_TYPES.has(type) ? type : String(a.contentType).toLowerCase(), data: buf.toString('base64') });
+    } catch (e) {
+      skipped.push(`${a.filename} (could not download)`);
+    }
+  }
+  if (list.length > MAX_IMAGES) skipped.push(`${list.length - MAX_IMAGES} more image(s) not read (limit ${MAX_IMAGES})`);
+  return { images, skipped };
 }
 
 const SYSTEM_THREAD = `You are an assistant inside a B2B CRM used by Samyou, a supplier of HVAC controllers and inverter drives.
@@ -188,6 +220,12 @@ Rules:
 - If the text contains a table that was pasted as one cell per line (e.g. "Input", "Size", "Voltage" followed by values), rebuild it as a table.
 - Use short paragraphs, bullet lists for enumerations, and headings only when the message has clear sections.
 - If quoted earlier emails are included, keep only the newest message and add one paragraph "Earlier messages in the thread were quoted and omitted."
+- Attached images are usually screenshots (WeChat or other chats, emails, spec sheets, drawings). Read them carefully:
+  * Put their content into the clean blocks under a heading like "From screenshot" (one per image when there are several).
+  * Chat screenshots: a list of "Name (time if visible): message", in order, translated to English.
+  * Tables in images: rebuild as a table. Other documents: short paragraphs or a list.
+  * If the typed text says only "(screenshot attached)", the screenshots ARE the message.
+  * Also return the verbatim text of each image, in its original language, in "screenshots".
 Return the result with the submit_clean_message tool.`;
 
 const FORMAT_TOOL = {
@@ -211,6 +249,19 @@ const FORMAT_TOOL = {
             rows: { type: 'array', items: { type: 'array', items: { type: 'string' } }, description: 'For table blocks' },
           },
           required: ['type'],
+        },
+      },
+      screenshots: {
+        type: 'array',
+        description: 'One entry per attached image, in order',
+        items: {
+          type: 'object',
+          properties: {
+            filename: { type: 'string' },
+            kind: { type: 'string', enum: ['chat', 'email', 'document', 'table', 'photo', 'other'] },
+            transcript: { type: 'string', description: 'All readable text, verbatim, in the original language (chat lines as "Name: message")' },
+          },
+          required: ['transcript'],
         },
       },
     },
@@ -238,17 +289,32 @@ function cleanBlocks(blocks) {
 
 // Clean, structured reading version of one message (+ TL;DR). Result is stored on the comment.
 async function formatMessage(c) {
-  const key = 'fmt:' + c.id + ':' + String(c.comment || '').length + ':' + (c.emailSubject || '');
+  const imgs = imageAttachments(c);
+  const key = 'fmt:' + c.id + ':' + String(c.comment || '').length + ':' + (c.emailSubject || '') + ':' + imgs.map((a) => a.id || a.url).join(',');
   const hit = cacheGet(key); if (hit) return { ...hit, cached: true };
   const raw = String(c.comment || '').replace(/\r/g, '');
-  const user = describeMessage({ ...c, comment: raw.length > 14000 ? raw.slice(0, 14000) + ' …[truncated]' : raw });
-  // Output is roughly the size of the input; allow generous room (≈ 1 token per 3 chars + overhead)
-  const maxTokens = Math.min(16000, Math.max(3000, Math.ceil(raw.length / 2.5) + 1500));
-  const json = await callClaudeRetry({ system: SYSTEM_FORMAT, user, maxTokens, tool: FORMAT_TOOL, timeoutMs: 120000 });
+  const { images, skipped } = imgs.length ? await loadImages(c) : { images: [], skipped: [] };
+  let text = describeMessage({ ...c, manual: c.manual ? { ...c.manual, ai: null } : null, comment: raw.length > 14000 ? raw.slice(0, 14000) + ' …[truncated]' : raw });
+  if (images.length) text += `\n\n${images.length} screenshot(s) attached below, in order: ${images.map((i) => i.filename).join(', ')}.`;
+  if (skipped.length) text += `\nNot readable: ${skipped.join('; ')}.`;
+  const content = images.length
+    ? [...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })), { type: 'text', text }]
+    : text;
+
+  // Output is roughly the size of the input (+ screenshot text); allow generous room
+  const maxTokens = Math.min(16000, Math.max(3000, Math.ceil(raw.length / 2.5) + 1500 + images.length * 1500));
+  const json = await callClaudeRetry({ system: SYSTEM_FORMAT, user: content, maxTokens, tool: FORMAT_TOOL, timeoutMs: 120000 });
   const value = {
     tldr: String(json.tldr || '').trim().slice(0, 600),
     asks: (Array.isArray(json.asks) ? json.asks : []).slice(0, 8).map((x) => String(x).trim()).filter(Boolean),
     blocks: cleanBlocks(json.blocks),
+    screenshots: (Array.isArray(json.screenshots) ? json.screenshots : []).slice(0, MAX_IMAGES).map((x, i) => ({
+      filename: String((x && x.filename) || (images[i] && images[i].filename) || `image ${i + 1}`).slice(0, 200),
+      kind: String((x && x.kind) || 'other'),
+      transcript: String((x && x.transcript) || '').trim().slice(0, 8000),
+    })).filter((x) => x.transcript),
+    imagesRead: images.length,
+    imagesSkipped: skipped,
     model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
     at: new Date().toISOString(),
   };
@@ -260,4 +326,4 @@ async function formatMessage(c) {
 // Back-compat: short TL;DR only
 async function summarizeMessage(c) { const f = await formatMessage(c); return { tldr: f.tldr, asks: f.asks }; }
 
-module.exports = { isConfigured, summarizeThread, summarizeMessage, formatMessage, _parseJson: parseJson, _describeMessage: describeMessage };
+module.exports = { isConfigured, summarizeThread, summarizeMessage, formatMessage, imageAttachments, _parseJson: parseJson, _describeMessage: describeMessage };

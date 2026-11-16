@@ -22,7 +22,9 @@ function autoClean(commentId) {
   setImmediate(async () => {
     try {
       const c = await crm.getComment(commentId);
-      if (!isExternal(c) || String(c.comment || '').length < MIN_LENGTH) return;
+      // Long text, or any screenshot/image to read
+      if (!isExternal(c)) return;
+      if (String(c.comment || '').length < MIN_LENGTH && !ai.imageAttachments(c).length) return;
       const result = await ai.formatMessage(c);
       await crm.setCommentAi(c.id, result);
     } catch (err) {
