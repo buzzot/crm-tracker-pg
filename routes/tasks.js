@@ -125,9 +125,9 @@ router.get('/tasks/:id', async (req, res, next) => {
 router.post('/tasks/:id/details', async (req, res, next) => {
   try {
     const user   = req.session.user;
-    const { name, date, deadline, description, status, deadlineReason } = req.body;
+    const { name, startDate, deadline, description, status, deadlineReason } = req.body;
     await crm.updateTaskDetails(req.params.id, {
-      name, date, deadline, description,
+      name, startDate, deadline, description,
       status,
       deadlineReason: deadlineReason || null,
       changedById:    user ? user.id   : null,
@@ -216,8 +216,8 @@ router.post('/tasks/:id/records', upload.array('attachment', 5), async (req, res
       name,
       details,
       category,
-      recordedByEmail: user ? user.email : null,
-      recordedByName:  user ? user.name  : null,
+      loggedById:   user ? user.id   : null,
+      loggedByName: user ? user.name : null,
       files: req.files,
     });
     res.redirect(`/tasks/${req.params.id}`);
@@ -239,6 +239,15 @@ router.post('/tasks/:id/complete', async (req, res, next) => {
     if (wantsJson(req)) return res.json({ ok: true });
     res.redirect(`/tasks/${req.params.id}`);
   } catch (err) { if (wantsJson(req)) return res.status(500).json({ ok: false, error: 'Could not complete the task.' }); next(err); }
+});
+
+router.post('/tasks/:id/status', async (req, res) => {
+  try {
+    const status = String((req.body && req.body.status) || '');
+    if (!crm.schema.tables.tasks.statusChoices.includes(status)) return res.status(400).json({ ok: false, error: 'Unknown status.' });
+    await crm.setTaskStatus(req.params.id, status);
+    res.json({ ok: true, status });
+  } catch (err) { res.status(500).json({ ok: false, error: 'Could not update the status.' }); }
 });
 
 router.post('/tasks/:id/reopen', async (req, res, next) => {

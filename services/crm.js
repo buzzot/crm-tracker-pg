@@ -1123,7 +1123,11 @@ async function getTaskDetail(id) {
   ]);
   if (!task) return { name: null };
   const owners = task.ownerId ? [{ id: task.ownerId, name: task.ownerName }] : [];
-  const project = task.projectId ? { id: task.projectId, name: task.projectName } : null;
+  let project = task.projectId ? { id: task.projectId, name: task.projectName } : null;
+  if (project) {
+    const pr = await query('SELECT p.company_id, c.name AS company_name FROM projects p LEFT JOIN companies c ON c.id = p.company_id WHERE p.id=$1', [project.id]).catch(() => ({ rows: [] }));
+    if (pr.rows[0] && pr.rows[0].company_id) project = { ...project, companyId: pr.rows[0].company_id, companyName: pr.rows[0].company_name };
+  }
   return {
     ...task,
     comments,
@@ -1160,7 +1164,7 @@ async function listOnboardingTasks() {
   return r.rows.map(mapTask);
 }
 
-async function updateTaskDetails(id, { name, type, date, deadline, status, details, description, changedById, changedByName, deadlineReason }) {
+async function updateTaskDetails(id, { name, type, date, startDate, deadline, status, details, description, changedById, changedByName, deadlineReason }) {
   // Detect deadline change and log it
   const existing = await getTask(id);
   const desc = description || details || null;
@@ -1175,10 +1179,19 @@ async function updateTaskDetails(id, { name, type, date, deadline, status, detai
       );
     }
   }
+  // Fields not sent by the form keep their current value (previously they were wiped)
+  const keep = (v, cur) => (v === undefined ? (cur || null) : (v || null));
+  const toDone = status === 'Completed' && existing && existing.status !== 'Completed';
+  const fromDone = status && status !== 'Completed' && existing && existing.status === 'Completed';
   await query(
     `UPDATE tasks SET name=COALESCE($2,name), type=$3, date=$4, deadline=$5,
-       status=COALESCE($6,status), details=COALESCE($7,details), updated_at=NOW() WHERE id=$1`,
-    [id, name || null, type || null, date || null, deadline !== undefined ? (deadline || null) : existing?.deadline || null, status || null, desc]
+       status=COALESCE($6,status), details=$7, start_date=COALESCE($8, start_date),
+       completed_at=CASE WHEN $9 THEN NOW() WHEN $10 THEN NULL ELSE completed_at END,
+       updated_at=NOW() WHERE id=$1`,
+    [id, name || null, keep(type, existing && existing.type), keep(date, existing && existing.date),
+     deadline !== undefined ? (deadline || null) : (existing && existing.deadline) || null, status || null,
+     (description !== undefined || details !== undefined) ? (desc || null) : (existing && existing.details) || null,
+     startDate || null, !!toDone, !!fromDone]
   );
   return getTask(id);
 }
@@ -1188,6 +1201,13 @@ async function completeTask(id) {
     `UPDATE tasks SET status='Completed', completed_at=NOW(), updated_at=NOW() WHERE id=$1`,
     [id]
   );
+}
+
+async function setTaskStatus(id, status) {
+  await query(
+    `UPDATE tasks SET status=$2,
+       completed_at = CASE WHEN $2='Completed' AND status <> 'Completed' THEN NOW() WHEN $2 <> 'Completed' THEN NULL ELSE completed_at END,
+       updated_at=NOW() WHERE id=$1`, [id, status]);
 }
 
 async function reopenTask(id, status) {
@@ -1234,6 +1254,10 @@ async function listTaskLogs(taskId) {
      WHERE tl.task_id=$1 ORDER BY tl.created_at DESC`,
     [taskId]
   );
+  const files = r.rows.length ? await query(
+    `SELECT id, entity_id, filename, content_type, storage_path, public_url, size_bytes FROM attachments
+     WHERE entity_type='task_log' AND entity_id = ANY($1::uuid[]) ORDER BY created_at`, [r.rows.map(x => x.id)]
+  ).then(x => x.rows).catch(() => []) : [];
   return r.rows.map(row => ({
     id: row.id,
     taskId: row.task_id,
@@ -1241,16 +1265,24 @@ async function listTaskLogs(taskId) {
     details: row.details,
     category: row.category,
     loggedByName: row.logged_by_name_resolved || row.logged_by_name,
-    createdAt: row.created_at
+    recordedByName: row.logged_by_name_resolved || row.logged_by_name,
+    createdAt: row.created_at,
+    attachments: files.filter(f => f.entity_id === row.id).map(f => ({
+      id: f.id, filename: f.filename, contentType: f.content_type, sizeBytes: f.size_bytes,
+      url: toMediaUrl(f.storage_path) || toMediaUrl(f.public_url),
+    })),
   }));
 }
 
-async function addTaskLog({ taskId, name, details, category, loggedById, loggedByName }) {
+async function addTaskLog({ taskId, name, details, category, loggedById, loggedByName, recordedByName, files }) {
+  const text = String(details || '').trim();
+  if (!text && !(files && files.length)) throw new Error('Write an update or attach a file.');
   const r = await query(
     `INSERT INTO task_logs (task_id, name, details, category, logged_by_id, logged_by_name)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-    [taskId, name || details?.slice(0, 60) || 'Update', details, category, loggedById, loggedByName]
+    [taskId, name || text.slice(0, 60) || 'Update', text || null, category || null, loggedById || null, loggedByName || recordedByName || null]
   );
+  if (files && files.length) await _uploadFiles('task_log', r.rows[0].id, files, loggedById);
   return r.rows[0];
 }
 
@@ -2030,6 +2062,7 @@ module.exports = {
   listProjectsWithSubtasks,
   listProjectsOverview,
   reopenTask,
+  setTaskStatus,
   companyLogos,
   companiesOverview,
   getAttachment,

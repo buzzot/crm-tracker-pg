@@ -1,564 +1,335 @@
 <%
-  const statusKey = (task.status || '').replace(/\s+/g, '');
-  const statusColors = {
-    NotStarted: { bg: '#eef0f3', fg: '#5b6172' },
-    ToDo:       { bg: '#eef0f3', fg: '#5b6172' },
-    InProgress: { bg: '#e7eefc', fg: '#2b5fb8' },
-    Completed:  { bg: '#dff5e3', fg: '#1c7a3c' },
-    Overdue:    { bg: '#fbe5e7', fg: '#c23b4a' },
-  };
-  const today = new Date(); today.setHours(0,0,0,0);
-  const isOverdue = task.deadline && task.status !== 'Completed' && new Date(task.deadline + 'T00:00:00') < today;
-  const displayStatus = isOverdue ? 'Overdue' : (task.status || 'To Do');
-  const statusColor = statusColors[isOverdue ? 'Overdue' : statusKey] || statusColors['ToDo'];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   const isCompleted = task.status === 'Completed';
+  const dueDays = task.deadline ? Math.round((new Date(task.deadline + 'T00:00:00') - today) / 86400000) : null;
+  const isOverdue = dueDays !== null && dueDays < 0 && !isCompleted;
+  const startStr = task.startDate || task.date || null;
+  const startAfterDue = startStr && task.deadline && startStr > task.deadline;
 
-  const noteAvatarClasses = ['note-avatar-blue', 'note-avatar-purple', 'note-avatar-gray'];
-  const youInitial = ((typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || '?').trim().charAt(0).toUpperCase();
+  const me = (typeof currentUser !== 'undefined' && currentUser) || {};
+  const role = me.role || 'Staff';
+  const isAdmin = role === 'Admin';
+  const isAssigned = (task.assigneeIds || []).includes(me.id);
+  const canAssign = isAdmin || role === 'Manager' || task.ownerId === me.id || isAssigned;
+  const sKey = s => String(s || '').replace(/[^A-Za-z0-9]/g, '');
+  const STATUS_ICON = { 'To Do': 'bi-circle', 'In Progress': 'bi-circle-half', 'Blocked': 'bi-slash-circle', 'Completed': 'bi-check-circle-fill' };
 
-  function fmtDate(d) {
+  function fmt(d, opts) {
     if (!d) return '—';
-    const dt = new Date(d + 'T00:00:00');
-    if (isNaN(dt.getTime())) return d;
-    return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const dt = new Date(String(d).length === 10 ? d + 'T00:00:00' : d);
+    return isNaN(dt) ? d : dt.toLocaleDateString('en-US', opts || { month: 'short', day: 'numeric', year: 'numeric' });
   }
-  function noteTimeAgo(iso) {
+  function ago(iso) {
     if (!iso) return '';
-    const then = new Date(iso);
-    if (isNaN(then.getTime())) return '';
-    const sec = Math.floor((Date.now() - then.getTime()) / 1000);
+    const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
     if (sec < 60) return 'just now';
-    const min = Math.floor(sec / 60);
-    if (min < 60) return min + 'm ago';
-    const hr = Math.floor(min / 60);
-    if (hr < 24) return hr + 'h ago';
-    const day = Math.floor(hr / 24);
-    if (day < 30) return day + 'd ago';
-    return then.toLocaleDateString();
+    const m = Math.floor(sec / 60); if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+    const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
+    return fmt(iso);
+  }
+  function initial(n) { return String(n || '?').trim().charAt(0).toUpperCase(); }
+  const AV = ['oklch(0.55 0.17 258)', 'oklch(0.55 0.16 300)', 'oklch(0.55 0.13 175)', 'oklch(0.6 0.15 55)', 'oklch(0.55 0.17 15)'];
+  function avBg(n) { let h = 0; String(n || '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return AV[h % AV.length]; }
+
+  let dueText = 'No due date', dueCls = 'is-none';
+  if (task.deadline) {
+    if (isCompleted) { dueText = 'Was due ' + fmt(task.deadline); dueCls = ''; }
+    else if (dueDays < 0) { dueText = (-dueDays) + ' day' + (dueDays === -1 ? '' : 's') + ' overdue'; dueCls = 'is-late'; }
+    else if (dueDays === 0) { dueText = 'Due today'; dueCls = 'is-soon'; }
+    else if (dueDays === 1) { dueText = 'Due tomorrow'; dueCls = 'is-soon'; }
+    else { dueText = 'Due in ' + dueDays + ' days'; dueCls = dueDays <= 3 ? 'is-soon' : ''; }
   }
 
-  const currentUserId = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null;
-  const currentUserRole = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.role : 'Staff';
-  const isAssigned = (task.assigneeIds || []).includes(currentUserId);
-  const canAssign = (currentUserRole === 'Admin' || currentUserRole === 'Manager' || task.ownerId === currentUserId || isAssigned);
+  // One timeline: comments, emails, progress notes and deadline changes (newest first)
+  const feed = [];
+  (task.comments || []).forEach(c => feed.push({ kind: c.type === 'email' ? 'email' : 'comment', at: c.postedAt, who: c.author, text: c.comment, subject: c.emailSubject, files: c.attachments, id: c.id }));
+  (task.records || []).forEach(r => feed.push({ kind: 'progress', at: r.createdAt, who: r.recordedByName || r.loggedByName, text: r.details, category: r.category, files: r.attachments, id: r.id }));
+  (task.deadlineHistory || []).forEach(h => feed.push({ kind: 'deadline', at: h.changedAt, who: h.changedByName, from: h.oldDeadline, to: h.newDeadline, reason: h.reason }));
+  feed.sort((a, b) => new Date(b.at) - new Date(a.at));
+  const people = (task.assignees || []).length ? task.assignees : (task.owners || []);
+  const taskEmail = 'task-' + task.id + '@' + emailDomain;
 %>
 
-<div class="pnew-page">
-  <% if (task.project) { %>
-    <a href="/projects/<%= task.project.id %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= task.project.name %></a>
-  <% } else { %>
-    <a href="/tasks" class="pnew-back-link"><i class="bi bi-arrow-left"></i> Tasks</a>
-  <% } %>
+<div class="pg pj td">
+
+  <nav class="pj-crumbs" aria-label="Breadcrumb">
+    <a href="/tasks">Tasks</a>
+    <% if (task.project) { %>
+      <% if (task.project.companyName) { %><i class="bi bi-chevron-right" aria-hidden="true"></i><a href="/companies/<%= task.project.companyId %>"><%= task.project.companyName %></a><% } %>
+      <i class="bi bi-chevron-right" aria-hidden="true"></i><a href="/projects/<%= task.project.id %>"><%= task.project.name %></a>
+    <% } %>
+  </nav>
 
   <% if (task.isArchived) { %>
-    <div class="td-archived-banner">
-      <i class="bi bi-archive-fill"></i>
-      <span>This task is archived and hidden from all users.</span>
-      <% if (currentUserRole === 'Admin') { %>
-        <form action="/tasks/<%= task.id %>/unarchive" method="POST" style="margin:0;">
-          <button type="submit" class="td-unarchive-btn">Restore</button>
-        </form>
-      <% } %>
+    <div class="td-banner td-banner-red">
+      <i class="bi bi-archive-fill"></i><span>This task is archived and hidden from everyone except admins.</span>
+      <% if (isAdmin) { %><form action="/tasks/<%= task.id %>/unarchive" method="POST"><button type="submit" class="pg-btn">Restore</button></form><% } %>
     </div>
   <% } %>
+  <% if (error) { %><div class="td-banner td-banner-red"><i class="bi bi-exclamation-circle"></i><span><%= error %></span></div><% } %>
 
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-    <div>
-      <div class="pnew-badge" style="background:<%= statusColor.bg %>; color:<%= statusColor.fg %>;">
-        <i class="bi bi-<%= isCompleted ? 'check-circle' : (isOverdue ? 'exclamation-circle' : 'list-check') %>"></i>
-        <%= displayStatus %>
-      </div>
-      <h1 class="pnew-hero"><%= task.name || '(untitled)' %></h1>
-      <p class="pnew-hero-sub">
-        Started <%= fmtDate(task.startDate || task.date) %>
-        <% if (task.deadline) { %>&middot; Due <strong><%= fmtDate(task.deadline) %></strong><% } %>
-        <% if (task.auditorName) { %>&middot; <i class="bi bi-eye"></i> <%= task.auditorName %><% } %>
-      </p>
-    </div>
-    <div class="d-flex gap-2 align-items-start flex-wrap">
-      <% if (!isCompleted && !task.isArchived) { %>
-        <form action="/tasks/<%= task.id %>/complete" method="POST">
-          <button type="submit" class="pnew-btn-save"><i class="bi bi-check-circle"></i> Mark Complete</button>
-        </form>
-      <% } %>
-      <% if (currentUserRole === 'Admin' && !task.isArchived) { %>
-        <form action="/tasks/<%= task.id %>/archive" method="POST" id="archiveForm">
-          <button type="button" class="td-archive-btn" onclick="confirmArchive()"><i class="bi bi-archive me-1"></i>Archive</button>
-        </form>
-      <% } %>
-    </div>
-  </div>
-
-  <% if (error) { %><div class="alert alert-danger mt-2"><%= error %></div><% } %>
-
-  <div class="pnew-grid">
-
-    <!-- ── Main column ─────────────────────────────────────────────────── -->
-    <div class="pnew-main">
-
-      <!-- Details / edit -->
-      <div class="pnew-card">
-        <div class="d-flex justify-content-between align-items-start gap-2">
-          <div>
-            <h2 class="pnew-card-title">Details</h2>
-          </div>
-          <button type="button" class="pnew-btn-save" id="detailsEditBtn"
-            onclick="document.getElementById('detailsView').style.display='none'; document.getElementById('detailsEditForm').style.display='block'; this.style.display='none';">
-            <i class="bi bi-pencil-square"></i> Edit
+  <header class="pj-head">
+    <div class="pj-head-main">
+      <h1 class="pj-title td-title<%= isCompleted ? ' is-done' : '' %>"><%= task.name || '(untitled)' %></h1>
+      <div class="pj-meta">
+        <div class="dropdown">
+          <button type="button" class="td-status td-status-<%= sKey(task.status) %>" data-bs-toggle="dropdown" aria-expanded="false" title="Change status" id="tdStatusBtn">
+            <i class="bi <%= STATUS_ICON[task.status] || 'bi-circle' %>"></i><span><%= task.status %></span><i class="bi bi-chevron-down td-caret"></i>
           </button>
-        </div>
-
-        <div id="detailsView">
-          <div class="pnew-classification-row">
-            <div>
-              <label class="pnew-field-label"><i class="bi bi-calendar3-event"></i> Start date</label>
-              <div class="pnew-static-field"><%= fmtDate(task.startDate || task.date) %></div>
-            </div>
-            <div>
-              <label class="pnew-field-label"><i class="bi bi-calendar-x"></i> Deadline</label>
-              <div class="pnew-static-field" style="<%= isOverdue ? 'color:oklch(0.5 0.2 20); font-weight:600;' : '' %>">
-                <%= fmtDate(task.deadline) %>
-                <% if (isOverdue) { %> <span style="font-size:0.75rem;">(overdue)</span><% } %>
-              </div>
-            </div>
-          </div>
-          <% if (task.description || task.details) { %>
-            <label class="pnew-field-label mt-3"><i class="bi bi-card-text"></i> Description</label>
-            <p class="pnew-card-sub mb-0" style="white-space:pre-wrap; color:#1f2a44;"><%= task.description || task.details %></p>
-          <% } %>
-        </div>
-
-        <form id="detailsEditForm" action="/tasks/<%= task.id %>/details" method="POST" style="display:none;">
-          <div class="pnew-classification-row">
-            <div>
-              <label class="pnew-field-label"><i class="bi bi-calendar-x"></i> Deadline</label>
-              <input type="date" name="deadline" class="pnew-input" value="<%= task.deadline || '' %>">
-            </div>
-            <div>
-              <label class="pnew-field-label"><i class="bi bi-tag"></i> Status</label>
-              <select name="status" class="pnew-input">
-                <% statusChoices.forEach(s => { %>
-                  <option value="<%= s %>" <%= task.status === s ? 'selected' : '' %>><%= s %></option>
-                <% }) %>
-              </select>
-            </div>
-          </div>
-
-          <label class="pnew-field-label mt-3"><i class="bi bi-chat-square-text"></i> Reason for deadline change <span class="text-muted" style="font-weight:400; font-size:0.75rem;">(logged automatically if deadline changes)</span></label>
-          <input type="text" name="deadlineReason" class="pnew-input" placeholder="e.g. client requested extension">
-
-          <label class="pnew-field-label mt-3"><i class="bi bi-card-text"></i> Description</label>
-          <textarea name="description" class="pnew-textarea" rows="4"><%= task.description || task.details || '' %></textarea>
-
-          <div class="d-flex gap-2 mt-3">
-            <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i> Save</button>
-            <button type="button" class="pnew-btn-cancel"
-              onclick="document.getElementById('detailsEditForm').style.display='none'; document.getElementById('detailsView').style.display='block'; document.getElementById('detailsEditBtn').style.display='inline-flex';">
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Deadline history -->
-      <% if (task.deadlineHistory && task.deadlineHistory.length) { %>
-      <div class="pnew-card">
-        <h2 class="pnew-card-title"><i class="bi bi-clock-history me-1" style="font-size:1rem;"></i> Deadline history</h2>
-        <p class="pnew-card-sub"><%= task.deadlineHistory.length %> change<%= task.deadlineHistory.length === 1 ? '' : 's' %> logged</p>
-        <div class="dl-history-list">
-          <% task.deadlineHistory.forEach(h => { %>
-            <div class="dl-history-row">
-              <div class="dl-history-icon"><i class="bi bi-arrow-right-circle"></i></div>
-              <div class="dl-history-body">
-                <div class="dl-history-change">
-                  <span class="dl-date-old"><%= fmtDate(h.oldDeadline) || 'none' %></span>
-                  <i class="bi bi-arrow-right" style="font-size:0.75rem; opacity:0.5;"></i>
-                  <span class="dl-date-new"><%= fmtDate(h.newDeadline) || 'none' %></span>
-                </div>
-                <% if (h.reason) { %><div class="dl-history-reason">"<%= h.reason %>"</div><% } %>
-                <div class="dl-history-meta">by <%= h.changedByName %> · <%= noteTimeAgo(h.changedAt) %></div>
-              </div>
-            </div>
-          <% }) %>
-        </div>
-      </div>
-      <% } %>
-
-      <!-- Discussion -->
-      <div class="pnew-card">
-        <h2 class="pnew-card-title">Discussion (<%= (task.comments || []).length %>)</h2>
-        <p class="pnew-card-sub">Comments and updates visible to everyone on this task.</p>
-
-        <form action="/tasks/<%= task.id %>/comments" method="POST" enctype="multipart/form-data">
-          <div class="note-compose-box">
-            <div class="d-flex gap-2">
-              <span class="note-avatar note-avatar-you"><%= youInitial %></span>
-              <textarea name="comment" class="note-textarea" rows="2" placeholder="Write a comment…" required></textarea>
-            </div>
-            <div class="note-compose-footer">
-              <label class="note-link-field" style="cursor:pointer;">
-                <i class="bi bi-paperclip"></i>
-                <span id="taskCommentFileLabel">Attach</span>
-                <input type="file" name="attachment" multiple style="display:none;" id="taskCommentFileInput">
-              </label>
-              <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
-            </div>
-          </div>
-        </form>
-
-        <div class="note-thread mt-2">
-          <% if (!(task.comments || []).length) { %>
-            <p class="text-muted mb-0" style="font-size:0.85rem;">No comments yet.</p>
-          <% } %>
-          <% (task.comments ? task.comments.slice().reverse() : []).forEach((c, i) => { %>
-            <% const cInitial = (c.author || '?').trim().charAt(0).toUpperCase(); %>
-            <% if (c.type === 'email') { %>
-              <div class="note-item note-item-email">
-                <div class="note-item-head">
-                  <span class="note-avatar note-avatar-email"><i class="bi bi-envelope-fill"></i></span>
-                  <div class="note-email-meta">
-                    <span class="note-email-from"><%= c.author %></span>
-                    <span class="note-email-subj"><%= c.emailSubject || '(no subject)' %></span>
-                  </div>
-                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
-                </div>
-                <div class="note-bubble note-email-bubble">
-                  <div class="note-text" style="white-space:pre-wrap;"><%= c.comment %></div>
-                  <%- include('partials/file-chips', { files: c.attachments }) %>
-                </div>
-              </div>
-            <% } else { %>
-              <div class="note-item">
-                <div class="note-item-head">
-                  <span class="note-avatar <%= noteAvatarClasses[i % noteAvatarClasses.length] %>"><%= cInitial %></span>
-                  <span class="fw-semibold note-author"><%= c.author || 'Someone' %></span>
-                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
-                </div>
-                <div class="note-bubble">
-                  <div class="note-text"><%= c.comment %></div>
-                  <%- include('partials/file-chips', { files: c.attachments }) %>
-                </div>
-              </div>
-            <% } %>
-          <% }) %>
-        </div>
-      </div>
-
-      <!-- Sub-task logs -->
-      <div class="pnew-card">
-        <h2 class="pnew-card-title">Activity log (<%= task.records.length %>)</h2>
-        <p class="pnew-card-sub">Sub-task updates and progress notes.</p>
-
-        <div class="note-thread">
-          <% if (!task.records.length) { %>
-            <p class="text-muted mb-0" style="font-size:0.85rem;">No updates logged yet.</p>
-          <% } %>
-          <% task.records.forEach((r, i) => { %>
-            <div class="note-item">
-              <div class="note-item-head">
-                <span class="note-avatar <%= noteAvatarClasses[i % noteAvatarClasses.length] %>"><%= (r.recordedByName||'?').trim().charAt(0).toUpperCase() %></span>
-                <span class="fw-semibold note-author"><%= r.recordedByName || 'Someone' %></span>
-                <span class="text-muted small note-item-time"><%= r.dateRecorded || '' %></span>
-              </div>
-              <div class="note-bubble">
-                <% if (r.category) { %><span class="pnew-badge" style="margin:0 0 0.35rem;"><%= r.category %></span><% } %>
-                <% if (r.details) { %><div class="note-text"><%= r.details %></div><% } %>
-                <%- include('partials/file-chips', { files: r.attachments }) %>
-              </div>
-            </div>
-          <% }) %>
-        </div>
-
-        <div class="note-composer mt-3">
-          <form action="/tasks/<%= task.id %>/records" method="POST" enctype="multipart/form-data">
-            <div class="note-compose-box">
-              <div class="d-flex gap-2">
-                <span class="note-avatar note-avatar-you"><%= youInitial %></span>
-                <textarea name="details" class="note-textarea" rows="2" placeholder="Log an update…"></textarea>
-              </div>
-              <div class="note-compose-footer">
-                <label class="note-link-field" style="cursor:pointer; flex:0 0 auto; white-space:nowrap;">
-                  <i class="bi bi-paperclip"></i>
-                  <span id="subtaskFileLabel">Attach</span>
-                  <input type="file" name="attachment" multiple style="display:none;" id="subtaskFileInput">
-                </label>
-                <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ── Aside column ───────────────────────────────────────────────── -->
-    <div class="pnew-aside">
-
-      <!-- Overview -->
-      <div class="pnew-summary-card">
-        <div class="pnew-summary-title">Overview</div>
-        <div class="pnew-summary-row"><span>Status</span><span style="<%= statusColor.fg ? 'color:'+statusColor.fg : '' %>; font-weight:600;"><%= displayStatus %></span></div>
-        <div class="pnew-summary-row"><span>Start date</span><span><%= fmtDate(task.startDate || task.date) %></span></div>
-        <div class="pnew-summary-row"><span>Deadline</span>
-          <span style="<%= isOverdue ? 'color:oklch(0.5 0.2 20);font-weight:600;' : '' %>">
-            <%= fmtDate(task.deadline) %><% if (isOverdue) { %> ⚠<% } %>
-          </span>
-        </div>
-        <div class="pnew-summary-row"><span>Deadline changes</span><span><%= (task.deadlineHistory || []).length %></span></div>
-        <div class="pnew-summary-row"><span>Comments</span><span><%= (task.comments || []).length %></span></div>
-        <div class="pnew-summary-row"><span>Files</span><span><%= (task.attachments || []).length %></span></div>
-        <div class="pnew-summary-row pnew-summary-row--email">
-          <span>Task email</span>
-          <span class="project-email-chip">
-            <% const _taskEmail = 'task-' + task.id + '@' + emailDomain; %>
-            <span class="project-email-addr"><%= _taskEmail %></span>
-            <button type="button" class="project-email-copy" title="Copy"
-              onclick="(function(b){navigator.clipboard.writeText(b.previousElementSibling.textContent).then(function(){b.innerHTML='<i class=\'bi bi-check-lg\'></i>';setTimeout(function(){b.innerHTML='<i class=\'bi bi-copy\'></i>';},1500)})})(this)">
-              <i class="bi bi-copy"></i>
-            </button>
-          </span>
-        </div>
-        <p class="project-email-hint">CC this address — replies appear here automatically.</p>
-      </div>
-
-      <!-- Attachments -->
-      <div class="pnew-card">
-        <h2 class="pnew-card-title">Attachments</h2>
-        <p class="pnew-card-sub"><%= (task.attachments || []).length %> file<%= (task.attachments || []).length === 1 ? '' : 's' %></p>
-
-        <div class="pnew-file-list">
-          <% (task.attachments || []).forEach(f => { %>
-            <div class="pnew-file-row">
-              <i class="bi bi-file-earmark"></i>
-              <a href="<%= f.url %>" target="_blank" class="pnew-file-name" style="text-decoration:none;"><%= f.filename %></a>
-            </div>
-          <% }) %>
-        </div>
-
-        <form action="/tasks/<%= task.id %>/attachments" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mt-3">
-          <input type="file" name="attachments" id="taskAttachInput" multiple required style="display:none;">
-          <label for="taskAttachInput" class="pnew-btn-cancel" style="cursor:pointer; margin:0;">
-            <i class="bi bi-paperclip"></i> <span id="taskAttachLabel">Choose files</span>
-          </label>
-          <button type="submit" class="pnew-btn-save"><i class="bi bi-upload"></i> Upload</button>
-        </form>
-      </div>
-
-      <!-- Owner -->
-      <div class="pnew-card">
-        <div class="d-flex justify-content-between align-items-start gap-2">
-          <div>
-            <h2 class="pnew-card-title">Owner</h2>
-            <p class="pnew-card-sub">Responsible for this task.</p>
-          </div>
-          <% if (canAssign) { %>
-            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#ownerPicker">
-              <i class="bi bi-pencil"></i>
-            </button>
-          <% } %>
-        </div>
-
-        <% if (task.owners && task.owners.length) { %>
-          <div class="d-flex align-items-center gap-2">
-            <span class="task-people-av" style="width:28px;height:28px;font-size:0.75rem;"><%= (task.owners[0].name||'?').charAt(0).toUpperCase() %></span>
-            <span style="font-size:0.875rem; font-weight:600;"><%= task.owners[0].name %></span>
-          </div>
-        <% } else { %>
-          <p class="pnew-card-sub mb-0">No owner set.</p>
-        <% } %>
-
-        <% if (canAssign) { %>
-          <div class="collapse mt-3" id="ownerPicker">
-            <form action="/tasks/<%= task.id %>/owner" method="POST">
-              <select name="ownerId" class="form-select form-select-sm mb-2">
-                <option value="">— Remove owner —</option>
-                <% (task.teamUsers || []).forEach(u => { %>
-                  <option value="<%= u.id %>" <%= task.ownerId === u.id ? 'selected' : '' %>>
-                    <%= u.name %><% if (u.title) { %> · <%= u.title %><% } %>
-                  </option>
-                <% }) %>
-              </select>
-              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
-            </form>
-          </div>
-        <% } %>
-      </div>
-
-      <!-- Auditor -->
-      <div class="pnew-card">
-        <div class="d-flex justify-content-between align-items-start gap-2">
-          <div>
-            <h2 class="pnew-card-title">Auditor</h2>
-            <p class="pnew-card-sub">Manager overseeing this task.</p>
-          </div>
-          <% if (canAssign) { %>
-            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#auditorPicker">
-              <i class="bi bi-pencil"></i>
-            </button>
-          <% } %>
-        </div>
-
-        <% if (task.auditorName) { %>
-          <div class="d-flex align-items-center gap-2">
-            <span class="task-people-av" style="width:28px;height:28px;font-size:0.75rem;background:oklch(0.55 0.18 250);"><%= task.auditorName.charAt(0).toUpperCase() %></span>
-            <span style="font-size:0.875rem; font-weight:600;"><%= task.auditorName %></span>
-          </div>
-        <% } else { %>
-          <p class="pnew-card-sub mb-0">No auditor set.</p>
-        <% } %>
-
-        <% if (canAssign) { %>
-          <div class="collapse mt-3" id="auditorPicker">
-            <form action="/tasks/<%= task.id %>/auditor" method="POST">
-              <select name="auditorId" class="form-select form-select-sm mb-2">
-                <option value="">— Remove auditor —</option>
-                <% (task.teamUsers || []).filter(u => u.role === 'Admin' || u.role === 'Manager').forEach(u => { %>
-                  <option value="<%= u.id %>" <%= task.auditorId === u.id ? 'selected' : '' %>>
-                    <%= u.name %><% if (u.title) { %> · <%= u.title %><% } %>
-                  </option>
-                <% }) %>
-              </select>
-              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
-            </form>
-          </div>
-        <% } %>
-      </div>
-
-      <!-- Assigned users -->
-      <div class="pnew-card">
-        <div class="d-flex justify-content-between align-items-start gap-2">
-          <div>
-            <h2 class="pnew-card-title">Assigned to</h2>
-            <p class="pnew-card-sub">Everyone working on this.</p>
-          </div>
-          <% if (canAssign) { %>
-            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#assigneePicker">
-              <i class="bi bi-person-plus"></i> Edit
-            </button>
-          <% } %>
-        </div>
-
-        <% if (task.assignees && task.assignees.length) { %>
-          <div class="d-flex flex-column gap-1">
-            <% task.assignees.forEach(a => { %>
-              <div class="d-flex align-items-center gap-2">
-                <span class="task-people-av" style="width:26px;height:26px;font-size:0.72rem;"><%= (a.name||'?').charAt(0).toUpperCase() %></span>
-                <span style="font-size:0.85rem;"><%= a.name %></span>
-              </div>
+          <ul class="dropdown-menu tn-menu">
+            <% statusChoices.forEach(s => { %>
+              <li><button type="button" class="dropdown-item<%= s === task.status ? ' active' : '' %>" data-td-status="<%= s %>"><i class="bi <%= STATUS_ICON[s] || 'bi-circle' %>"></i><%= s %></button></li>
             <% }) %>
-          </div>
-        <% } else { %>
-          <p class="pnew-card-sub mb-0">No one assigned yet.</p>
+          </ul>
+        </div>
+        <span class="td-due <%= dueCls %>"><i class="bi <%= isOverdue ? 'bi-alarm' : 'bi-calendar3' %>"></i><%= dueText %><% if (task.deadline && !isCompleted) { %><span class="td-due-date"> · <%= fmt(task.deadline, { month: 'short', day: 'numeric' }) %></span><% } %></span>
+        <% if (people.length) { %>
+          <span class="pj-meta-item"><span class="td-avs"><% people.slice(0, 3).forEach(p => { %><span class="pj-av pj-av-xs" style="background:<%- avBg(p.name) %>" title="<%= p.name %>"><%= initial(p.name) %></span><% }) %></span><%= people[0].name %><%= people.length > 1 ? ' +' + (people.length - 1) : '' %></span>
         <% } %>
+      </div>
+    </div>
+    <div class="pj-head-actions">
+      <button type="button" class="pg-btn" id="tdEditBtn"><i class="bi bi-pencil" aria-hidden="true"></i>Edit</button>
+      <% if (!task.isArchived) { %>
+        <% if (isCompleted) { %>
+          <form action="/tasks/<%= task.id %>/reopen" method="POST"><button type="submit" class="pg-btn"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>Reopen</button></form>
+        <% } else { %>
+          <form action="/tasks/<%= task.id %>/complete" method="POST"><button type="submit" class="pg-btn pg-btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i>Mark complete</button></form>
+        <% } %>
+      <% } %>
+      <% if (isAdmin && !task.isArchived) { %>
+        <div class="dropdown">
+          <button type="button" class="pg-btn td-more" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions"><i class="bi bi-three-dots"></i></button>
+          <ul class="dropdown-menu dropdown-menu-end tn-menu">
+            <li><form action="/tasks/<%= task.id %>/archive" method="POST" onsubmit="return confirm('Archive this task?\n\nIt will be hidden from everyone. Admins can restore it from the Admin section.')"><button type="submit" class="dropdown-item td-danger"><i class="bi bi-archive"></i>Archive task</button></form></li>
+          </ul>
+        </div>
+      <% } %>
+    </div>
+  </header>
 
+  <div class="pj-grid">
+    <div class="pj-main">
+
+      <!-- About -->
+      <section class="pj-card" aria-labelledby="tdAboutTitle">
+        <div class="pj-card-head"><h2 class="pj-card-title" id="tdAboutTitle">About this task</h2></div>
+        <% if (task.description || task.details) { %>
+          <div class="td-desc"><%= task.description || task.details %></div>
+        <% } else { %>
+          <button type="button" class="td-add-desc" data-td-edit><i class="bi bi-plus-lg"></i>Add a description: what needs to be done and what "done" looks like</button>
+        <% } %>
+        <dl class="td-facts">
+          <div><dt>Start</dt><dd><%= fmt(startStr) %></dd></div>
+          <div><dt>Due</dt><dd class="<%= isOverdue ? 'pj-red' : '' %>"><%= fmt(task.deadline) %><% if ((task.deadlineHistory || []).length) { %> <span class="td-moved" title="Deadline changes are listed under Updates">moved <%= task.deadlineHistory.length %>×</span><% } %></dd></div>
+          <div><dt>Project</dt><dd><% if (task.project) { %><a href="/projects/<%= task.project.id %>"><%= task.project.name %></a><% } else { %>—<% } %></dd></div>
+          <% if (task.completedAt) { %><div><dt>Completed</dt><dd><%= fmt(task.completedAt) %></dd></div><% } %>
+        </dl>
+        <% if (startAfterDue) { %><p class="td-warn"><i class="bi bi-exclamation-triangle"></i>The start date is after the due date. <button type="button" class="pj-link-btn" data-td-edit>Fix dates</button></p><% } %>
+      </section>
+
+      <!-- Updates: one timeline -->
+      <section class="pj-card" id="updates" aria-labelledby="tdUpdTitle">
+        <div class="pj-card-head"><div>
+          <h2 class="pj-card-title" id="tdUpdTitle">Updates <span class="pj-n"><%= feed.length %></span></h2>
+          <p class="pj-card-sub">Comments, progress notes, emails and deadline changes</p>
+        </div></div>
+
+        <form class="td-compose" id="tdCompose" method="POST" action="/tasks/<%= task.id %>/comments" enctype="multipart/form-data">
+          <div class="td-modes" role="tablist" aria-label="Update type">
+            <button type="button" class="td-mode is-on" role="tab" aria-selected="true" data-mode="comment"><i class="bi bi-chat-left-text"></i>Comment</button>
+            <button type="button" class="td-mode" role="tab" aria-selected="false" data-mode="progress"><i class="bi bi-graph-up-arrow"></i>Progress note</button>
+          </div>
+          <textarea name="comment" id="tdText" rows="3" placeholder="Write a comment for everyone on this task…"></textarea>
+          <div class="td-compose-foot">
+            <label class="td-attach"><i class="bi bi-paperclip"></i><span id="tdFileLabel">Attach files</span><input type="file" name="attachment" id="tdFiles" multiple hidden></label>
+            <span class="td-compose-hint" id="tdHint"></span>
+            <button type="submit" class="pg-btn pg-btn-primary"><i class="bi bi-send"></i>Post</button>
+          </div>
+        </form>
+
+        <ol class="td-feed">
+          <% if (!feed.length) { %><li class="td-empty">No updates yet. Post a comment or a progress note to keep everyone in the loop.</li><% } %>
+          <% feed.forEach(f => { %>
+            <li class="td-item td-item-<%= f.kind %>">
+              <% if (f.kind === 'deadline') { %>
+                <span class="td-ico"><i class="bi bi-calendar-event"></i></span>
+                <div class="td-item-body">
+                  <div class="td-line"><b><%= f.who || 'Someone' %></b> moved the due date <span class="td-old"><%= f.from ? fmt(f.from) : 'none' %></span> <i class="bi bi-arrow-right"></i> <b><%= f.to ? fmt(f.to) : 'none' %></b> <span class="td-time"><%= ago(f.at) %></span></div>
+                  <% if (f.reason) { %><div class="td-reason">“<%= f.reason %>”</div><% } %>
+                </div>
+              <% } else { %>
+                <span class="pj-av" style="background:<%- f.kind === 'email' ? 'oklch(0.55 0.15 230)' : avBg(f.who) %>"><% if (f.kind === 'email') { %><i class="bi bi-envelope-fill"></i><% } else { %><%= initial(f.who) %><% } %></span>
+                <div class="td-item-body">
+                  <div class="td-line">
+                    <b><%= f.who || 'Someone' %></b>
+                    <% if (f.kind === 'progress') { %><span class="td-tag td-tag-progress">Progress<%= f.category ? ' · ' + f.category : '' %></span><% } %>
+                    <% if (f.kind === 'email') { %><span class="td-tag td-tag-email">Email</span><% } %>
+                    <span class="td-time" title="<%= new Date(f.at).toLocaleString('en-US') %>"><%= ago(f.at) %></span>
+                  </div>
+                  <% if (f.subject) { %><div class="td-subj"><%= f.subject %></div><% } %>
+                  <% if (f.text && f.text !== '(screenshot attached)') { %><div class="td-text"><%= f.text %></div><% } %>
+                  <%- include('partials/file-chips', { files: f.files }) %>
+                </div>
+              <% } %>
+            </li>
+          <% }) %>
+        </ol>
+      </section>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="pj-side">
+      <section class="pj-card pj-side-card" aria-labelledby="tdPeopleTitle">
+        <h2 class="pj-side-title" id="tdPeopleTitle">People</h2>
+        <div class="td-person">
+          <span class="td-role">Assigned</span>
+          <div class="td-who">
+            <% if ((task.assignees || []).length) { task.assignees.forEach(a => { %><span class="td-chip"><span class="pj-av pj-av-xs" style="background:<%- avBg(a.name) %>"><%= initial(a.name) %></span><%= a.name %></span><% }) } else { %><span class="pj-muted">No one</span><% } %>
+          </div>
+          <% if (canAssign) { %><button type="button" class="pj-link-btn" data-bs-toggle="collapse" data-bs-target="#assigneePicker" aria-expanded="false">Edit</button><% } %>
+        </div>
         <% if (canAssign) { %>
-          <div class="collapse mt-3" id="assigneePicker">
-            <form action="/tasks/<%= task.id %>/assignees" method="POST">
-              <div class="d-flex flex-column gap-1 mb-3" style="max-height:180px;overflow-y:auto;">
-                <% (task.teamUsers || []).filter(u => currentUserRole !== 'Staff' || u.role === 'Staff').forEach(u => { %>
-                  <label class="task-people-check">
-                    <input type="checkbox" name="userIds" value="<%= u.id %>"
-                      <%= (task.assigneeIds || []).includes(u.id) ? 'checked' : '' %>>
-                    <span class="task-people-av" style="width:24px;height:24px;font-size:0.7rem;"><%= (u.name||'?').charAt(0).toUpperCase() %></span>
-                    <span style="font-size:0.85rem;"><%= u.name %><% if (u.title) { %> <span style="opacity:0.5;">· <%= u.title %></span><% } %></span>
-                  </label>
+          <div class="collapse" id="assigneePicker">
+            <form action="/tasks/<%= task.id %>/assignees" method="POST" class="td-picker">
+              <div class="td-picker-list">
+                <% (task.teamUsers || []).filter(u => u.isActive !== false && (role !== 'Staff' || u.role === 'Staff')).forEach(u => { %>
+                  <label><input type="checkbox" name="userIds" value="<%= u.id %>" <%= (task.assigneeIds || []).includes(u.id) ? 'checked' : '' %>><span class="pj-av pj-av-xs" style="background:<%- avBg(u.name) %>"><%= initial(u.name) %></span><%= u.name %><% if (u.title) { %><span class="pj-muted"> · <%= u.title %></span><% } %></label>
                 <% }) %>
               </div>
-              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
+              <button type="submit" class="pg-btn pg-btn-primary pj-full">Save</button>
             </form>
           </div>
         <% } %>
-      </div>
 
-      <!-- Project link -->
-      <% if (task.project) { %>
-        <div class="pnew-tip-card">
-          <i class="bi bi-folder2-open"></i>
-          <div class="pnew-tip-title">Part of a project</div>
-          <div class="pnew-tip-text">This task belongs to <a href="/projects/<%= task.project.id %>"><%= task.project.name %></a>.</div>
+        <div class="td-person">
+          <span class="td-role">Owner</span>
+          <div class="td-who"><% if (task.ownerName) { %><span class="td-chip"><span class="pj-av pj-av-xs" style="background:<%- avBg(task.ownerName) %>"><%= initial(task.ownerName) %></span><%= task.ownerName %></span><% } else { %><span class="pj-muted">Not set</span><% } %></div>
+          <% if (canAssign) { %><button type="button" class="pj-link-btn" data-bs-toggle="collapse" data-bs-target="#ownerPicker" aria-expanded="false">Change</button><% } %>
         </div>
-      <% } %>
+        <% if (canAssign) { %>
+          <div class="collapse" id="ownerPicker">
+            <form action="/tasks/<%= task.id %>/owner" method="POST" class="pj-inline-form td-inline">
+              <select name="ownerId" class="pj-select"><option value="">No owner</option><% (task.teamUsers || []).filter(u => u.isActive !== false).forEach(u => { %><option value="<%= u.id %>" <%= task.ownerId === u.id ? 'selected' : '' %>><%= u.name %></option><% }) %></select>
+              <button type="submit" class="pg-btn pg-btn-primary">Save</button>
+            </form>
+          </div>
+        <% } %>
 
-    </div>
+        <div class="td-person">
+          <span class="td-role" title="Manager who checks the result">Reviewer</span>
+          <div class="td-who"><% if (task.auditorName) { %><span class="td-chip"><span class="pj-av pj-av-xs" style="background:<%- avBg(task.auditorName) %>"><%= initial(task.auditorName) %></span><%= task.auditorName %></span><% } else { %><span class="pj-muted">Not set</span><% } %></div>
+          <% if (canAssign) { %><button type="button" class="pj-link-btn" data-bs-toggle="collapse" data-bs-target="#auditorPicker" aria-expanded="false">Change</button><% } %>
+        </div>
+        <% if (canAssign) { %>
+          <div class="collapse" id="auditorPicker">
+            <form action="/tasks/<%= task.id %>/auditor" method="POST" class="pj-inline-form td-inline">
+              <select name="auditorId" class="pj-select"><option value="">No reviewer</option><% (task.teamUsers || []).filter(u => u.isActive !== false && (u.role === 'Admin' || u.role === 'Manager')).forEach(u => { %><option value="<%= u.id %>" <%= task.auditorId === u.id ? 'selected' : '' %>><%= u.name %></option><% }) %></select>
+              <button type="submit" class="pg-btn pg-btn-primary">Save</button>
+            </form>
+          </div>
+        <% } %>
+      </section>
+
+      <section class="pj-card pj-side-card" aria-labelledby="tdFilesTitle">
+        <h2 class="pj-side-title" id="tdFilesTitle">Files <span class="pj-n"><%= (task.attachments || []).length %></span></h2>
+        <%- include('partials/file-chips', { files: task.attachments || [] }) %>
+        <form action="/tasks/<%= task.id %>/attachments" method="POST" enctype="multipart/form-data" class="td-drop" id="tdDrop">
+          <input type="file" name="attachments" id="tdDropInput" multiple hidden>
+          <i class="bi bi-cloud-arrow-up"></i><span><b>Drop files</b> or <label for="tdDropInput" class="td-browse">browse</label></span>
+        </form>
+      </section>
+
+      <section class="pj-card pj-side-card" aria-labelledby="tdEmailTitle">
+        <h2 class="pj-side-title" id="tdEmailTitle">Task email</h2>
+        <div class="pj-copy">
+          <span class="pj-copy-text" title="<%= taskEmail %>"><%= taskEmail %></span>
+          <button type="button" class="pj-copy-btn" id="tdCopy" aria-label="Copy task email address"><i class="bi bi-copy" aria-hidden="true"></i></button>
+        </div>
+        <p class="pj-hint">Cc this address on an email and the replies appear under Updates.</p>
+      </section>
+    </aside>
   </div>
 </div>
 
-<style>
-/* Archive banner + buttons */
-.td-archived-banner {
-  display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;
-  padding:0.6rem 1rem; border-radius:10px;
-  background:#fff5f5; border:1px solid #fca5a5;
-  color:#b91c1c; font-size:0.85rem; font-weight:600;
-  margin-bottom:1rem;
-}
-.td-archived-banner i { font-size:1rem; flex-shrink:0; }
-.td-archived-banner span { flex:1; }
-.td-unarchive-btn {
-  padding:0.3rem 0.75rem; border-radius:6px;
-  border:1px solid #fca5a5; background:#fff;
-  color:#b91c1c; font-size:0.8rem; font-weight:600;
-  cursor:pointer; transition:all 0.12s;
-}
-.td-unarchive-btn:hover { background:#fee2e2; }
-.td-archive-btn {
-  display:inline-flex; align-items:center;
-  padding:0.45rem 0.9rem; border-radius:7px;
-  border:1px solid #fca5a5; background:#fff5f5;
-  color:#b91c1c; font-size:0.85rem; font-weight:600;
-  cursor:pointer; transition:all 0.12s;
-}
-.td-archive-btn:hover { background:#fee2e2; border-color:#ef4444; }
-
-/* Deadline history */
-.dl-history-list { display:flex; flex-direction:column; gap:0.5rem; margin-top:0.5rem; }
-.dl-history-row {
-  display:flex; align-items:flex-start; gap:0.6rem;
-  padding:0.5rem 0.6rem; border-radius:8px; background:var(--crm-muted);
-}
-.dl-history-icon { color:var(--crm-accent); font-size:1rem; margin-top:0.05rem; flex-shrink:0; }
-.dl-history-body { flex:1; min-width:0; }
-.dl-history-change { display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; }
-.dl-date-old { color:var(--crm-muted-fg); text-decoration:line-through; }
-.dl-date-new { font-weight:700; color:var(--crm-fg); }
-.dl-history-reason { font-size:0.78rem; color:var(--crm-muted-fg); font-style:italic; margin-top:0.15rem; }
-.dl-history-meta { font-size:0.72rem; color:var(--crm-muted-fg); margin-top:0.1rem; }
-
-/* People chip shared */
-.task-people-av {
-  width:28px; height:28px; border-radius:50%; flex-shrink:0;
-  background:var(--crm-accent); color:#fff;
-  display:flex; align-items:center; justify-content:center;
-  font-size:0.75rem; font-weight:700;
-}
-.task-people-check {
-  display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0.4rem;
-  border-radius:6px; cursor:pointer; transition:background 0.12s;
-}
-.task-people-check:hover { background:var(--crm-muted); }
-</style>
+<!-- Edit dialog -->
+<dialog class="pp-dialog td-dialog" id="tdEdit" aria-labelledby="tdEditTitle">
+  <form method="POST" action="/tasks/<%= task.id %>/details" class="pp-dialog-in" id="tdEditForm">
+    <h2 id="tdEditTitle">Edit task</h2>
+    <label class="em-field"><span>Name</span><input type="text" name="name" class="pnew-input" value="<%= task.name || '' %>" required></label>
+    <div class="em-grid">
+      <label class="em-field"><span>Start date</span><input type="date" name="startDate" class="pnew-input" value="<%= task.startDate || '' %>"></label>
+      <label class="em-field"><span>Due date</span><input type="date" name="deadline" id="tdDeadline" class="pnew-input" value="<%= task.deadline || '' %>" data-orig="<%= task.deadline || '' %>"></label>
+    </div>
+    <label class="em-field" id="tdReasonRow" hidden><span>Why is the due date changing? <span class="em-opt">shown in Updates</span></span><input type="text" name="deadlineReason" class="pnew-input" placeholder="e.g. customer moved the meeting"></label>
+    <label class="em-field"><span>Status</span>
+      <select name="status" class="pnew-input"><% statusChoices.forEach(s => { %><option value="<%= s %>" <%= task.status === s ? 'selected' : '' %>><%= s %></option><% }) %></select></label>
+    <label class="em-field"><span>Description</span><textarea name="description" class="pnew-input" rows="5" placeholder="What needs to be done, and what does done look like?"><%= task.description || task.details || '' %></textarea></label>
+    <p class="td-warn" id="tdDateWarn" hidden><i class="bi bi-exclamation-triangle"></i>The start date is after the due date.</p>
+    <div class="pp-dialog-foot">
+      <span></span>
+      <span class="td-dlg-actions"><button type="button" class="pg-btn" data-td-close>Cancel</button><button type="submit" class="pg-btn pg-btn-primary">Save</button></span>
+    </div>
+  </form>
+</dialog>
 
 <script>
-function confirmArchive() {
-  if (confirm('Archive this task?\n\nIt will be hidden from all users and lists. Only Admins can see and restore it from the Admin section.')) {
-    document.getElementById('archiveForm').submit();
-  }
-}
-
-(function(){
-  // File input labels
-  var pairs = [
-    ['taskCommentFileInput','taskCommentFileLabel'],
-    ['subtaskFileInput','subtaskFileLabel'],
-    ['taskAttachInput','taskAttachLabel'],
-  ];
-  pairs.forEach(function(p){
-    var inp = document.getElementById(p[0]);
-    var lbl = document.getElementById(p[1]);
-    if (inp && lbl) inp.addEventListener('change', function(){
-      var n = inp.files ? inp.files.length : 0;
-      lbl.textContent = n ? (n + ' file' + (n===1?'':'s')) : (p[1].includes('Attach') ? 'Attach' : 'Choose files');
+(function () {
+  var TID = <%- JSON.stringify(task.id) %>;
+  // Status menu
+  document.querySelectorAll('[data-td-status]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var st = b.dataset.tdStatus, btn = document.getElementById('tdStatusBtn');
+      btn.disabled = true;
+      fetch('/tasks/' + TID + '/status', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ status: st }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (!j.ok) throw new Error(j.error); location.reload(); })
+        .catch(function (e) { btn.disabled = false; alert((e && e.message) || 'Could not update the status.'); });
     });
+  });
+
+  // Edit dialog
+  var dlg = document.getElementById('tdEdit');
+  function openEdit() { dlg.showModal(); }
+  document.getElementById('tdEditBtn').addEventListener('click', openEdit);
+  document.querySelectorAll('[data-td-edit]').forEach(function (b) { b.addEventListener('click', openEdit); });
+  dlg.querySelector('[data-td-close]').addEventListener('click', function () { dlg.close(); });
+  var dl = document.getElementById('tdDeadline'), start = dlg.querySelector('[name=startDate]');
+  function checkDates() {
+    document.getElementById('tdReasonRow').hidden = dl.value === dl.dataset.orig;
+    document.getElementById('tdDateWarn').hidden = !(start.value && dl.value && start.value > dl.value);
+  }
+  dl.addEventListener('input', checkDates); start.addEventListener('input', checkDates); checkDates();
+
+  // Composer: comment vs progress note
+  var form = document.getElementById('tdCompose'), text = document.getElementById('tdText'), files = document.getElementById('tdFiles');
+  var MODES = {
+    comment: { action: '/tasks/' + TID + '/comments', field: 'comment', ph: 'Write a comment for everyone on this task…', hint: '' },
+    progress: { action: '/tasks/' + TID + '/records', field: 'details', ph: 'What did you do? What is next? Any blockers?', hint: 'Progress notes show how the work moved forward' },
+  };
+  document.querySelectorAll('.td-mode').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var m = MODES[b.dataset.mode];
+      document.querySelectorAll('.td-mode').forEach(function (x) { var on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-selected', on); });
+      form.action = m.action; text.name = m.field; text.placeholder = m.ph; document.getElementById('tdHint').textContent = m.hint; text.focus();
+    });
+  });
+  files.addEventListener('change', function () { var n = files.files.length; document.getElementById('tdFileLabel').textContent = n ? n + ' file' + (n === 1 ? '' : 's') : 'Attach files'; });
+  form.addEventListener('submit', function (e) { if (!text.value.trim() && !files.files.length) { e.preventDefault(); text.focus(); } });
+  text.addEventListener('keydown', function (e) { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') form.requestSubmit(); });
+
+  // Files: drop or browse uploads straight away
+  var drop = document.getElementById('tdDrop'), dropInput = document.getElementById('tdDropInput');
+  dropInput.addEventListener('change', function () { if (dropInput.files.length) { drop.classList.add('is-busy'); drop.submit(); } });
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('is-over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('is-over'); }); });
+  drop.addEventListener('drop', function (e) { if (e.dataTransfer.files.length) { dropInput.files = e.dataTransfer.files; drop.classList.add('is-busy'); drop.submit(); } });
+
+  // Copy task email
+  var copy = document.getElementById('tdCopy');
+  copy.addEventListener('click', function () {
+    navigator.clipboard.writeText(<%- JSON.stringify(taskEmail) %>).then(function () { copy.innerHTML = '<i class="bi bi-check-lg"></i>'; setTimeout(function () { copy.innerHTML = '<i class="bi bi-copy"></i>'; }, 1500); });
   });
 })();
 </script>
