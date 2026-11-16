@@ -4145,3 +4145,74 @@ body.ks-lock { overflow: hidden; }
 .logo-msg.is-error { color: var(--crm-danger); font-weight: 500; }
 .logo-change { background: none; border: 0; padding: 0; font-size: 0.75rem; font-weight: 600; color: var(--crm-accent); cursor: pointer; }
 .logo-change:hover { text-decoration: underline; }
+
+/* =====================================================================
+   SHARED PAGE CHROME (pg-*) — header, actions, tabs, search.
+   Same metrics as the top nav: 32px controls, 8px radius, accent primary.
+   Container width/padding matches .tn-inner so page edges line up with the nav.
+   ===================================================================== */
+.pg { max-width: 1440px; margin: 0 auto; padding: 0 clamp(0px, 2vw, 24px) 3rem; }
+.pg-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.pg-heading { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.pg-title {
+  margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
+  font-size: 1.375rem; font-weight: 650; letter-spacing: -0.015em; line-height: 1.25; color: var(--crm-fg);
+}
+.pg-count { font-size: 0.85rem; font-weight: 500; color: var(--crm-muted-fg); font-variant-numeric: tabular-nums; }
+.pg-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.pg-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border: 1px solid var(--crm-border); border-radius: 8px; background: #fff;
+  font-size: 0.8125rem; font-weight: 500; line-height: 1; color: var(--crm-fg);
+  text-decoration: none; white-space: nowrap; cursor: pointer; transition: background .12s, border-color .12s;
+}
+.pg-btn i { font-size: 0.85rem; color: var(--crm-muted-fg); }
+.pg-btn:hover { background: var(--crm-muted); color: var(--crm-fg); }
+.pg-btn-primary { background: var(--crm-accent); border-color: var(--crm-accent); color: #fff; font-weight: 600; }
+.pg-btn-primary i { color: #fff; }
+.pg-btn-primary:hover { background: oklch(0.5 0.2 258); border-color: oklch(0.5 0.2 258); color: #fff; }
+.pg-btn:focus-visible, .pg-tab:focus-visible { outline: 2px solid var(--crm-accent); outline-offset: 2px; }
+
+.pg-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--crm-border); margin-bottom: 14px; }
+.pg-tabs { display: flex; gap: 20px; overflow-x: auto; scrollbar-width: none; }
+.pg-tabs::-webkit-scrollbar { display: none; }
+.pg-tab {
+  position: relative; flex-shrink: 0; background: none; border: 0; padding: 8px 0 10px;
+  font-size: 0.85rem; font-weight: 500; color: var(--crm-muted-fg); cursor: pointer; white-space: nowrap;
+}
+.pg-tab::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px 2px 0 0; }
+.pg-tab:hover { color: var(--crm-fg); }
+.pg-tab.is-active { color: var(--crm-fg); font-weight: 600; }
+.pg-tab.is-active::after { background: var(--crm-accent); }
+.pg-tab-n { margin-left: 4px; font-size: 0.75rem; font-weight: 500; color: var(--crm-muted-fg); font-variant-numeric: tabular-nums; }
+
+.pg-search {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; width: 240px; padding: 0 10px; margin: 0 0 8px;
+  border: 1px solid var(--crm-border); border-radius: 8px; background: #fff; color: var(--crm-muted-fg); flex-shrink: 0;
+}
+.pg-search:focus-within { border-color: var(--crm-accent); box-shadow: 0 0 0 3px oklch(0.55 0.2 258 / 0.12); }
+.pg-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: 0.8125rem; color: var(--crm-fg); }
+
+/* Company status pill — covers every status the edit form can set, plus legacy values */
+.co-status { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: var(--crm-muted); color: var(--crm-muted-fg); white-space: nowrap; }
+.co-status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.co-status-Client   { background: oklch(0.95 0.04 160); color: oklch(0.45 0.12 160); }
+.co-status-Prospect { background: oklch(0.95 0.03 258); color: oklch(0.45 0.16 258); }
+.co-status-Partner  { background: oklch(0.95 0.03 295); color: oklch(0.45 0.16 295); }
+.co-status-Active   { background: oklch(0.95 0.04 200); color: oklch(0.45 0.11 200); }
+.co-status-Planned, .co-status-Lead { background: oklch(0.96 0.045 80); color: oklch(0.48 0.12 65); }
+.co-status-Inactive { background: var(--crm-muted); color: var(--crm-muted-fg); }
+
+@media (max-width: 760px) {
+  .pg-header { align-items: flex-start; }
+  .pg-toolbar { flex-direction: column-reverse; align-items: stretch; gap: 8px; }
+  .pg-search { width: 100%; margin: 0; }
+  .pg-btn.btn-print-list { display: none; }
+}
+
+/* Activity list: same container edges as the nav and other pages */
+.al { max-width: 1440px; padding-left: clamp(0px, 2vw, 24px); padding-right: clamp(0px, 2vw, 24px); }
+/* Strip the browser's built-in search-box chrome inside our search fields */
+.pg-search input, .al-search input { -webkit-appearance: none; appearance: none; height: 100%; padding: 0; border-radius: 0; box-shadow: none; }
+.pg-search input::-webkit-search-decoration, .al-search input::-webkit-search-decoration { -webkit-appearance: none; }

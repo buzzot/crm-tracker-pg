@@ -8,11 +8,23 @@
   const AVATAR_COLORS = ['avatar-blue', 'avatar-purple', 'avatar-gold', 'avatar-teal', 'avatar-pink'];
   function avatarColor(i) { return AVATAR_COLORS[i % AVATAR_COLORS.length]; }
 
-  const statusChoices = ['Planned', 'Lead', 'Client'];
+  // Tabs come from the statuses actually in use (the edit form offers Active, Inactive,
+  // Prospect, Partner, Client; older records may still say Planned or Lead).
+  const STATUS_ORDER = ['Client', 'Prospect', 'Partner', 'Active', 'Inactive', 'Planned', 'Lead'];
   const statusCounts = {};
-  statusChoices.forEach(s => { statusCounts[s] = 0; });
-  companies.forEach(c => { if (c.status && statusCounts.hasOwnProperty(c.status)) statusCounts[c.status]++; });
+  let noStatusCount = 0;
+  companies.forEach(c => {
+    if (!c.status) { noStatusCount++; return; }
+    statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
+  });
+  const statusTabs = Object.keys(statusCounts).sort((a, b) => {
+    const ia = STATUS_ORDER.indexOf(a), ib = STATUS_ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+  });
+  const statusKey = s => String(s || '').replace(/[^A-Za-z0-9]/g, '');
 %>
+
+<div class="pg">
 
 <!-- Print-only header (hidden on screen) -->
 <div id="print-header">
@@ -22,27 +34,33 @@
   <hr class="ph-rule">
 </div>
 
-<div class="companies-page-header">
-  <h1 class="companies-page-title">Companies <span class="companies-page-count"><%= companies.length %></span></h1>
-  <div style="display:flex; gap:8px; align-items:center;">
-    <button onclick="window.print()" class="btn-print-list" title="Print company list">
-      <i class="bi bi-printer"></i> Print
+<div class="pg-header companies-page-header">
+  <div class="pg-heading">
+    <h1 class="pg-title">Companies</h1>
+    <span class="pg-count" aria-label="<%= companies.length %> companies"><%= companies.length %></span>
+  </div>
+  <div class="pg-actions">
+    <button type="button" onclick="window.print()" class="pg-btn btn-print-list" title="Print the companies currently shown">
+      <i class="bi bi-printer" aria-hidden="true"></i>Print
     </button>
-    <a href="/companies/new" class="btn-add-company">Add Company</a>
+    <a href="/companies/new" class="pg-btn pg-btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i>Add company</a>
   </div>
 </div>
 
-<div class="companies-toolbar">
-  <div class="status-filter-tabs" id="statusFilterTabs">
-    <button type="button" class="filter-tab active" data-status="all">All <span class="filter-tab-count"><%= companies.length %></span></button>
-    <% statusChoices.forEach(s => { %>
-      <button type="button" class="filter-tab" data-status="<%= s %>"><%= s %> <span class="filter-tab-count"><%= statusCounts[s] %></span></button>
+<div class="pg-toolbar companies-toolbar">
+  <div class="pg-tabs" id="statusFilterTabs" role="tablist" aria-label="Filter by status">
+    <button type="button" class="pg-tab is-active" role="tab" aria-selected="true" data-status="all">All <span class="pg-tab-n"><%= companies.length %></span></button>
+    <% statusTabs.forEach(s => { %>
+      <button type="button" class="pg-tab" role="tab" aria-selected="false" data-status="<%= s %>"><%= s %> <span class="pg-tab-n"><%= statusCounts[s] %></span></button>
     <% }) %>
+    <% if (noStatusCount) { %>
+      <button type="button" class="pg-tab" role="tab" aria-selected="false" data-status="">No status <span class="pg-tab-n"><%= noStatusCount %></span></button>
+    <% } %>
   </div>
-  <div class="companies-search-wrap">
-    <i class="bi bi-search"></i>
-    <input type="text" id="companySearch" placeholder="Search companies...">
-  </div>
+  <label class="pg-search">
+    <i class="bi bi-search" aria-hidden="true"></i>
+    <input type="search" id="companySearch" placeholder="Search companies" autocomplete="off" aria-label="Search companies">
+  </label>
 </div>
 
 <div class="companies-table-card">
@@ -82,7 +100,7 @@
           </td>
           <td data-label="Status">
             <% if (c.status) { %>
-              <span class="badge company-status-<%= c.status.replace(/\s+/g,'') %>"><span class="status-dot"></span><%= c.status %></span>
+              <span class="co-status co-status-<%= statusKey(c.status) %>"><span class="co-status-dot" aria-hidden="true"></span><%= c.status %></span>
             <% } else { %><span class="muted-cell">—</span><% } %>
           </td>
           <td data-label="Website">
@@ -99,10 +117,12 @@
   <% } %>
 </div>
 
+</div><!-- /.pg -->
+
 <script>
   (function () {
     const searchInput = document.getElementById('companySearch');
-    const tabs = document.querySelectorAll('#statusFilterTabs .filter-tab');
+    const tabs = document.querySelectorAll('#statusFilterTabs .pg-tab');
     const rows = document.querySelectorAll('#companiesTable tbody tr');
     let activeStatus = 'all';
 
@@ -117,8 +137,8 @@
 
     tabs.forEach((tab) => {
       tab.addEventListener('click', () => {
-        tabs.forEach((t) => t.classList.remove('active'));
-        tab.classList.add('active');
+        tabs.forEach((t) => { t.classList.remove('is-active'); t.setAttribute('aria-selected', 'false'); });
+        tab.classList.add('is-active'); tab.setAttribute('aria-selected', 'true');
         activeStatus = tab.dataset.status;
         applyFilters();
       });
@@ -139,23 +159,6 @@
 </script>
 
 <style>
-/* ── Print button (screen only) ── */
-.btn-print-list {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0.45rem 0.9rem;
-  border: 1px solid var(--crm-border);
-  border-radius: 8px;
-  background: var(--crm-muted);
-  color: var(--crm-muted-fg);
-  font-size: 0.83rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-.btn-print-list:hover { background: var(--crm-fg); color: #fff; border-color: var(--crm-fg); }
-
 /* ── Print-only header (hidden on screen) ── */
 #print-header { display: none; }
 
