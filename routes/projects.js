@@ -77,7 +77,31 @@ router.get('/projects/:id', async (req, res, next) => {
       crm.listProjectActivities()
     ]);
     if (!project.name) return res.status(404).render('error', { title: 'Not found', message: 'Project not found.' });
-    res.render('project-detail', { title: project.name, project, allTasks, msgError: req.query.msgError ? String(req.query.msgError).slice(0, 200) : null });
+
+    // People for the "Log email or WeChat" From/To pickers: the project company's
+    // contacts (same access rules as the Contacts list) plus active team members.
+    let messagePeople = { companyName: project.companyName || null, contacts: [], team: [] };
+    try {
+      const companyId = project.companyId || (project.companyIds || [])[0] || null;
+      const [contacts, team] = await Promise.all([
+        companyId ? crm.listContacts(req.session.user) : Promise.resolve([]),
+        crm.listTeamUsers(),
+      ]);
+      messagePeople.contacts = contacts
+        .filter((c) => (c.companyIds || []).includes(companyId) && c.status !== 'Left')
+        .map((c) => ({ name: c.fullName || '', email: c.email || '', title: c.title || '' }))
+        .filter((c) => c.name || c.email);
+      messagePeople.team = team
+        .filter((u) => u.isActive !== false)
+        .map((u) => ({ name: u.name || '', email: u.email || '', title: u.title || '' }));
+    } catch (e) {
+      console.error('[projects] message people lookup failed:', e.message);   // pickers are optional
+    }
+
+    res.render('project-detail', {
+      title: project.name, project, allTasks, messagePeople,
+      msgError: req.query.msgError ? String(req.query.msgError).slice(0, 200) : null,
+    });
   } catch (err) {
     next(err);
   }

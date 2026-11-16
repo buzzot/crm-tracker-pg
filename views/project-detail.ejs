@@ -183,10 +183,24 @@
             </div>
           </div>
           <div class="mm-grid">
-            <label class="mm-field"><span>From <b aria-hidden="true">*</b></span>
-              <input type="text" name="from" id="mmFrom" class="mm-input" maxlength="300" placeholder="Lin Lan <lin.lan@rheem.com>" autocomplete="off"></label>
-            <label class="mm-field"><span>To</span>
-              <input type="text" name="to" id="mmTo" class="mm-input" maxlength="300" placeholder="Optional" autocomplete="off"></label>
+            <div class="mm-field">
+              <label for="mmFrom"><span>From <b aria-hidden="true">*</b></span></label>
+              <div class="mm-combo">
+                <input type="text" name="from" id="mmFrom" class="mm-input" maxlength="300" placeholder="Pick a contact or type a name" autocomplete="off"
+                       role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="mmFromList" data-mm-pick="single">
+                <button type="button" class="mm-combo-btn" tabindex="-1" aria-label="Show contacts" data-mm-open="mmFrom"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
+                <div class="mm-pop" id="mmFromList" role="listbox" hidden></div>
+              </div>
+            </div>
+            <div class="mm-field">
+              <label for="mmTo"><span>To</span></label>
+              <div class="mm-combo">
+                <input type="text" name="to" id="mmTo" class="mm-input" maxlength="300" placeholder="Optional, pick one or more" autocomplete="off"
+                       role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="mmToList" data-mm-pick="multi">
+                <button type="button" class="mm-combo-btn" tabindex="-1" aria-label="Show contacts" data-mm-open="mmTo"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
+                <div class="mm-pop" id="mmToList" role="listbox" hidden></div>
+              </div>
+            </div>
             <label class="mm-field mm-field-date"><span>Date and time</span>
               <input type="datetime-local" id="mmSent" class="mm-input"></label>
           </div>
@@ -349,8 +363,8 @@
           function sync() {
             var ch = val('channel'), out = val('direction') === 'out';
             subjWrap.hidden = ch !== 'email';
-            from.placeholder = ch === 'wechat' ? (out ? ME || 'Your WeChat name' : 'Their WeChat name') : (out ? ME || 'Your name' : 'Lin Lan <lin.lan@rheem.com>');
-            to.placeholder = ch === 'wechat' ? 'Optional, e.g. group chat name' : 'Optional';
+            from.placeholder = ch === 'wechat' ? 'Pick a contact or type a WeChat name' : 'Pick a contact or type a name';
+            to.placeholder = ch === 'wechat' ? 'Optional, e.g. a person or group chat' : 'Optional, pick one or more';
             if (out && !from.value && ME) from.value = ME;
             if (!out && from.value === ME) from.value = '';
           }
@@ -401,8 +415,8 @@
             if (parsed) {
               e.preventDefault();
               var f = parsed.fields;
-              if (f.from && !from.value) from.value = f.from;
-              if (f.to && !to.value) to.value = f.to;
+              if (f.from && !from.value) from.value = cleanAddr(f.from);
+              if (f.to && !to.value) to.value = cleanAddr(f.to);
               if (f.subject) { subj.value = f.subject; var em = form.querySelector('input[name="channel"][value="email"]'); em.checked = true; sync(); }
               if (f.date) { var d = parseDate(f.date); if (d) sent.value = toLocalInput(d); }
               body.setRangeText(parsed.rest, body.selectionStart, body.selectionEnd, 'end');
@@ -416,6 +430,8 @@
           files.addEventListener('change', updateFiles);
 
           form.addEventListener('submit', function (e) {
+            from.value = cleanAddr(from.value).trim();
+            to.value = cleanAddr(to.value).replace(/[,;]\s*$/, '').trim();
             var hasFiles = files.files && files.files.length;
             if (!from.value.trim()) { e.preventDefault(); from.focus(); from.setCustomValidity('Enter who the message is from'); from.reportValidity(); return; }
             if (!body.value.trim() && !hasFiles) { e.preventDefault(); body.focus(); body.setCustomValidity('Paste the message text or attach a screenshot'); body.reportValidity(); return; }
@@ -423,6 +439,108 @@
             sentIso.value = isNaN(d.getTime()) ? '' : d.toISOString();
           });
           [from, body].forEach(function (el) { el.addEventListener('input', function () { el.setCustomValidity(''); }); });
+
+          // ── From / To pickers: project company's contacts + your team ──────────
+          var PEOPLE = <%- JSON.stringify(typeof messagePeople !== 'undefined' && messagePeople ? messagePeople : { contacts: [], team: [] }).replace(/</g, '\\u003c') %>;
+          function fmtPerson(p) { return p.email ? (p.name ? p.name + ' <' + p.email + '>' : p.email) : p.name; }
+          function cleanAddr(v) { return String(v || '').replace(/mailto:/gi, '').replace(/\s{2,}/g, ' '); }
+          function escH(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+          function setupPicker(input) {
+            var pop = document.getElementById(input.getAttribute('aria-controls'));
+            var multi = input.getAttribute('data-mm-pick') === 'multi';
+            var opts = [], active = -1;
+
+            function token() { return multi ? input.value.split(/[,;]/).pop().trim() : input.value.trim(); }
+            function groups() {
+              var theirs = { label: 'Contacts' + (PEOPLE.companyName ? ' at ' + PEOPLE.companyName : ''), items: PEOPLE.contacts || [] };
+              var ours = { label: 'Your team', items: PEOPLE.team || [] };
+              // Received: From = them, To = us.  Sent: the other way round.
+              var out = val('direction') === 'out';
+              var themFirst = (input === from) !== out;
+              return themFirst ? [theirs, ours] : [ours, theirs];
+            }
+            function render() {
+              var q = token().toLowerCase(), html = '', n = 0;
+              opts = [];
+              groups().forEach(function (g) {
+                var items = g.items.filter(function (p) { return !q || (p.name + ' ' + p.email + ' ' + p.title).toLowerCase().indexOf(q) !== -1; }).slice(0, 8);
+                if (!items.length) return;
+                html += '<div class="mm-pop-group">' + escH(g.label) + '</div>';
+                items.forEach(function (p) {
+                  opts.push(p);
+                  html += '<div class="mm-pop-item" role="option" id="' + input.id + '-o' + n + '" data-i="' + n + '">' +
+                    '<span class="mm-pop-avatar" aria-hidden="true">' + escH((p.name || p.email || '?').trim().charAt(0).toUpperCase()) + '</span>' +
+                    '<span class="mm-pop-text"><span class="mm-pop-name">' + escH(p.name || p.email) + '</span>' +
+                    '<span class="mm-pop-sub">' + escH([p.title, p.email].filter(Boolean).join(' · ')) + '</span></span></div>';
+                  n++;
+                });
+              });
+              if (!n) {
+                var none = (PEOPLE.contacts || []).length || (PEOPLE.team || []).length
+                  ? 'No match. Keep typing to use it as is.'
+                  : 'No contacts for this project’s company yet.';
+                html = '<div class="mm-pop-empty">' + none + '</div>';
+              }
+              pop.innerHTML = html;
+              setActive(n ? 0 : -1);
+            }
+            function setActive(i) {
+              var els = pop.querySelectorAll('.mm-pop-item');
+              active = els.length ? (i + els.length) % els.length : -1;
+              els.forEach(function (el, j) { el.classList.toggle('is-active', j === active); el.setAttribute('aria-selected', j === active); });
+              if (active >= 0) { input.setAttribute('aria-activedescendant', els[active].id); els[active].scrollIntoView({ block: 'nearest' }); }
+              else input.removeAttribute('aria-activedescendant');
+            }
+            function open() { render(); pop.hidden = false; input.setAttribute('aria-expanded', 'true'); }
+            function close() { pop.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); }
+            function choose(i) {
+              var p = opts[i]; if (!p) return;
+              var v = fmtPerson(p);
+              if (multi) {
+                var parts = input.value.split(/[,;]/).map(function (x) { return x.trim(); }).filter(Boolean);
+                if (token()) parts.pop();
+                if (parts.indexOf(v) === -1) parts.push(v);
+                input.value = parts.join(', ') + ', ';
+              } else {
+                input.value = v;
+              }
+              input.setCustomValidity('');
+              close(); input.focus();
+              if (multi) { setTimeout(open, 0); }
+            }
+
+            input.addEventListener('focus', open);
+            input.addEventListener('input', function () {
+              if (/mailto:/i.test(input.value)) { var pos = input.selectionStart; input.value = cleanAddr(input.value); try { input.setSelectionRange(pos - 7, pos - 7); } catch (e) {} }
+              open();
+            });
+            input.addEventListener('keydown', function (e) {
+              if (pop.hidden && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { open(); e.preventDefault(); return; }
+              if (pop.hidden) return;
+              if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
+              else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+              else if (e.key === 'Enter' && active >= 0 && opts.length) { e.preventDefault(); choose(active); }
+              else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+              else if (e.key === 'Tab') { close(); }
+            });
+            input.addEventListener('blur', function () {
+              setTimeout(close, 120);
+              input.value = cleanAddr(input.value).replace(/[,;]\s*$/, '').trim();
+            });
+            pop.addEventListener('mousedown', function (e) {
+              var el = e.target.closest('.mm-pop-item'); if (!el) return;
+              e.preventDefault(); choose(+el.getAttribute('data-i'));
+            });
+            pop.addEventListener('mousemove', function (e) {
+              var el = e.target.closest('.mm-pop-item'); if (el && +el.getAttribute('data-i') !== active) setActive(+el.getAttribute('data-i'));
+            });
+            document.querySelector('[data-mm-open="' + input.id + '"]').addEventListener('mousedown', function (e) {
+              e.preventDefault(); if (pop.hidden) { input.focus(); open(); } else close();
+            });
+          }
+          setupPicker(from);
+          setupPicker(to);
 
           if (document.querySelector('.mm-alert') || location.hash === '#log-message') setMode('message');
         })();
