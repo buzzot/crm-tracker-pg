@@ -54,13 +54,10 @@
       <% }) %>
       <button type="button" class="pg-tab" role="tab" aria-selected="false" data-status="all">All <span class="pg-tab-n"><%= projects.length %></span></button>
     </div>
-    <label class="pg-search">
-      <i class="bi bi-search" aria-hidden="true"></i>
-      <input type="search" id="projectSearch" placeholder="Search projects, companies, products, tasks" autocomplete="off" aria-label="Search projects">
-    </label>
   </div>
 
   <div class="pl-filters">
+  <label class="pl-filter" title="Filter this list (press /)"><i class="bi bi-funnel" aria-hidden="true"></i><input type="search" id="projectSearch" placeholder="Filter projects…" autocomplete="off" aria-label="Search projects" data-page-filter><kbd aria-hidden="true">/</kbd></label>
     <button type="button" class="pl-chip" id="plAttn" aria-pressed="false"><i class="bi bi-exclamation-circle"></i>Needs attention <b><%= attention %></b></button>
     <button type="button" class="pl-chip" id="plMine" aria-pressed="false"><i class="bi bi-person"></i>My projects <b><%= mineCount %></b></button>
     <span class="pl-spacer"></span>

@@ -39,10 +39,7 @@
 
   <!-- Toolbar: search, filters and sort together -->
   <div class="al-toolbar">
-    <label class="al-search">
-      <i class="bi bi-search" aria-hidden="true"></i>
-      <input type="search" id="fQ" placeholder="Search activities" autocomplete="off" aria-label="Search activities">
-    </label>
+    <label class="pl-filter" title="Filter this list (press /)"><i class="bi bi-funnel" aria-hidden="true"></i><input type="search" id="fQ" placeholder="Filter activities…" autocomplete="off" aria-label="Filter activities" data-page-filter><kbd aria-hidden="true">/</kbd></label>
     <select id="fType" class="al-select" aria-label="Type">
       <option value="">Type</option>
       <% typeChoices.forEach(t => { %><option value="<%= t %>"><%= t %></option><% }) %>

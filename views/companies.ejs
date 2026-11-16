@@ -63,13 +63,10 @@
     <% }) %>
     <% if (noStatus) { %><button type="button" class="pg-tab" role="tab" aria-selected="false" data-status="">No status <span class="pg-tab-n"><%= noStatus %></span></button><% } %>
   </div>
-  <label class="pg-search">
-    <i class="bi bi-search" aria-hidden="true"></i>
-    <input type="search" id="companySearch" placeholder="Search name, industry, website, owner" autocomplete="off" aria-label="Search companies">
-  </label>
 </div>
 
 <div class="pl-filters">
+  <label class="pl-filter" title="Filter this list (press /)"><i class="bi bi-funnel" aria-hidden="true"></i><input type="search" id="companySearch" placeholder="Filter companies…" autocomplete="off" aria-label="Search companies" data-page-filter><kbd aria-hidden="true">/</kbd></label>
   <button type="button" class="pl-chip" id="coFollow" aria-pressed="false" title="Companies we work with that haven't been contacted for 30+ days"><i class="bi bi-bell"></i>Needs follow-up <b><%= followCount %></b></button>
   <button type="button" class="pl-chip" id="coWork" aria-pressed="false"><i class="bi bi-briefcase"></i>Open projects or deals <b><%= workCount %></b></button>
   <button type="button" class="pl-chip" id="coMine" aria-pressed="false"><i class="bi bi-person"></i>My companies <b><%= mineCount %></b></button>

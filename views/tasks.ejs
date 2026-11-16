@@ -63,13 +63,10 @@
       <button type="button" class="pg-tab" role="tab" data-tab="completed">Completed <span class="pg-tab-n"><%= n.completed %></span></button>
       <button type="button" class="pg-tab" role="tab" data-tab="all">All <span class="pg-tab-n"><%= n.all %></span></button>
     </div>
-    <label class="pg-search">
-      <i class="bi bi-search" aria-hidden="true"></i>
-      <input type="search" id="tkSearch" placeholder="Search tasks, projects, companies, people" autocomplete="off" aria-label="Search tasks">
-    </label>
   </div>
 
   <div class="pl-filters">
+  <label class="pl-filter" title="Filter this list (press /)"><i class="bi bi-funnel" aria-hidden="true"></i><input type="search" id="tkSearch" placeholder="Filter tasks…" autocomplete="off" aria-label="Search tasks" data-page-filter><kbd aria-hidden="true">/</kbd></label>
     <button type="button" class="pl-chip" id="tkMine" aria-pressed="false"><i class="bi bi-person"></i>Assigned to me <b><%= n.mine %></b></button>
     <label class="pl-select"><span>Person</span>
       <select id="tkPerson">

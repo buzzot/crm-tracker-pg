@@ -71,10 +71,7 @@
   </div>
 
   <div class="pl-filters">
-    <label class="pg-search pp-search">
-      <i class="bi bi-search" aria-hidden="true"></i>
-      <input type="search" id="ppSearch" placeholder="Search deals, companies, products" autocomplete="off" aria-label="Search deals">
-    </label>
+  <label class="pl-filter" title="Filter this list (press /)"><i class="bi bi-funnel" aria-hidden="true"></i><input type="search" id="ppSearch" placeholder="Filter deals…" autocomplete="off" aria-label="Search deals" data-page-filter><kbd aria-hidden="true">/</kbd></label>
     <button type="button" class="pl-chip" id="ppMine" aria-pressed="false"><i class="bi bi-person"></i>My deals</button>
     <button type="button" class="pl-chip" id="ppStale" aria-pressed="false"><i class="bi bi-moon"></i>Stalled <b><%= stats.staleCount %></b></button>
     <% if (owners.length > 1) { %>

@@ -319,3 +319,18 @@ function initCompanySearch() {
       .catch(function (err) { chip.classList.remove('is-removing'); btn.disabled = false; alert(err.message || 'Could not remove the attachment.'); });
   });
 })();
+
+// "/" focuses the current page's list filter (⌘K / Ctrl+K stays global search)
+document.addEventListener('keydown', function (e) {
+  if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+  var t = e.target, tag = (t && t.tagName) || '';
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (t && t.isContentEditable)) return;
+  var f = document.querySelector('[data-page-filter]');
+  if (!f) return;
+  e.preventDefault(); f.focus(); f.select();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && e.target && e.target.hasAttribute && e.target.hasAttribute('data-page-filter') && e.target.value) {
+    e.target.value = ''; e.target.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+});

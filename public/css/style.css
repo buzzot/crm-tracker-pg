@@ -4235,7 +4235,7 @@ body.ks-lock { overflow: hidden; }
 }
 
 /* Primary */
-.tn-new, .pg-btn-primary, .al-btn-primary, .ad-btn-primary, .sd-btn-primary {
+.pg-btn-primary, .al-btn-primary, .ad-btn-primary, .sd-btn-primary {
   background: var(--btn-primary-bg) !important;
   border: 1px solid var(--btn-primary-border) !important;
   color: #fff !important;
@@ -4245,15 +4245,14 @@ body.ks-lock { overflow: hidden; }
   text-shadow: 0 1px 0 oklch(0.3 0.15 258 / 0.25);
   transition: background .15s, box-shadow .15s, transform .05s;
 }
-.tn-new:hover, .tn-new[aria-expanded="true"],
 .pg-btn-primary:hover, .al-btn-primary:hover, .ad-btn-primary:hover, .sd-btn-primary:hover {
   background: var(--btn-primary-bg-hover) !important;
   color: #fff !important;
 }
-.tn-new:active, .pg-btn-primary:active, .al-btn-primary:active, .ad-btn-primary:active, .sd-btn-primary:active {
+.pg-btn-primary:active, .al-btn-primary:active, .ad-btn-primary:active, .sd-btn-primary:active {
   box-shadow: var(--btn-primary-shadow-active); transform: translateY(0.5px);
 }
-.tn-new i, .pg-btn-primary i, .al-btn-primary i, .ad-btn-primary i { color: #fff !important; }
+.pg-btn-primary i, .al-btn-primary i, .ad-btn-primary i { color: #fff !important; }
 
 /* Secondary */
 .pg-btn:not(.pg-btn-primary), .al-btn:not(.al-btn-primary), .ad-btn:not(.ad-btn-primary):not(.ad-btn-ghost) {
@@ -5403,3 +5402,21 @@ a.pp-co:hover { color: var(--crm-accent); }
 .fc-pop-meta { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; font-size: 0.75rem; border-top: 1px solid var(--crm-border); }
 .fc-pop-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fc-pop-meta b { font-weight: 500; color: var(--crm-muted-fg); white-space: nowrap; }
+
+
+/* ═══ Top-bar "New": secondary, so each page keeps one primary button ═══ */
+.tn-new { background: #fff; color: var(--crm-fg); border: 1px solid var(--crm-border); box-shadow: 0 1px 2px rgba(15,23,42,.05); font-weight: 500; }
+.tn-new i { color: var(--crm-muted-fg); }
+.tn-new:hover, .tn-new[aria-expanded="true"] { background: var(--crm-muted); color: var(--crm-fg); border-color: oklch(0.85 0.01 258); }
+
+/* ═══ Page filter (in the filter row, distinct from global search) ═══ */
+.pl-filter { display: inline-flex; align-items: center; gap: 7px; height: 30px; width: 230px; padding: 0 6px 0 10px; margin: 0; border: 1px solid var(--crm-border); border-radius: 999px; background: #fff; transition: border-color .12s, box-shadow .12s, width .15s; }
+.pl-filter:focus-within { border-color: var(--crm-accent); box-shadow: 0 0 0 3px oklch(0.93 0.04 258); width: 280px; }
+.pl-filter i { font-size: 0.8rem; color: var(--crm-muted-fg); }
+.pl-filter input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; padding: 0; font-size: 0.8rem; color: var(--crm-fg); -webkit-appearance: none; appearance: none; }
+.pl-filter input::-webkit-search-decoration { -webkit-appearance: none; }
+.pl-filter kbd { font: 600 0.68rem/1 inherit; color: var(--crm-muted-fg); background: var(--crm-muted); border: 1px solid var(--crm-border); border-radius: 5px; padding: 2px 6px; box-shadow: none; }
+.pl-filter:focus-within kbd, .pl-filter input:not(:placeholder-shown) ~ kbd { display: none; }
+.pl-filters + .pl-table-wrap, .pl-filters + .pp-kpis { margin-top: 0; }
+@media (max-width: 640px) { .pl-filter, .pl-filter:focus-within { width: 100%; } }
+.pl-filter input, .pl-filter input:focus { border: 0 !important; box-shadow: none !important; border-radius: 0 !important; background: none !important; height: 100% !important; padding: 0 !important; width: auto !important; }
