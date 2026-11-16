@@ -65,6 +65,31 @@
   const _canRd = currentUser && ['Admin', 'Head R&D Controllers', 'Head R&D VFD'].includes(currentUser.role);
   const projStatusCls = { 'Active': 'active', 'On Hold': 'hold', 'Completed': 'done', 'Cancelled': 'cancelled' }[project.status] || 'none';
   const primaryCompany = (project.companies || [])[0] || null;
+  const _isAdmin = !!(currentUser && currentUser.role === 'Admin');
+  const _aiOn = typeof aiEnabled !== 'undefined' && !!aiEnabled;
+  function _esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+  // Small per-message toolbar: AI TL;DR for long messages, Edit/Delete for admins
+  function msgTools(c) {
+    const long = String(c.comment || '').length > 400;
+    if (!long && !_isAdmin) return '';
+    const kind = c.manual ? 'logged' : (c.type === 'email' ? 'email' : 'comment');
+    const edit = {
+      id: c.id, kind, content: c.comment || '', from: c.author || '', to: c.manual ? (c.manual.to || '') : '',
+      subject: c.emailSubject || '', sentAt: c.postedAt ? new Date(c.postedAt).toISOString() : '',
+      channel: c.manual ? c.manual.channel : (c.type === 'email' ? 'email' : ''), direction: c.manual ? c.manual.direction : 'in',
+    };
+    let h = '<span class="msg-tools">';
+    if (long) h += '<button type="button" class="msg-tool" data-ai-msg="' + _esc(c.id) + '" title="Summarise this message with AI"><i class="bi bi-stars" aria-hidden="true"></i><span>Summarize</span></button>';
+    if (_isAdmin) {
+      h += '<span class="dropdown"><button type="button" class="msg-tool msg-tool-icon" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Message actions"><i class="bi bi-three-dots" aria-hidden="true"></i></button>'
+        + '<ul class="dropdown-menu dropdown-menu-end tn-menu">'
+        + '<li><button type="button" class="dropdown-item" data-edit-msg="' + _esc(JSON.stringify(edit)) + '"><i class="bi bi-pencil"></i>Edit</button></li>'
+        + '<li><form action="/comments/' + _esc(c.id) + '/delete" method="POST" class="m-0" onsubmit="return confirm(\'Delete this message permanently? Attachments on it are removed too.\')">'
+        + '<button type="submit" class="dropdown-item msg-danger"><i class="bi bi-trash"></i>Delete</button></form></li>'
+        + '</ul></span>';
+    }
+    return h + '</span>';
+  }
 %>
 
 <div class="pg pj">
@@ -187,7 +212,15 @@
 
       <section class="pj-card" id="comments" aria-labelledby="pjConvTitle">
         <div class="pj-card-head"><div><h2 class="pj-card-title" id="pjConvTitle">Conversation <span class="pj-n"><%= (project.comments || []).length %></span></h2>
-          <p class="pj-card-sub">Comments, plus emails and WeChat messages logged to this project</p></div></div>
+          <p class="pj-card-sub">Comments, plus emails and WeChat messages logged to this project</p></div>
+          <div class="pj-card-actions">
+            <button type="button" class="pg-btn ai-btn" id="aiSummaryBtn" data-ai-on="<%= _aiOn ? 1 : 0 %>" data-is-admin="<%= _isAdmin ? 1 : 0 %>" <%= (project.comments || []).length ? '' : 'disabled' %>
+                    title="<%= (project.comments || []).length ? 'Summarise this conversation with AI' : 'Nothing to summarise yet' %>">
+              <i class="bi bi-stars" aria-hidden="true"></i>Summarize
+            </button>
+          </div>
+        </div>
+        <div class="ai-panel" id="aiPanel" hidden aria-live="polite"></div>
 
         <div class="mm-switch" role="tablist" aria-label="Add to this project">
           <button type="button" class="mm-switch-btn is-active" role="tab" aria-selected="true" data-mm-mode="comment"><i class="bi bi-chat-left-text" aria-hidden="true"></i>Comment</button>
@@ -291,10 +324,11 @@
                       <% if (c.emailSubject) { %><span class="note-email-subj"><%= c.emailSubject %></span><% } %>
                     </span>
                   </div>
-                  <span class="text-muted small note-item-time" title="<%= when ? when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '' %>"><%= noteTimeAgo(c.postedAt) %></span>
+                  <span class="text-muted small note-item-time" title="<%= when ? when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '' %>"><%= noteTimeAgo(c.postedAt) %></span><%- msgTools(c) %>
                 </div>
                 <div class="note-bubble mm-bubble mm-bubble-<%= ch %>">
                   <div class="note-text" style="white-space: pre-wrap;"><%= c.comment %></div>
+                  <div class="ai-tldr" id="tldr-<%= c.id %>" hidden></div>
                   <% if (c.attachments && c.attachments.length) { %>
                     <div class="d-flex flex-wrap gap-2 mt-2">
                       <% c.attachments.forEach(file => { %>
@@ -302,7 +336,7 @@
                       <% }) %>
                     </div>
                   <% } %>
-                  <% if (c.manual.loggedBy) { %><div class="mm-logged">Logged by <%= c.manual.loggedBy %></div><% } %>
+                  <% if (c.manual.loggedBy || c.manual.editedBy) { %><div class="mm-logged"><% if (c.manual.loggedBy) { %>Logged by <%= c.manual.loggedBy %><% } %><% if (c.manual.editedBy) { %><%= c.manual.loggedBy ? ' · ' : '' %>Edited by <%= c.manual.editedBy %><% } %></div><% } %>
                 </div>
               </div>
             <% } else if (c.type === 'email') { %>
@@ -313,10 +347,11 @@
                     <span class="note-email-from"><%= c.author %></span>
                     <span class="note-email-subj"><%= c.emailSubject || '(no subject)' %></span>
                   </div>
-                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span><%- msgTools(c) %>
                 </div>
                 <div class="note-bubble note-email-bubble">
                   <div class="note-text" style="white-space: pre-wrap;"><%= c.comment %></div>
+                  <div class="ai-tldr" id="tldr-<%= c.id %>" hidden></div>
                 </div>
               </div>
             <% } else { %>
@@ -324,10 +359,11 @@
                 <div class="note-item-head">
                   <span class="note-avatar <%= noteAvatarClasses[i % noteAvatarClasses.length] %>"><%= cInitial %></span>
                   <span class="fw-semibold note-author"><%= c.author || 'Someone' %></span>
-                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span>
+                  <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span><%- msgTools(c) %>
                 </div>
                 <div class="note-bubble">
                   <div class="note-text"><%= c.comment %></div>
+                  <div class="ai-tldr" id="tldr-<%= c.id %>" hidden></div>
                   <% if (c.link) { %>
                     <a href="<%= c.link %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-link-45deg"></i><%= c.link %></a>
                   <% } %>
@@ -343,6 +379,43 @@
             <% } %>
           <% }) %>
         </div>
+
+        <% if (_isAdmin) { %>
+        <dialog class="msg-dialog" id="msgEditDialog" aria-labelledby="msgEditTitle">
+          <form method="POST" id="msgEditForm" class="msg-edit">
+            <div class="msg-edit-head">
+              <h3 id="msgEditTitle">Edit message</h3>
+              <button type="button" class="pj-copy-btn" data-close-dialog aria-label="Close"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            </div>
+            <input type="hidden" name="sentAtIso" id="meSentIso">
+            <div class="msg-edit-ext">
+              <div class="mm-row">
+                <div class="mm-seg" role="radiogroup" aria-label="Channel">
+                  <label><input type="radio" name="channel" value="email"><span>Email</span></label>
+                  <label><input type="radio" name="channel" value="wechat"><span>WeChat</span></label>
+                  <label><input type="radio" name="channel" value="other"><span>Other</span></label>
+                </div>
+                <div class="mm-seg" role="radiogroup" aria-label="Direction">
+                  <label><input type="radio" name="direction" value="in"><span>Received</span></label>
+                  <label><input type="radio" name="direction" value="out"><span>Sent</span></label>
+                </div>
+              </div>
+              <div class="mm-grid">
+                <label class="mm-field"><span>From</span><input type="text" name="from" id="meFrom" class="mm-input" maxlength="300"></label>
+                <label class="mm-field"><span>To</span><input type="text" name="to" id="meTo" class="mm-input" maxlength="300"></label>
+                <label class="mm-field"><span>Date and time</span><input type="datetime-local" id="meSent" class="mm-input"></label>
+              </div>
+              <label class="mm-field" id="meSubjectWrap"><span>Subject</span><input type="text" name="subject" id="meSubject" class="mm-input" maxlength="500"></label>
+            </div>
+            <label class="mm-field"><span>Message</span><textarea name="content" id="meContent" class="mm-input mm-textarea" rows="8" required></textarea></label>
+            <p class="pj-hint msg-edit-note" id="meNote"></p>
+            <div class="msg-edit-foot">
+              <button type="button" class="pg-btn" data-close-dialog>Cancel</button>
+              <button type="submit" class="pg-btn pg-btn-primary"><i class="bi bi-check2" aria-hidden="true"></i>Save changes</button>
+            </div>
+          </form>
+        </dialog>
+        <% } %>
       </section>
 
       <script>
@@ -757,6 +830,118 @@
       copy.innerHTML = '<i class="bi bi-check-lg"></i>'; setTimeout(function () { copy.innerHTML = '<i class="bi bi-copy"></i>'; }, 1500);
     });
   });
+
+  // ── AI: conversation summary ──────────────────────────────────────────
+  var PROJECT_ID = <%- JSON.stringify(project.id) %>;
+  var aiBtn = document.getElementById('aiSummaryBtn'), aiPanel = document.getElementById('aiPanel');
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function ago(iso) { var s = Math.floor((Date.now() - new Date(iso)) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : new Date(iso).toLocaleDateString(); }
+  function notSetUp() {
+    return aiBtn.getAttribute('data-is-admin') === '1'
+      ? 'AI is not set up yet. Add <code>ANTHROPIC_API_KEY</code> in Railway → Variables, then redeploy.'
+      : 'AI summaries are not available yet. Ask an admin to turn them on.';
+  }
+  function post(url) {
+    return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return r.ok && j.ok ? j : Promise.reject(j); }); });
+  }
+  function renderSummary(d) {
+    var sent = { positive: ['Positive', 'is-pos'], neutral: ['Neutral', 'is-neu'], concerned: ['Needs attention', 'is-neg'] }[d.sentiment] || ['Neutral', 'is-neu'];
+    var h = '<div class="ai-head"><span class="ai-badge"><i class="bi bi-stars"></i>AI summary</span><span class="ai-tone ' + sent[1] + '">' + sent[0] + '</span>' +
+      '<button type="button" class="pj-copy-btn ai-close" aria-label="Close summary"><i class="bi bi-x-lg"></i></button></div>';
+    if (d.summary) h += '<p class="ai-summary">' + esc(d.summary) + '</p>';
+    if (d.latest) h += '<p class="ai-latest"><strong>Latest:</strong> ' + esc(d.latest) + '</p>';
+    if (d.actionItems && d.actionItems.length) {
+      h += '<div class="ai-sec"><div class="ai-sec-title">Action items</div><ul class="ai-list">' + d.actionItems.map(function (a) {
+        return '<li><span class="ai-owner">' + esc(a.owner || '—') + '</span><span>' + esc(a.item) + (a.due ? ' <span class="ai-due">' + esc(a.due) + '</span>' : '') + '</span></li>';
+      }).join('') + '</ul></div>';
+    }
+    if (d.openQuestions && d.openQuestions.length) {
+      h += '<div class="ai-sec"><div class="ai-sec-title">Open questions</div><ul class="ai-list ai-q">' + d.openQuestions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul></div>';
+    }
+    h += '<div class="ai-foot">Generated from ' + d.messageCount + ' message' + (d.messageCount === 1 ? '' : 's') + ' · ' + ago(d.generatedAt) +
+      ' · AI can make mistakes, check the messages before acting. <button type="button" class="pj-link-btn ai-regen">Regenerate</button></div>';
+    aiPanel.innerHTML = h;
+  }
+  function loadSummary(force) {
+    if (aiBtn.getAttribute('data-ai-on') !== '1') { aiPanel.hidden = false; aiPanel.className = 'ai-panel is-info'; aiPanel.innerHTML = '<i class="bi bi-info-circle"></i> ' + notSetUp(); return; }
+    aiPanel.hidden = false; aiPanel.className = 'ai-panel is-loading';
+    aiPanel.innerHTML = '<div class="ai-head"><span class="ai-badge"><i class="bi bi-stars"></i>Summarising the conversation…</span></div><i class="ai-sk w90"></i><i class="ai-sk w70"></i><i class="ai-sk w80"></i>';
+    aiBtn.disabled = true;
+    post('/projects/' + encodeURIComponent(PROJECT_ID) + '/summary' + (force ? '?r=' + Date.now() : ''))
+      .then(function (d) { aiPanel.className = 'ai-panel'; renderSummary(d); })
+      .catch(function (e) {
+        aiPanel.className = 'ai-panel is-error';
+        aiPanel.innerHTML = '<i class="bi bi-exclamation-circle"></i> ' + esc((e && e.error) || 'Could not create a summary.') + ' <button type="button" class="pj-link-btn ai-regen">Try again</button>';
+      })
+      .then(function () { aiBtn.disabled = false; });
+  }
+  if (aiBtn && aiPanel) {
+    aiBtn.addEventListener('click', function () { loadSummary(false); });
+    aiPanel.addEventListener('click', function (e) {
+      if (e.target.closest('.ai-close')) { aiPanel.hidden = true; return; }
+      if (e.target.closest('.ai-regen')) loadSummary(true);
+    });
+  }
+
+  // ── AI: one-message TL;DR ─────────────────────────────────────────────
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-ai-msg]'); if (!b) return;
+    var id = b.getAttribute('data-ai-msg'), box = document.getElementById('tldr-' + id);
+    if (!box) return;
+    if (!box.hidden && box.getAttribute('data-done')) { box.hidden = true; return; }
+    box.hidden = false;
+    if (aiBtn && aiBtn.getAttribute('data-ai-on') !== '1') { box.className = 'ai-tldr is-info'; box.innerHTML = notSetUp(); return; }
+    if (box.getAttribute('data-done')) return;
+    box.className = 'ai-tldr is-loading'; box.innerHTML = '<i class="bi bi-stars"></i> Summarising…';
+    b.disabled = true;
+    post('/comments/' + encodeURIComponent(id) + '/summary')
+      .then(function (d) {
+        box.className = 'ai-tldr'; box.setAttribute('data-done', '1');
+        box.innerHTML = '<div><span class="ai-badge"><i class="bi bi-stars"></i>TL;DR</span> ' + esc(d.tldr) + '</div>' +
+          (d.asks && d.asks.length ? '<ul class="ai-asks">' + d.asks.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>' : '');
+      })
+      .catch(function (err) { box.className = 'ai-tldr is-error'; box.textContent = (err && err.error) || 'Could not summarise this message.'; })
+      .then(function () { b.disabled = false; });
+  });
+
+  // ── Admin: edit a message ─────────────────────────────────────────────
+  var dlg = document.getElementById('msgEditDialog');
+  if (dlg) {
+    var ef = document.getElementById('msgEditForm');
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function localInput(iso) { var d = new Date(iso); if (isNaN(d)) return ''; return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+    function syncSubject() { var ch = ef.querySelector('input[name="channel"]:checked'); document.getElementById('meSubjectWrap').hidden = !ch || ch.value !== 'email'; }
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-edit-msg]'); if (!b) return;
+      var d; try { d = JSON.parse(b.getAttribute('data-edit-msg')); } catch (_) { return; }
+      ef.action = '/comments/' + encodeURIComponent(d.id) + '/edit';
+      var ext = d.kind !== 'comment';
+      ef.querySelector('.msg-edit-ext').hidden = !ext;
+      ef.querySelectorAll('.msg-edit-ext input').forEach(function (i) { i.disabled = !ext; });
+      document.getElementById('meContent').value = d.content;
+      if (ext) {
+        document.getElementById('meFrom').value = d.from;
+        document.getElementById('meTo').value = d.to;
+        document.getElementById('meSubject').value = d.subject;
+        document.getElementById('meSent').value = localInput(d.sentAt);
+        (ef.querySelector('input[name="channel"][value="' + (d.channel || 'email') + '"]') || {}).checked = true;
+        (ef.querySelector('input[name="direction"][value="' + (d.direction || 'in') + '"]') || {}).checked = true;
+        syncSubject();
+      }
+      document.getElementById('meNote').textContent = d.kind === 'comment'
+        ? 'Only the text of a comment can be changed; the author stays the same.'
+        : 'Changes are saved with your name as the editor.';
+      dlg.showModal();
+      setTimeout(function () { document.getElementById('meContent').focus(); }, 0);
+    });
+    ef.addEventListener('change', function (e) { if (e.target.name === 'channel') syncSubject(); });
+    ef.addEventListener('submit', function () {
+      var v = document.getElementById('meSent').value;
+      document.getElementById('meSentIso').value = v ? new Date(v).toISOString() : '';
+    });
+    dlg.addEventListener('click', function (e) { if (e.target === dlg || e.target.closest('[data-close-dialog]')) dlg.close(); });
+  }
 
   // Files: click or drop, then upload
   var input = document.getElementById('projectAttachInput'), label = document.getElementById('projectAttachLabel');

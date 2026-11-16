@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const crm = require('../services/crm');
+const ai = require('../services/ai');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -99,7 +100,7 @@ router.get('/projects/:id', async (req, res, next) => {
     }
 
     res.render('project-detail', {
-      title: project.name, project, allTasks, messagePeople,
+      title: project.name, project, allTasks, messagePeople, aiEnabled: ai.isConfigured(),
       msgError: req.query.msgError ? String(req.query.msgError).slice(0, 200) : null,
     });
   } catch (err) {
@@ -246,6 +247,20 @@ router.post('/projects/:id/attachments', upload.array('attachments', 10), async 
     res.redirect(`/projects/${req.params.id}`);
   } catch (err) {
     next(err);
+  }
+});
+
+// AI summary of the whole conversation (comments + logged/inbound messages)
+router.post('/projects/:id/summary', async (req, res) => {
+  try {
+    const project = await crm.getProjectDetail(req.params.id);
+    if (!project || !project.name) return res.status(404).json({ ok: false, error: 'Project not found.' });
+    const result = await ai.summarizeThread({ project, comments: project.comments, tasks: project.subtasks });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    const status = err.code === 'AI_NOT_CONFIGURED' ? 503 : err.code === 'AI_EMPTY' ? 400 : 502;
+    if (!err.code) console.error('[ai] project summary failed:', err.message);
+    res.status(status).json({ ok: false, error: err.code ? err.message : 'Could not create a summary. Try again.' });
   }
 });
 

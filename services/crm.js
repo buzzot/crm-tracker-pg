@@ -1406,6 +1406,8 @@ function mapComment(row) {
       to: manual.to || null,
       loggedBy: manual.by || null,
       loggedById: manual.byId || null,
+      editedBy: manual.editedBy || null,
+      editedAt: manual.editedAt || null,
     } : null,
     id: row.id,
     comment: row.content,
@@ -1452,6 +1454,69 @@ async function addManualMessage({ entityType, entityId, channel, direction, from
   );
   if (files && files.length) await _uploadFiles('comment', r.rows[0].id, files, loggedById);
   return r.rows[0];
+}
+
+// ─── Single comment: read / edit / delete (admin tools) ──────────────────────
+async function getComment(id) {
+  const r = await query(
+    `SELECT cm.*, u.name AS user_name,
+       COALESCE(json_agg(json_build_object('id', a.id, 'filename', a.filename, 'url', a.public_url,
+         'contentType', a.content_type, 'sizeBytes', a.size_bytes)) FILTER (WHERE a.id IS NOT NULL), '[]'::json) AS attachments
+     FROM comments cm
+     LEFT JOIN users u ON u.id = cm.author_id
+     LEFT JOIN attachments a ON a.entity_type = 'comment' AND a.entity_id = cm.id
+     WHERE cm.id = $1
+     GROUP BY cm.id, u.name`,
+    [id]
+  );
+  return r.rows[0] ? mapComment(r.rows[0]) : null;
+}
+
+// Edit a comment or logged message. Plain comments: text only (author stays the user
+// who wrote it). Logged messages / inbound emails: sender, recipient, subject, date,
+// channel and direction can be corrected too. Edits are stamped in the metadata.
+async function updateComment(id, { content, from, to, subject, sentAt, channel, direction, editedById, editedByName }) {
+  const cur = await query('SELECT * FROM comments WHERE id=$1', [id]);
+  const row = cur.rows[0];
+  if (!row) throw new Error('Message not found.');
+  const text = String(content == null ? row.content : content).trim();
+  if (!text) throw new Error('Message text cannot be empty.');
+
+  const manual = parseManualMeta(row.link);
+  const isExternal = !!manual || row.type === 'email';
+  if (!isExternal) {
+    await query('UPDATE comments SET content=$2 WHERE id=$1', [id, text]);
+    return getComment(id);
+  }
+
+  let when = sentAt ? new Date(sentAt) : new Date(row.created_at);
+  if (isNaN(when.getTime())) when = new Date(row.created_at);
+  if (when.getTime() > Date.now() + 5 * 60 * 1000) throw new Error('The message date is in the future.');
+  const sender = String(from == null ? (row.author_name || '') : from).trim();
+  if (!sender) throw new Error('Enter who the message is from.');
+
+  // Inbound webhook emails become "manual" once edited so the edit can be recorded
+  const ch = ['email', 'wechat', 'other'].includes(channel) ? channel : (manual ? manual.ch : 'email');
+  const meta = {
+    v: 1, ch,
+    dir: direction === 'out' || direction === 'in' ? direction : (manual ? manual.dir : 'in'),
+    to: to == null ? (manual ? manual.to : null) : (String(to).trim().slice(0, 300) || null),
+    by: manual ? manual.by : null, byId: manual ? manual.byId : null,
+    editedBy: editedByName || null, editedById: editedById || null, editedAt: new Date().toISOString(),
+  };
+  const type = ch === 'email' ? 'email' : ch === 'wechat' ? 'wechat' : 'message';
+  const subj = ch === 'email' ? (String(subject == null ? (row.email_subject || '') : subject).trim().slice(0, 500) || null) : null;
+  await query(
+    `UPDATE comments SET content=$2, author_name=$3, email_subject=$4, type=$5, link=$6, created_at=$7 WHERE id=$1`,
+    [id, text, sender.slice(0, 300), subj, type, MANUAL_PREFIX + JSON.stringify(meta), when.toISOString()]
+  );
+  return getComment(id);
+}
+
+async function deleteComment(id) {
+  await query(`DELETE FROM attachments WHERE entity_type='comment' AND entity_id=$1`, [id]);
+  const r = await query('DELETE FROM comments WHERE id=$1 RETURNING entity_type, entity_id', [id]);
+  return r.rows[0] || null;
 }
 
 // Shim functions matching old Airtable crm.js signatures used by routes
@@ -1780,6 +1845,9 @@ module.exports = {
   createActivity,
   updateActivity,
   addManualMessage,
+  getComment,
+  updateComment,
+  deleteComment,
   completeActivity,
   deleteActivity,
   getActivityDetail,
