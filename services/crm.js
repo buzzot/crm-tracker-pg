@@ -851,15 +851,24 @@ async function setProjectAssignees(projectId, userIds) {
   });
 }
 
-async function createProject({ name, status, details, companyId, dealId, ownerId, groupId, createdById }) {
+async function createProject({ name, status, details, description, category, startDate, endDate, productIds, companyId, dealId, ownerId, groupId, createdById }) {
+  const nm = String(name || '').trim();
+  if (!nm) throw new Error('Give the project a name.');
+  if (startDate && endDate && startDate > endDate) throw new Error('The target end date is before the start date.');
   // Default owner to the creator if not explicitly set
   const effectiveOwner = ownerId || createdById || null;
   const r = await query(
-    `INSERT INTO projects (name, status, details, company_id, deal_id, owner_id, group_id, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [name, status, details, companyId, dealId, effectiveOwner, groupId, createdById || null]
+    `INSERT INTO projects (name, status, details, category, start_date, end_date, company_id, deal_id, owner_id, group_id, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+    [nm, status || 'Active', (description || details || '').trim() || null, category || null, startDate || null, endDate || null,
+     companyId || null, dealId || null, effectiveOwner, groupId || null, createdById || null]
   );
-  return getProject(r.rows[0].id);
+  const id = r.rows[0].id;
+  const ids = (Array.isArray(productIds) ? productIds : productIds ? [productIds] : []).filter(Boolean);
+  for (const pid of ids) {
+    await query('INSERT INTO product_projects (product_id, project_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [pid, id]);
+  }
+  return getProject(id);
 }
 
 async function updateProject(id, { name, status, category, description, companyId, startDate, endDate, productIds, isRdIssue }, updatedById) {

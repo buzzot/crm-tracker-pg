@@ -57,55 +57,53 @@ router.get('/projects', async (req, res, next) => {
   }
 });
 
+// ── New project ────────────────────────────────────────────────────────────
+async function renderNewProject(req, res, { values = {}, error = null, status = 200 } = {}) {
+  const user = req.session.user;
+  const [companies, products, projects, teamUsers] = await Promise.all([
+    crm.listCompanies(user), crm.listProducts(), crm.listProjects(user), crm.listTeamUsers(),
+  ]);
+  const presetCompany = values.companyId || req.query.company || '';
+  res.status(status).render('project-new', {
+    title: 'New project',
+    companies: companies.map((c) => ({ id: c.id, name: c.name })).sort((x, y) => String(x.name).localeCompare(String(y.name))),
+    products: products.map((p) => ({ id: p.id, name: p.name, category: p.category || null })).sort((x, y) => String(x.name).localeCompare(String(y.name))),
+    openProjects: projects.filter((p) => p.companyId && !['Completed', 'Cancelled'].includes(p.status)).map((p) => ({ id: p.id, name: p.name, companyId: p.companyId, status: p.status || 'Active' })),
+    teamUsers: teamUsers.filter((u) => u.isActive !== false).map((u) => ({ id: u.id, name: u.name, title: u.title })),
+    statusChoices: crm.schema.tables.projects.statusChoices,
+    categoryChoices: crm.schema.tables.projects.categoryChoices,
+    productCategoryChoices: crm.schema.tables.products.categoryChoices,
+    presetCompany, error, values,
+  });
+}
+
 router.get('/projects/new', async (req, res, next) => {
-  try {
-    const user = req.session.user;
-    const [companies, products] = await Promise.all([crm.listCompanies(user), crm.listProducts()]);
-    res.render('project-new', {
-      title: 'Create Project',
-      company: null,
-      companies,
-      products,
-      statusChoices: crm.schema.tables.projects.statusChoices,
-      categoryChoices: crm.schema.tables.projects.categoryChoices,
-      productCategoryChoices: crm.schema.tables.products.categoryChoices,
-      error: null,
-      values: {}
-    });
-  } catch (err) {
-    next(err);
-  }
+  try { await renderNewProject(req, res); } catch (err) { next(err); }
 });
 
 router.post('/projects', upload.array('attachments', 10), async (req, res, next) => {
+  const b = req.body || {};
   try {
-    const { name, companyId, status, category, description, startDate, endDate } = req.body;
-    let productIds = req.body.productIds;
-    if (!productIds) productIds = [];
-    if (!Array.isArray(productIds)) productIds = [productIds];
-    const project = await crm.createProject({ name, companyId: companyId || null, productIds, status, category, description, startDate, endDate, createdById: req.session.user?.id });
-    if (req.files && req.files.length) {
-      await crm.addProjectAttachments(project.id, req.files);
+    const user = req.session.user;
+    const list = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+    const project = await crm.createProject({
+      name: b.name, companyId: b.companyId || null, productIds: list(b.productIds).filter(Boolean),
+      status: b.status || 'Active', category: b.category || null, description: b.description,
+      startDate: b.startDate || null, endDate: b.endDate || null,
+      ownerId: b.ownerId || (user && user.id) || null, createdById: user && user.id,
+    });
+    if (req.files && req.files.length) await crm.addProjectAttachments(project.id, req.files, user && user.id);
+    // Optional first tasks
+    const names = list(b.taskName), dues = list(b.taskDue), whos = list(b.taskOwner);
+    for (let i = 0; i < names.length; i++) {
+      const name = String(names[i] || '').trim();
+      if (!name) continue;
+      const t = await crm.createTask({ name, projectId: project.id, deadline: dues[i] || null, status: 'To Do', ownerId: (user && user.id) || null });
+      if (whos[i]) { try { await crm.setTaskAssignees({ taskId: t.id, userIds: [whos[i]] }); } catch (_) { /* optional */ } }
     }
     res.redirect(`/projects/${project.id}`);
   } catch (err) {
-    try {
-      const user = req.session.user;
-      const [companies, products] = await Promise.all([crm.listCompanies(user), crm.listProducts()]);
-      return res.status(400).render('project-new', {
-        title: 'Create Project',
-        company: null,
-        companies,
-        products,
-        statusChoices: crm.schema.tables.projects.statusChoices,
-        categoryChoices: crm.schema.tables.projects.categoryChoices,
-        productCategoryChoices: crm.schema.tables.products.categoryChoices,
-        error: err.message,
-        values: req.body
-      });
-    } catch (err2) {
-      next(err2);
-    }
+    try { await renderNewProject(req, res, { values: b, error: err.message, status: 400 }); } catch (e2) { next(e2); }
   }
 });
 

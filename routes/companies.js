@@ -216,19 +216,8 @@ router.post('/companies/:id/deals', async (req, res, next) => {
   }
 });
 
-router.get('/companies/:id/projects/new', async (req, res, next) => {
-  try {
-    const company = await crm.getCompany(req.params.id);
-    if (!company) return res.status(404).render('error', { title: 'Not found', message: 'Company not found.' });
-    const products = await crm.listProducts();
-    res.render('project-new', {
-      title: 'Create Project', company, products,
-      statusChoices: crm.schema.tables.projects.statusChoices,
-      categoryChoices: crm.schema.tables.projects.categoryChoices,
-      productCategoryChoices: crm.schema.tables.products.categoryChoices,
-      error: null, values: {}
-    });
-  } catch (err) { next(err); }
+router.get('/companies/:id/projects/new', (req, res) => {
+  res.redirect('/projects/new?company=' + encodeURIComponent(req.params.id));
 });
 
 router.post('/companies/:id/projects', upload.array('attachments', 10), async (req, res, next) => {

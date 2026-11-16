@@ -1,432 +1,271 @@
 <%
-  const formAction = company ? `/companies/${company.id}/projects` : '/projects';
-  const backHref = company ? `/companies/${company.id}` : '/projects';
-  const backLabel = company ? company.name : 'All projects';
-  const heroSub = company
-    ? `Creating a project for ${company.name}. You can refine ownership and tasks after the project is created.`
-    : 'Connect a company, set the stage, and tag related products. You can refine ownership and tasks after the project is created.';
-  const sortedProducts = [...products].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const v = values || {};
+  const me = (typeof currentUser !== 'undefined' && currentUser) || {};
+  const preset = companies.find(c => c.id === (v.companyId || presetCompany)) || null;
+  const list = x => Array.isArray(x) ? x : x ? [x] : [];
+  const pickedProducts = list(v.productIds);
+  const status = v.status || 'Active';
+  const ownerId = v.ownerId || me.id;
+  const backHref = preset ? '/companies/' + preset.id : '/projects';
+  const taskRows = list(v.taskName).length ? list(v.taskName).map((n, i) => ({ name: n, due: list(v.taskDue)[i] || '', owner: list(v.taskOwner)[i] || '' })) : [{ name: '', due: '', owner: '' }];
+  const STATUS_HINT = { 'Active': 'Work is happening now', 'On Hold': 'Paused, waiting on something', 'Completed': 'Already finished', 'Cancelled': 'Not going ahead' };
 %>
 
-<div class="pnew-page">
-  <a href="<%= backHref %>" class="pnew-back-link"><i class="bi bi-arrow-left"></i> <%= backLabel %></a>
+<div class="pg npj">
+  <nav class="pj-crumbs" aria-label="Breadcrumb">
+    <a href="/projects">Projects</a>
+    <% if (preset) { %><i class="bi bi-chevron-right" aria-hidden="true"></i><a href="/companies/<%= preset.id %>"><%= preset.name %></a><% } %>
+  </nav>
+  <h1 class="npj-title">New project</h1>
+  <p class="npj-sub">Only the name is required. Add the rest now or later from the project page.</p>
 
-  <div class="pnew-badge"><i class="bi bi-folder-plus"></i> New project</div>
+  <% if (error) { %><div class="td-banner td-banner-red"><i class="bi bi-exclamation-circle"></i><span><%= error %></span></div><% } %>
 
-  <h1 class="pnew-hero">Create a <em>project</em></h1>
-  <p class="pnew-hero-sub"><%= heroSub %></p>
+  <form action="/projects" method="POST" enctype="multipart/form-data" id="npjForm" class="npj-card" novalidate>
 
-  <% if (error) { %>
-    <div class="alert alert-danger"><%= error %></div>
-  <% } %>
+    <!-- 1. What -->
+    <section class="npj-sec">
+      <label class="npj-name-label" for="npjName">Project name</label>
+      <input type="text" name="name" id="npjName" class="npj-name" value="<%= v.name || '' %>" placeholder="e.g. Rheem heat pump, phase 2" required autofocus autocomplete="off" maxlength="200">
+      <p class="npj-err" id="npjNameErr" hidden>Give the project a name.</p>
+    </section>
 
-  <form action="<%= formAction %>" method="POST" id="projectNewForm" enctype="multipart/form-data">
-    <div class="pnew-grid">
-      <div class="pnew-main">
-
-        <div class="pnew-card">
-          <h2 class="pnew-card-title">Identity</h2>
-          <p class="pnew-card-sub">What this project is and who it's for.</p>
-
-          <label class="pnew-field-label" for="pnewName">Project name <span class="pnew-required">*</span></label>
-          <input type="text" name="name" id="pnewName" class="pnew-input" placeholder="e.g. Rheem Heat Pump — Phase 2" value="<%= values.name || '' %>" required autofocus>
-          <div class="pnew-help">Use a short, recognisable label — you can rename later.</div>
-
-          <% if (company) { %>
-            <label class="pnew-field-label mt-3"><i class="bi bi-building"></i> Company</label>
-            <div class="pnew-static-field"><%= company.name %></div>
-          <% } else { %>
-            <label class="pnew-field-label mt-3" for="pnewCompany"><i class="bi bi-building"></i> Company</label>
-            <select name="companyId" id="pnewCompany" class="pnew-select">
-              <option value="">— None —</option>
-              <% companies.forEach(c => { %>
-                <option value="<%= c.id %>" <%= values.companyId === c.id ? 'selected' : '' %>><%= c.name %></option>
-              <% }) %>
-            </select>
-          <% } %>
+    <!-- 2. Who and where -->
+    <section class="npj-sec npj-grid">
+      <div class="npj-field npj-span2">
+        <label for="npjCompanyInput">Company</label>
+        <div class="npj-combo" id="npjCompany">
+          <i class="bi bi-building" aria-hidden="true"></i>
+          <input type="text" id="npjCompanyInput" placeholder="Search companies…" autocomplete="off" value="<%= preset ? preset.name : '' %>" role="combobox" aria-expanded="false" aria-controls="npjCompanyList">
+          <button type="button" class="npj-clear" id="npjCompanyClear" aria-label="Clear company" <%= preset ? '' : 'hidden' %>><i class="bi bi-x"></i></button>
+          <input type="hidden" name="companyId" id="npjCompanyId" value="<%= preset ? preset.id : '' %>">
+          <ul class="npj-pop" id="npjCompanyList" role="listbox" hidden></ul>
         </div>
-
-        <div class="pnew-card">
-          <h2 class="pnew-card-title">Classification</h2>
-          <p class="pnew-card-sub">Where it sits in your pipeline.</p>
-
-          <div class="pnew-classification-row">
-            <div>
-              <label class="pnew-field-label"><i class="bi bi-activity"></i> Status</label>
-              <input type="hidden" name="status" id="pnewStatusInput" value="<%= values.status || '' %>">
-              <div class="pnew-status-chips" id="pnewStatusChips">
-                <% statusChoices.forEach(opt => { %>
-                  <button type="button" class="pnew-status-chip <%= values.status === opt ? 'active' : '' %>" data-status="<%= opt %>"><span class="pnew-chip-dot"></span><%= opt %></button>
-                <% }) %>
-              </div>
-            </div>
-            <div>
-              <label class="pnew-field-label" for="pnewCategory"><i class="bi bi-tag"></i> Category</label>
-              <select name="category" id="pnewCategory" class="pnew-select">
-                <option value="">— Select —</option>
-                <% categoryChoices.forEach(opt => { %>
-                  <option value="<%= opt %>" <%= values.category === opt ? 'selected' : '' %>><%= opt %></option>
-                <% }) %>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="pnew-card">
-          <div class="pnew-products-header">
-            <div>
-              <h2 class="pnew-card-title">Related products</h2>
-              <p class="pnew-card-sub">Tag existing products — or create a new one if this is a development project.</p>
-            </div>
-            <div class="pnew-products-header-actions">
-              <span class="pnew-product-count" id="pnewProductCount">0 selected</span>
-              <button type="button" class="pnew-btn-new-product" data-bs-toggle="modal" data-bs-target="#newProductModal">New product</button>
-            </div>
-          </div>
-
-          <div class="pnew-search-wrap">
-            <i class="bi bi-search"></i>
-            <input type="text" id="pnewProductSearch" placeholder="Search products by name or category...">
-          </div>
-
-          <div class="pnew-product-list" id="pnewProductList">
-            <% if (!sortedProducts.length) { %>
-              <div class="pnew-product-empty">No products yet.</div>
-            <% } %>
-            <% sortedProducts.forEach(p => { %>
-              <label class="pnew-product-row" data-search="<%= [p.name, p.category].filter(Boolean).join(' ').toLowerCase() %>">
-                <input type="checkbox" name="productIds" value="<%= p.id %>" class="pnew-product-checkbox">
-                <span class="pnew-product-name"><%= p.name %></span>
-                <% if (p.category) { %><span class="pnew-product-sub"><%= p.category %></span><% } %>
-              </label>
-            <% }) %>
-          </div>
-        </div>
-
-        <div class="pnew-card">
-          <h2 class="pnew-card-title">Timeline</h2>
-          <p class="pnew-card-sub">Optional — leave blank if not yet scheduled.</p>
-
-          <div class="pnew-timeline-grid">
-            <div>
-              <label class="pnew-field-label" for="pnewStartDate"><i class="bi bi-calendar3"></i> Start date</label>
-              <input type="date" name="startDate" id="pnewStartDate" class="pnew-input" value="<%= values.startDate || '' %>">
-            </div>
-            <div>
-              <label class="pnew-field-label" for="pnewEndDate"><i class="bi bi-calendar3"></i> End date</label>
-              <input type="date" name="endDate" id="pnewEndDate" class="pnew-input" value="<%= values.endDate || '' %>">
-            </div>
-          </div>
-        </div>
-
-        <div class="pnew-card">
-          <div class="pnew-description-header">
-            <h2 class="pnew-card-title">Description</h2>
-            <span class="pnew-char-counter" id="pnewCharCounter">0/500</span>
-          </div>
-          <p class="pnew-card-sub">Context for your team. Markdown not required.</p>
-          <textarea name="description" id="pnewDescription" class="pnew-textarea" rows="4" maxlength="500" placeholder="Goals, scope, key contacts, anything the team should know..."><%= values.description || '' %></textarea>
-        </div>
-
-        <div class="pnew-card">
-          <h2 class="pnew-card-title">Attachments</h2>
-          <p class="pnew-card-sub">Briefs, datasheets, or reference images for this project.</p>
-
-          <label class="pnew-dropzone" id="pnewDropzone" for="pnewFileInput">
-            <i class="bi bi-cloud-arrow-up"></i>
-            <div class="pnew-dropzone-text">Drop files here, or <span class="pnew-dropzone-browse">browse</span></div>
-            <div class="pnew-dropzone-help">Up to 25MB per file &middot; images, PDFs, docs, spreadsheets</div>
-          </label>
-          <input type="file" name="attachments" id="pnewFileInput" class="pnew-file-input" multiple>
-
-          <div class="pnew-file-list" id="pnewFileList"></div>
-        </div>
-
+        <div class="npj-dupes" id="npjDupes" hidden></div>
       </div>
-
-      <div class="pnew-aside">
-        <div class="pnew-summary-card">
-          <div class="pnew-summary-title">Summary</div>
-          <div class="pnew-summary-row"><span>Name</span><span id="pnewSummaryName">Untitled</span></div>
-          <div class="pnew-summary-row"><span>Company</span><span id="pnewSummaryCompany">—</span></div>
-          <div class="pnew-summary-row"><span>Status</span><span id="pnewSummaryStatus">—</span></div>
-          <div class="pnew-summary-row"><span>Category</span><span id="pnewSummaryCategory">—</span></div>
-          <div class="pnew-summary-row"><span>Products</span><span id="pnewSummaryProducts">—</span></div>
-          <div class="pnew-summary-row"><span>Window</span><span id="pnewSummaryWindow">—</span></div>
-          <div class="pnew-summary-row"><span>Files</span><span id="pnewSummaryFiles">—</span></div>
-        </div>
-
-        <div class="pnew-tip-card">
-          <i class="bi bi-file-earmark-text"></i>
-          <div class="pnew-tip-title">Tip</div>
-          <div class="pnew-tip-text">Projects without a status default to the first stage in your pipeline. You can always update classification from the project detail view.</div>
+      <div class="npj-field">
+        <label for="npjOwner">Owner</label>
+        <select name="ownerId" id="npjOwner">
+          <% teamUsers.forEach(u => { %><option value="<%= u.id %>" <%= u.id === ownerId ? 'selected' : '' %>><%= u.name %><%= u.id === me.id ? ' (me)' : '' %></option><% }) %>
+        </select>
+      </div>
+      <div class="npj-field">
+        <label for="npjCategory">Type</label>
+        <select name="category" id="npjCategory">
+          <option value="">Not set</option>
+          <% (categoryChoices || []).forEach(c => { %><option value="<%= c %>" <%= v.category === c ? 'selected' : '' %>><%= c %></option><% }) %>
+        </select>
+      </div>
+      <div class="npj-field npj-span2">
+        <span class="npj-label">Status</span>
+        <div class="npj-seg" role="radiogroup" aria-label="Status">
+          <% statusChoices.forEach(s => { %>
+            <label class="npj-seg-opt" title="<%= STATUS_HINT[s] || '' %>"><input type="radio" name="status" value="<%= s %>" <%= s === status ? 'checked' : '' %>><span><%= s %></span></label>
+          <% }) %>
         </div>
       </div>
-    </div>
-
-    <div class="pnew-footer-bar">
-      <span class="pnew-footer-msg" id="pnewFooterMsg">Project name is required to continue.</span>
-      <div class="pnew-footer-actions">
-        <a href="<%= backHref %>" class="pnew-btn-cancel">Cancel</a>
-        <button type="submit" class="pnew-btn-save" id="pnewSaveBtn" disabled><i class="bi bi-check-lg"></i> Save project</button>
+      <div class="npj-field">
+        <label for="npjStart">Start</label>
+        <input type="date" name="startDate" id="npjStart" value="<%= v.startDate || '' %>">
       </div>
-    </div>
+      <div class="npj-field">
+        <label for="npjEnd">Target finish</label>
+        <input type="date" name="endDate" id="npjEnd" value="<%= v.endDate || '' %>">
+        <p class="npj-err" id="npjDateErr" hidden>Finish is before start.</p>
+      </div>
+    </section>
+
+    <!-- 3. Products -->
+    <section class="npj-sec">
+      <div class="npj-sec-head"><h2>Products</h2><span class="npj-opt">optional</span></div>
+      <div class="npj-chips" id="npjPicked"></div>
+      <div class="npj-combo npj-combo-sm" id="npjProd">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="text" id="npjProdInput" placeholder="Add products: type a name or category" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="npjProdList">
+        <ul class="npj-pop" id="npjProdList" role="listbox" hidden></ul>
+      </div>
+      <div id="npjProdHidden"></div>
+    </section>
+
+    <!-- 4. Description -->
+    <section class="npj-sec">
+      <div class="npj-sec-head"><h2>Brief</h2><span class="npj-opt">optional</span></div>
+      <textarea name="description" id="npjDesc" rows="4" maxlength="2000" placeholder="Goal, scope and what the customer needs. The team and the AI email assistant use this."><%= v.description || '' %></textarea>
+    </section>
+
+    <!-- 5. First tasks -->
+    <section class="npj-sec">
+      <div class="npj-sec-head"><h2>First tasks</h2><span class="npj-opt">optional · makes the project trackable from day one</span></div>
+      <div class="npj-tasks" id="npjTasks">
+        <% taskRows.forEach(t => { %>
+          <div class="npj-task">
+            <i class="bi bi-circle" aria-hidden="true"></i>
+            <input type="text" name="taskName" value="<%= t.name %>" placeholder="e.g. Send quotation" aria-label="Task name">
+            <select name="taskOwner" aria-label="Assignee"><option value="">Assignee</option><% teamUsers.forEach(u => { %><option value="<%= u.id %>" <%= t.owner === u.id ? 'selected' : '' %>><%= u.name %></option><% }) %></select>
+            <input type="date" name="taskDue" value="<%= t.due %>" aria-label="Due date">
+            <button type="button" class="npj-x" data-remove-task aria-label="Remove task"><i class="bi bi-x"></i></button>
+          </div>
+        <% }) %>
+      </div>
+      <button type="button" class="pj-link-btn" id="npjAddTask"><i class="bi bi-plus-lg"></i>Add task</button>
+    </section>
+
+    <!-- 6. Files -->
+    <section class="npj-sec">
+      <div class="npj-sec-head"><h2>Files</h2><span class="npj-opt">optional · drawings, specs, RFQs</span></div>
+      <label class="td-drop npj-drop" id="npjDrop" for="npjFiles"><i class="bi bi-cloud-arrow-up"></i><span><b>Drop files</b> or <span class="td-browse">browse</span></span></label>
+      <input type="file" name="attachments" id="npjFiles" multiple hidden>
+      <ul class="npj-files" id="npjFileList"></ul>
+    </section>
+
+    <footer class="npj-foot">
+      <span class="npj-foot-hint"><kbd>⌘</kbd><kbd>Enter</kbd> to create</span>
+      <a href="<%= backHref %>" class="pg-btn">Cancel</a>
+      <button type="submit" class="pg-btn pg-btn-primary" id="npjSubmit"><i class="bi bi-check2"></i>Create project</button>
+    </footer>
   </form>
-
-  <div class="modal fade" id="newProductModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-box-seam me-1"></i> New product</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="alert alert-danger d-none" id="npError"></div>
-          <label class="pnew-field-label" for="npName">Product name <span class="pnew-required">*</span></label>
-          <input type="text" id="npName" class="pnew-input" placeholder="e.g. DC Inverter Driver — 5HP">
-          <label class="pnew-field-label mt-3" for="npCategory"><i class="bi bi-tag"></i> Category</label>
-          <select id="npCategory" class="pnew-select">
-            <option value="">— Select —</option>
-            <% (typeof productCategoryChoices !== 'undefined' ? productCategoryChoices : []).forEach(opt => { %>
-              <option value="<%= opt %>"><%= opt %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="pnew-btn-cancel" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="pnew-btn-save" id="npCreateBtn"><i class="bi bi-check-lg"></i> Create product</button>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <script>
-  (function () {
-    const nameInput = document.getElementById('pnewName');
-    const companySelect = document.getElementById('pnewCompany');
-    const statusChips = document.querySelectorAll('#pnewStatusChips .pnew-status-chip');
-    const statusInput = document.getElementById('pnewStatusInput');
-    const categorySelect = document.getElementById('pnewCategory');
-    const productSearch = document.getElementById('pnewProductSearch');
-    const productList = document.getElementById('pnewProductList');
-    const productCount = document.getElementById('pnewProductCount');
-    const startDate = document.getElementById('pnewStartDate');
-    const endDate = document.getElementById('pnewEndDate');
-    const description = document.getElementById('pnewDescription');
-    const charCounter = document.getElementById('pnewCharCounter');
-    const saveBtn = document.getElementById('pnewSaveBtn');
-    const footerMsg = document.getElementById('pnewFooterMsg');
+(function () {
+  var COMPANIES = <%- JSON.stringify(companies).replace(/</g, '\\u003c') %>;
+  var PRODUCTS = <%- JSON.stringify(products).replace(/</g, '\\u003c') %>;
+  var OPEN = <%- JSON.stringify(openProjects).replace(/</g, '\\u003c') %>;
+  var picked = <%- JSON.stringify(pickedProducts).replace(/</g, '\\u003c') %>;
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
-    const summaryName = document.getElementById('pnewSummaryName');
-    const summaryCompany = document.getElementById('pnewSummaryCompany');
-    const summaryStatus = document.getElementById('pnewSummaryStatus');
-    const summaryCategory = document.getElementById('pnewSummaryCategory');
-    const summaryProducts = document.getElementById('pnewSummaryProducts');
-    const summaryWindow = document.getElementById('pnewSummaryWindow');
-    const summaryFiles = document.getElementById('pnewSummaryFiles');
-
-    const fileInput = document.getElementById('pnewFileInput');
-    const dropzone = document.getElementById('pnewDropzone');
-    const fileList = document.getElementById('pnewFileList');
-
-    function formatBytes(bytes) {
-      if (bytes < 1024) return `${bytes} B`;
-      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  // Generic combobox
+  function combo(input, listEl, source, render, onPick, extra) {
+    var active = -1, items = [];
+    function close() { listEl.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; }
+    function draw() {
+      var q = input.value.trim().toLowerCase();
+      items = source(q);
+      var html = items.map(function (it, i) { return '<li role="option" data-i="' + i + '">' + render(it, q) + '</li>'; }).join('');
+      var ex = extra ? extra(q, items) : '';
+      listEl.innerHTML = html + ex || '<li class="npj-none">No matches</li>';
+      listEl.hidden = false; input.setAttribute('aria-expanded', 'true'); active = -1;
     }
-
-    function renderFileList() {
-      const files = Array.from(fileInput.files || []);
-      fileList.innerHTML = '';
-      files.forEach((file, idx) => {
-        const row = document.createElement('div');
-        row.className = 'pnew-file-row';
-        row.innerHTML = `
-          <i class="bi bi-file-earmark"></i>
-          <span class="pnew-file-name">${file.name}</span>
-          <span class="pnew-file-size">${formatBytes(file.size)}</span>
-          <button type="button" class="pnew-file-remove" data-idx="${idx}" aria-label="Remove"><i class="bi bi-x"></i></button>
-        `;
-        fileList.appendChild(row);
-      });
-
-      fileList.querySelectorAll('.pnew-file-remove').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const idx = Number(btn.dataset.idx);
-          const dt = new DataTransfer();
-          Array.from(fileInput.files).forEach((f, i) => { if (i !== idx) dt.items.add(f); });
-          fileInput.files = dt.files;
-          renderFileList();
-          updateSummary();
-        });
-      });
-
-      summaryFiles.textContent = files.length ? `${files.length} file${files.length === 1 ? '' : 's'}` : '—';
-    }
-
-    fileInput.addEventListener('change', renderFileList);
-
-    ['dragover', 'dragenter'].forEach((evt) => {
-      dropzone.addEventListener(evt, (e) => {
-        e.preventDefault();
-        dropzone.classList.add('dragover');
-      });
+    function hl() { listEl.querySelectorAll('li').forEach(function (li, i) { li.classList.toggle('is-active', i === active); }); }
+    input.addEventListener('focus', draw);
+    input.addEventListener('input', draw);
+    input.addEventListener('keydown', function (e) {
+      var n = listEl.querySelectorAll('li').length;
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (listEl.hidden) draw(); active = Math.min(n - 1, active + 1); hl(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(0, active - 1); hl(); }
+      else if (e.key === 'Enter') { if (!listEl.hidden) { e.preventDefault(); var li = listEl.querySelectorAll('li')[active < 0 ? 0 : active]; if (li) li.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); } }
+      else if (e.key === 'Escape') close();
     });
-    ['dragleave', 'dragend'].forEach((evt) => {
-      dropzone.addEventListener(evt, () => dropzone.classList.remove('dragover'));
+    listEl.addEventListener('mousedown', function (e) {
+      var li = e.target.closest('li'); if (!li) return; e.preventDefault();
+      if (li.dataset.i !== undefined) onPick(items[+li.dataset.i]); else if (li.dataset.action) onPick(null, li.dataset.action);
+      close();
     });
-    dropzone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropzone.classList.remove('dragover');
-      const incoming = Array.from(e.dataTransfer.files || []);
-      if (!incoming.length) return;
-      const dt = new DataTransfer();
-      Array.from(fileInput.files || []).forEach((f) => dt.items.add(f));
-      incoming.forEach((f) => dt.items.add(f));
-      fileInput.files = dt.files;
-      renderFileList();
+    input.addEventListener('blur', function () { setTimeout(close, 120); });
+    return { close: close, draw: draw };
+  }
+  function mark(text, q) {
+    if (!q) return esc(text);
+    var i = String(text).toLowerCase().indexOf(q);
+    return i < 0 ? esc(text) : esc(text.slice(0, i)) + '<b>' + esc(text.slice(i, i + q.length)) + '</b>' + esc(text.slice(i + q.length));
+  }
+
+  // Company
+  var cInput = $('npjCompanyInput'), cId = $('npjCompanyId'), cClear = $('npjCompanyClear');
+  function setCompany(c) {
+    cId.value = c ? c.id : ''; cInput.value = c ? c.name : ''; cClear.hidden = !c;
+    var dupes = c ? OPEN.filter(function (p) { return p.companyId === c.id; }) : [];
+    var box = $('npjDupes');
+    if (dupes.length) {
+      box.innerHTML = '<i class="bi bi-info-circle"></i><span>' + esc(c.name) + ' already has ' + dupes.length + ' open project' + (dupes.length === 1 ? '' : 's') + ': ' +
+        dupes.slice(0, 4).map(function (p) { return '<a href="/projects/' + p.id + '" target="_blank">' + esc(p.name) + '</a>'; }).join(', ') + (dupes.length > 4 ? '…' : '') + '. Check it isn\'t a duplicate.</span>';
+      box.hidden = false;
+    } else box.hidden = true;
+  }
+  combo(cInput, $('npjCompanyList'),
+    function (q) { return COMPANIES.filter(function (c) { return !q || c.name.toLowerCase().indexOf(q) !== -1; }).slice(0, 40); },
+    function (c, q) { return '<i class="bi bi-building"></i>' + mark(c.name, q); },
+    function (c, action) { if (action === 'new') { location.href = '/companies/new'; return; } setCompany(c); },
+    function (q, items) { return items.length ? '' : '<li data-action="new" class="npj-new"><i class="bi bi-plus-lg"></i>Add a new company</li>'; });
+  cClear.addEventListener('click', function () { setCompany(null); cInput.focus(); });
+  cInput.addEventListener('change', function () { var m = COMPANIES.find(function (c) { return c.name.toLowerCase() === cInput.value.trim().toLowerCase(); }); if (m) setCompany(m); else if (!cInput.value.trim()) setCompany(null); else if (!cId.value) cInput.value = ''; });
+  if (cId.value) setCompany(COMPANIES.find(function (c) { return c.id === cId.value; }) || null);
+
+  // Products
+  function drawPicked() {
+    $('npjPicked').innerHTML = picked.map(function (id) {
+      var p = PRODUCTS.find(function (x) { return x.id === id; }); if (!p) return '';
+      return '<span class="npj-chip">' + esc(p.name) + (p.category ? '<small>' + esc(p.category) + '</small>' : '') + '<button type="button" data-unpick="' + esc(id) + '" aria-label="Remove ' + esc(p.name) + '"><i class="bi bi-x"></i></button></span>';
+    }).join('');
+    $('npjProdHidden').innerHTML = picked.map(function (id) { return '<input type="hidden" name="productIds" value="' + esc(id) + '">'; }).join('');
+  }
+  $('npjPicked').addEventListener('click', function (e) { var b = e.target.closest('[data-unpick]'); if (!b) return; picked = picked.filter(function (x) { return x !== b.dataset.unpick; }); drawPicked(); });
+  var pInput = $('npjProdInput');
+  var prodCombo = combo(pInput, $('npjProdList'),
+    function (q) { return PRODUCTS.filter(function (p) { return picked.indexOf(p.id) === -1 && (!q || (p.name + ' ' + (p.category || '')).toLowerCase().indexOf(q) !== -1); }).slice(0, 30); },
+    function (p, q) { return mark(p.name, q) + (p.category ? '<small>' + esc(p.category) + '</small>' : ''); },
+    function (p, action) {
+      if (action === 'create') return createProduct(pInput.value.trim());
+      picked.push(p.id); pInput.value = ''; drawPicked(); setTimeout(function () { pInput.focus(); }, 0);
+    },
+    function (q, items) {
+      var exact = PRODUCTS.some(function (p) { return p.name.toLowerCase() === q; });
+      return q && !exact ? '<li data-action="create" class="npj-new"><i class="bi bi-plus-lg"></i>Create product “' + esc(pInput.value.trim()) + '”</li>' : '';
     });
+  function createProduct(name) {
+    if (!name) return;
+    fetch('/api/products', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (!d.ok) throw new Error(d.error); PRODUCTS.push({ id: d.product.id, name: d.product.name, category: d.product.category || null }); picked.push(d.product.id); pInput.value = ''; drawPicked(); })
+      .catch(function (e) { alert((e && e.message) || 'Could not create the product.'); });
+  }
+  drawPicked();
 
-    function formatDate(value) {
-      if (!value) return null;
-      const d = new Date(value + 'T00:00:00');
-      if (isNaN(d.getTime())) return null;
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    }
+  // First tasks
+  var tasks = $('npjTasks');
+  $('npjAddTask').addEventListener('click', function () {
+    var row = tasks.querySelector('.npj-task').cloneNode(true);
+    row.querySelectorAll('input').forEach(function (i) { i.value = ''; }); row.querySelector('select').value = '';
+    tasks.appendChild(row); row.querySelector('input').focus();
+  });
+  tasks.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-remove-task]'); if (!b) return;
+    var rows = tasks.querySelectorAll('.npj-task');
+    if (rows.length > 1) b.closest('.npj-task').remove(); else { b.closest('.npj-task').querySelectorAll('input').forEach(function (i) { i.value = ''; }); }
+  });
+  tasks.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.name === 'taskName') { e.preventDefault(); $('npjAddTask').click(); } });
 
-    function updateSummary() {
-      summaryName.textContent = nameInput.value.trim() || 'Untitled';
+  // Files
+  var fileInput = $('npjFiles'), drop = $('npjDrop'), dt = new DataTransfer();
+  function drawFiles() {
+    fileInput.files = dt.files;
+    $('npjFileList').innerHTML = Array.prototype.map.call(dt.files, function (f, i) {
+      return '<li><i class="bi bi-file-earmark"></i><span>' + esc(f.name) + '</span><small>' + Math.max(1, Math.round(f.size / 1024)) + ' KB</small><button type="button" data-rm-file="' + i + '" aria-label="Remove"><i class="bi bi-x"></i></button></li>';
+    }).join('');
+  }
+  function addFiles(list) { Array.prototype.forEach.call(list, function (f) { if (dt.files.length < 10) dt.items.add(f); }); drawFiles(); }
+  fileInput.addEventListener('change', function () { var fl = Array.prototype.slice.call(fileInput.files); dt = new DataTransfer(); addFiles(fl); });
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('is-over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('is-over'); }); });
+  drop.addEventListener('drop', function (e) { addFiles(e.dataTransfer.files); });
+  $('npjFileList').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-rm-file]'); if (!b) return;
+    var keep = new DataTransfer(); Array.prototype.forEach.call(dt.files, function (f, i) { if (i !== +b.dataset.rmFile) keep.items.add(f); }); dt = keep; drawFiles();
+  });
 
-      if (companySelect) {
-        const opt = companySelect.options[companySelect.selectedIndex];
-        summaryCompany.textContent = (opt && opt.value) ? opt.textContent : '—';
-      }
-
-      summaryStatus.textContent = statusInput.value || '—';
-      summaryCategory.textContent = categorySelect.value || '—';
-
-      const checked = Array.from(document.querySelectorAll('#pnewProductList input[type=checkbox]:checked'));
-      productCount.textContent = `${checked.length} selected`;
-      if (!checked.length) {
-        summaryProducts.textContent = '—';
-      } else {
-        const firstName = checked[0].closest('.pnew-product-row').querySelector('.pnew-product-name').textContent;
-        summaryProducts.textContent = checked.length === 1 ? firstName : `${firstName} +${checked.length - 1} more`;
-      }
-
-      const startLabel = formatDate(startDate.value);
-      const endLabel = formatDate(endDate.value);
-      if (startLabel && endLabel) summaryWindow.textContent = `${startLabel} – ${endLabel}`;
-      else if (startLabel) summaryWindow.textContent = `From ${startLabel}`;
-      else if (endLabel) summaryWindow.textContent = `Until ${endLabel}`;
-      else summaryWindow.textContent = '—';
-    }
-
-    function updateSaveState() {
-      const ready = !!nameInput.value.trim();
-      saveBtn.disabled = !ready;
-      footerMsg.textContent = ready ? '' : 'Project name is required to continue.';
-    }
-
-    nameInput.addEventListener('input', () => { updateSummary(); updateSaveState(); });
-    if (companySelect) companySelect.addEventListener('change', updateSummary);
-    categorySelect.addEventListener('change', updateSummary);
-    startDate.addEventListener('change', updateSummary);
-    endDate.addEventListener('change', updateSummary);
-
-    statusChips.forEach((chip) => {
-      chip.addEventListener('click', () => {
-        const isActive = chip.classList.contains('active');
-        statusChips.forEach((c) => c.classList.remove('active'));
-        if (!isActive) {
-          chip.classList.add('active');
-          statusInput.value = chip.dataset.status;
-        } else {
-          statusInput.value = '';
-        }
-        updateSummary();
-      });
-    });
-
-    productSearch.addEventListener('input', () => {
-      const q = productSearch.value.toLowerCase();
-      productList.querySelectorAll('.pnew-product-row').forEach((row) => {
-        row.style.display = (!q || row.dataset.search.includes(q)) ? '' : 'none';
-      });
-    });
-
-    // Delegated so dynamically-added rows (from "+ New product") work too.
-    productList.addEventListener('change', (e) => {
-      if (e.target.matches('input[type=checkbox]')) updateSummary();
-    });
-
-    // --- "+ New product" modal -------------------------------------------
-    const newProductModalEl = document.getElementById('newProductModal');
-    const npName = document.getElementById('npName');
-    const npCategory = document.getElementById('npCategory');
-    const npError = document.getElementById('npError');
-    const npCreateBtn = document.getElementById('npCreateBtn');
-    const newProductModal = window.bootstrap ? new bootstrap.Modal(newProductModalEl) : null;
-
-    function addProductRow(product) {
-      const empty = productList.querySelector('.pnew-product-empty');
-      if (empty) empty.remove();
-
-      const label = document.createElement('label');
-      label.className = 'pnew-product-row';
-      label.dataset.search = [product.name, product.category].filter(Boolean).join(' ').toLowerCase();
-      label.innerHTML = `
-        <input type="checkbox" name="productIds" value="${product.id}" class="pnew-product-checkbox" checked>
-        <span class="pnew-product-name"></span>
-        ${product.category ? '<span class="pnew-product-sub"></span>' : ''}
-      `;
-      label.querySelector('.pnew-product-name').textContent = product.name;
-      if (product.category) label.querySelector('.pnew-product-sub').textContent = product.category;
-      productList.prepend(label);
-      updateSummary();
-    }
-
-    newProductModalEl.addEventListener('shown.bs.modal', () => {
-      npName.value = '';
-      npCategory.value = '';
-      npError.classList.add('d-none');
-      npName.focus();
-    });
-
-    npCreateBtn.addEventListener('click', async () => {
-      const name = npName.value.trim();
-      if (!name) {
-        npError.textContent = 'Product name is required.';
-        npError.classList.remove('d-none');
-        return;
-      }
-      npCreateBtn.disabled = true;
-      try {
-        const res = await fetch('/api/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, category: npCategory.value || null })
-        });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || 'Could not create product.');
-        addProductRow(data.product);
-        if (newProductModal) newProductModal.hide();
-      } catch (err) {
-        npError.textContent = err.message;
-        npError.classList.remove('d-none');
-      } finally {
-        npCreateBtn.disabled = false;
-      }
-    });
-
-    description.addEventListener('input', () => {
-      charCounter.textContent = `${description.value.length}/500`;
-    });
-
-    updateSummary();
-    updateSaveState();
-    renderFileList();
-    charCounter.textContent = `${description.value.length}/500`;
-  })();
+  // Validation + submit
+  var form = $('npjForm'), name = $('npjName'), start = $('npjStart'), end = $('npjEnd');
+  function datesOk() { var bad = start.value && end.value && start.value > end.value; $('npjDateErr').hidden = !bad; return !bad; }
+  start.addEventListener('change', datesOk); end.addEventListener('change', datesOk);
+  name.addEventListener('input', function () { if (name.value.trim()) $('npjNameErr').hidden = true; });
+  form.addEventListener('submit', function (e) {
+    var ok = true;
+    if (!name.value.trim()) { $('npjNameErr').hidden = false; name.focus(); ok = false; }
+    if (!datesOk()) ok = false;
+    if (!ok) { e.preventDefault(); return; }
+    $('npjSubmit').disabled = true; $('npjSubmit').innerHTML = '<i class="bi bi-hourglass-split"></i>Creating…';
+  });
+  document.addEventListener('keydown', function (e) { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') form.requestSubmit(); });
+})();
 </script>
