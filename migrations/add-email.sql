@@ -51,3 +51,11 @@ CREATE TABLE IF NOT EXISTS company_research (
   items       JSONB NOT NULL DEFAULT '[]',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Sending method: 'mailgun' (HTTPS API; works on hosts that block SMTP) or 'smtp' (own mailbox)
+ALTER TABLE user_email_settings ADD COLUMN IF NOT EXISTS send_method TEXT NOT NULL DEFAULT 'smtp';
+ALTER TABLE user_email_settings ADD COLUMN IF NOT EXISTS bcc_self BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE user_email_settings ALTER COLUMN smtp_host DROP NOT NULL;
+ALTER TABLE user_email_settings ALTER COLUMN smtp_port DROP NOT NULL;
+ALTER TABLE user_email_settings ALTER COLUMN smtp_user DROP NOT NULL;
+ALTER TABLE user_email_settings ALTER COLUMN smtp_pass_enc DROP NOT NULL;

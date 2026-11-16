@@ -6,6 +6,7 @@ const crm     = require('../services/crm');
 const storage = require('../services/storage');
 const mail    = require('../services/mail');
 const smtp    = require('../services/smtp');
+const mailgun = require('../services/mailgun');
 const multer  = require('multer');
 const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } });
 
@@ -32,7 +33,7 @@ router.get('/profile', async (req, res, next) => {
     res.render('profile', {
       title: 'My Profile',
       profileUser: user,
-      mailbox, mailboxError, providers: mail.PROVIDERS, trackingDomain: mail.trackingDomain(),
+      mailbox, mailboxError, providers: mail.PROVIDERS, trackingDomain: mail.trackingDomain(), mailgunReady: mailgun.isConfigured(),
       ROLE_TITLES: crm.ROLE_TITLES,
       flash: req.session.flash || null,
       mustChange: req.query.must_change === '1' || (user && user.mustChangePassword),
@@ -120,8 +121,8 @@ router.get('/profile/email/detect', async (req, res) => {
 router.post('/profile/email', async (req, res) => {
   const wantsJson = (req.get('accept') || '').includes('application/json');
   try {
-    const { email, displayName, provider, host, port, secure, user, password, signature } = req.body;
-    const saved = await mail.saveSettings(req.session.user.id, { email, displayName, provider, host, port, secure, user, password, signature });
+    const { email, displayName, provider, method, bccSelf, host, port, secure, user, password, signature } = req.body;
+    const saved = await mail.saveSettings(req.session.user.id, { email, displayName, provider, method, bccSelf: bccSelf ? '1' : '0', host, port, secure, user, password, signature });
     if (wantsJson) return res.json({ ok: true, mailbox: saved });
     req.session.flash = { type: 'success', message: 'Email settings saved. Send a test email to confirm they work.' };
     res.redirect('/profile#email');
@@ -135,20 +136,32 @@ router.post('/profile/email', async (req, res) => {
 // POST /profile/email/test — send a test email to yourself
 router.post('/profile/email/test', async (req, res) => {
   const userId = req.session.user.id;
+  let settings = null;
   try {
-    const { settings, conn } = await mail.smtpConfig(userId);
-    const from = { name: settings.displayName || req.session.user.name || '', email: settings.email };
-    const text = `This is a test email from Samyou CRM.\n\nYour mailbox ${settings.email} is connected: emails you send from the CRM will come from this address.`;
-    await smtp.sendMail(conn, { from, to: [from], subject: 'Samyou CRM: your email is connected', text, html: '<p>' + text.replace(/\n\n/g, '</p><p>') + '</p>' });
+    settings = await mail.getSettings(userId);
+    if (!settings) return res.status(400).json({ ok: false, error: 'Save your email settings first.' });
+    const via = settings.method === 'mailgun' ? 'through Mailgun' : 'through your mailbox';
+    const text = `This is a test email from Samyou CRM.\n\nYour address ${settings.email} is connected (sending ${via}): emails you send from the CRM will come from this address.`;
+    const me = { name: settings.displayName || req.session.user.name || '', email: settings.email };
+    await mail.sendAs(userId, { to: [me], cc: [], subject: 'Samyou CRM: your email is connected', text, html: '<p>' + text.replace(/\n\n/g, '</p><p>') + '</p>' }, { fallbackName: req.session.user.name });
     await mail.markVerified(userId, null);
-    res.json({ ok: true, message: `Test email sent to ${settings.email}. Check your inbox.` });
+    res.json({ ok: true, message: `Test email sent to ${settings.email}. Check your inbox (and spam folder).` });
   } catch (e) {
-    let provider = null;
-    try { provider = (await mail.getSettings(userId) || {}).provider; } catch (_) { /* ignore */ }
-    const msg = e.code === 'NO_MAILBOX' ? e.message : smtp.friendlyError(e, provider);
+    const msg = mail.sendError(e, settings);
     try { await mail.markVerified(userId, msg); } catch (_) { /* ignore */ }
     res.status(400).json({ ok: false, error: msg });
   }
+});
+
+// GET /profile/email/mailgun-status → is the sending domain verified in Mailgun, and which DNS records are needed
+router.get('/profile/email/mailgun-status', async (req, res) => {
+  try {
+    const settings = await mail.getSettings(req.session.user.id);
+    const email = String(req.query.email || (settings && settings.email) || '').trim();
+    const domain = mailgun.domainOf(email);
+    if (!domain) return res.json({ ok: true, configured: mailgun.isConfigured(), domain: null });
+    res.json({ ok: true, ...(await mailgun.domainStatus(domain)) });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 
 // POST /profile/email/remove — disconnect

@@ -6,6 +6,7 @@ const dns = require('dns').promises;
 const { query } = require('../config/db');
 const secret = require('./secret');
 const smtp = require('./smtp');
+const mailgun = require('./mailgun');
 
 // ── Schema (idempotent; same SQL as migrations/add-email.sql) ───────────────
 let schemaReady = null;
@@ -58,6 +59,7 @@ function mapSettings(r) {
   if (!r) return null;
   return {
     email: r.email, displayName: r.display_name, provider: r.provider,
+    method: r.send_method === 'mailgun' ? 'mailgun' : 'smtp', bccSelf: r.bcc_self !== false,
     host: r.smtp_host, port: r.smtp_port, secure: r.smtp_secure, user: r.smtp_user,
     hasPassword: !!r.smtp_pass_enc, signature: r.signature || '',
     verifiedAt: r.verified_at, lastError: r.last_error, updatedAt: r.updated_at,
@@ -74,22 +76,33 @@ async function saveSettings(userId, s) {
   await ensureSchema();
   const email = String(s.email || '').trim().toLowerCase();
   if (!smtp.isEmail(email)) throw new Error('Enter a valid email address.');
-  const host = String(s.host || '').trim();
-  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) throw new Error('Enter the SMTP server name, e.g. smtp.office365.com.');
-  const port = parseInt(s.port, 10);
-  if (!(port > 0 && port < 65536)) throw new Error('Enter a valid port (usually 465 or 587).');
-  const secure = s.secure === 'starttls' ? 'starttls' : 'ssl';
-  const user = String(s.user || email).trim();
+  const method = s.method === 'smtp' ? 'smtp' : 'mailgun';
+  const bccSelf = s.bccSelf === undefined ? true : (s.bccSelf === true || s.bccSelf === '1' || s.bccSelf === 'on');
+  const displayName = String(s.displayName || '').trim() || null;
+  const signature = String(s.signature || '').slice(0, 2000) || null;
+
+  let host = null, port = null, secure = 'ssl', user = null;
   const existing = await query('SELECT smtp_pass_enc FROM user_email_settings WHERE user_id=$1', [userId]);
-  let passEnc = existing.rows[0] && existing.rows[0].smtp_pass_enc;
-  if (s.password) passEnc = secret.encrypt(s.password);
-  if (!passEnc) throw new Error('Enter the password (or app password) for this mailbox.');
+  let passEnc = existing.rows[0] ? existing.rows[0].smtp_pass_enc : null;
+  if (method === 'smtp') {
+    host = String(s.host || '').trim();
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) throw new Error('Enter the SMTP server name, e.g. smtp.qiye.aliyun.com.');
+    port = parseInt(s.port, 10);
+    if (!(port > 0 && port < 65536)) throw new Error('Enter a valid port (usually 465 or 587).');
+    secure = s.secure === 'starttls' ? 'starttls' : 'ssl';
+    user = String(s.user || email).trim();
+    if (s.password) passEnc = secret.encrypt(s.password);
+    if (!passEnc) throw new Error('Enter the password (or app password) for this mailbox.');
+  } else if (s.password) {
+    passEnc = secret.encrypt(s.password);   // kept in case they switch back to SMTP
+  }
+
   await query(
-    `INSERT INTO user_email_settings (user_id, email, display_name, provider, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass_enc, signature, verified_at, last_error, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULL,NULL,NOW())
-     ON CONFLICT (user_id) DO UPDATE SET email=$2, display_name=$3, provider=$4, smtp_host=$5, smtp_port=$6, smtp_secure=$7,
-       smtp_user=$8, smtp_pass_enc=$9, signature=$10, verified_at=NULL, last_error=NULL, updated_at=NOW()`,
-    [userId, email, String(s.displayName || '').trim() || null, s.provider || null, host, port, secure, user, passEnc, String(s.signature || '').slice(0, 2000) || null]
+    `INSERT INTO user_email_settings (user_id, email, display_name, provider, send_method, bcc_self, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass_enc, signature, verified_at, last_error, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULL,NULL,NOW())
+     ON CONFLICT (user_id) DO UPDATE SET email=$2, display_name=$3, provider=$4, send_method=$5, bcc_self=$6, smtp_host=$7, smtp_port=$8,
+       smtp_secure=$9, smtp_user=$10, smtp_pass_enc=$11, signature=$12, verified_at=NULL, last_error=NULL, updated_at=NOW()`,
+    [userId, email, displayName, s.provider || null, method, bccSelf, host, port, secure, user, passEnc, signature]
   );
   return getSettings(userId);
 }
@@ -108,6 +121,34 @@ async function smtpConfig(userId) {
   try { pass = secret.decrypt(row.smtp_pass_enc); }
   catch (_) { const e = new Error('Your saved mailbox password can no longer be read. Re-enter it in My Profile.'); e.code = 'NO_MAILBOX'; throw e; }
   return { settings: mapSettings(row), conn: { host: row.smtp_host, port: row.smtp_port, secure: row.smtp_secure, user: row.smtp_user, pass } };
+}
+
+// Send as the user, using their chosen method. mail: { to, cc, subject, text, html, inReplyTo, references }
+async function sendAs(userId, mail, { fallbackName } = {}) {
+  await ensureSchema();
+  const r = await query('SELECT * FROM user_email_settings WHERE user_id=$1', [userId]);
+  const row = r.rows[0];
+  if (!row) { const e = new Error('Set up your email in My Profile first.'); e.code = 'NO_MAILBOX'; throw e; }
+  const settings = mapSettings(row);
+  const from = { name: settings.displayName || fallbackName || '', email: settings.email };
+  if (settings.method === 'mailgun') {
+    const to = mail.to.filter((a) => smtp.isEmail(a.email));
+    const cc = (mail.cc || []).filter((a) => smtp.isEmail(a.email));
+    if (!to.length) throw new Error('Add at least one valid recipient.');
+    const bcc = settings.bccSelf && !to.concat(cc).some((a) => a.email.toLowerCase() === from.email.toLowerCase()) ? [from] : [];
+    const out = await mailgun.send({ ...mail, from, to, cc, bcc }, { formatAddress: smtp.formatAddress });
+    return { messageId: out.messageId, accepted: to.concat(cc).map((a) => a.email), settings, from };
+  }
+  let pass;
+  try { pass = secret.decrypt(row.smtp_pass_enc); }
+  catch (_) { const e = new Error('Your saved mailbox password can no longer be read. Re-enter it in My Profile.'); e.code = 'NO_MAILBOX'; throw e; }
+  const out = await smtp.sendMail({ host: row.smtp_host, port: row.smtp_port, secure: row.smtp_secure, user: row.smtp_user, pass }, { ...mail, from });
+  return { messageId: out.messageId, accepted: out.accepted, settings, from };
+}
+
+function sendError(e, settings) {
+  if (e && (e.code === 'NO_MAILBOX' || String(e.code || '').startsWith('MAILGUN'))) return e.message;
+  return smtp.friendlyError(e, settings && settings.provider);
 }
 
 async function markVerified(userId, error) {
@@ -317,7 +358,7 @@ async function saveResearch(companyId, items) {
 }
 
 module.exports = {
-  ensureSchema, PROVIDERS, detectProvider, getSettings, saveSettings, removeSettings, smtpConfig, markVerified,
+  ensureSchema, PROVIDERS, detectProvider, getSettings, saveSettings, removeSettings, smtpConfig, markVerified, sendAs, sendError,
   companyAddress, companyByAlias, trackingDomain, normSubject, threadKeyFor, getMessage, saveDraft, markSent, markFailed,
   deleteDraft, listCompanyMessages, companyThreads, buildThreads, recordInbound, getResearch, saveResearch,
 };

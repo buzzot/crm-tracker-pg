@@ -137,7 +137,7 @@
         <% if (_mbState === 'ok') { %><i class="bi bi-check-circle-fill"></i>Connected<% } else if (_mbState === 'error') { %><i class="bi bi-exclamation-circle-fill"></i>Not working<% } else if (_mbState === 'untested') { %><i class="bi bi-dash-circle"></i>Saved, not tested<% } else { %><i class="bi bi-circle"></i>Not connected<% } %>
       </span>
     </div>
-    <p class="em-intro">Send emails from the CRM using your own work address. They go out from your mailbox, and each company's tracking address is added in Cc so replies are logged automatically<% if (typeof trackingDomain !== 'undefined') { %> (for example <code>aaon@<%= trackingDomain %></code>)<% } %>.</p>
+    <p class="em-intro">Send emails from the CRM using your own work address. Recipients see your address as the sender, replies come back to your inbox, and each company's tracking address is added in Cc so replies are logged automatically<% if (typeof trackingDomain !== 'undefined') { %> (for example <code>aaon@<%= trackingDomain %></code>)<% } %>.</p>
     <% if (typeof mailboxError !== 'undefined' && mailboxError) { %><div class="em-alert"><%= mailboxError %></div><% } %>
     <% if (_mb && _mb.lastError) { %><div class="em-alert"><i class="bi bi-exclamation-circle"></i> Last test failed: <%= _mb.lastError %></div><% } %>
 
@@ -149,6 +149,31 @@
           <input type="text" name="displayName" class="pnew-input" value="<%= _mb ? (_mb.displayName || '') : (profileUser && profileUser.name) || '' %>" placeholder="Marsel"></label>
       </div>
 
+      <% var _method = _mb ? _mb.method : 'mailgun'; %>
+      <div class="em-method" role="radiogroup" aria-label="How to send">
+        <label class="em-method-opt">
+          <input type="radio" name="method" value="mailgun" <%= _method === 'mailgun' ? 'checked' : '' %>>
+          <span><b>Send via Mailgun</b><small>Recommended. Works on our server; no mailbox password needed.</small></span>
+        </label>
+        <label class="em-method-opt">
+          <input type="radio" name="method" value="smtp" <%= _method === 'smtp' ? 'checked' : '' %>>
+          <span><b>Send via my mailbox (SMTP)</b><small>Uses your mailbox server directly. Blocked on some hosting plans.</small></span>
+        </label>
+      </div>
+
+      <div id="emMg" class="em-mg" <%= _method === 'mailgun' ? '' : 'hidden' %>>
+        <% if (typeof mailgunReady !== 'undefined' && !mailgunReady) { %>
+          <div class="em-alert"><i class="bi bi-exclamation-circle"></i> Mailgun is not set up on the server yet. An admin needs to add <code>MAILGUN_API_KEY</code> in Railway → Variables.</div>
+        <% } %>
+        <div class="em-mg-status" id="emMgStatus" aria-live="polite"><i class="bi bi-hourglass-split"></i> Checking your domain in Mailgun…</div>
+        <div class="em-mg-records" id="emMgRecords" hidden>
+          <p class="em-help">Add these records in your domain's DNS (for <b>samyouusa.com</b> that is Alibaba Cloud DNS), then click <b>Verify</b> in Mailgun. If the domain already has an SPF record (<code>v=spf1 …</code>), don't add a second one: add <code>include:mailgun.org</code> to the existing one. Don't change MX records.</p>
+          <table class="em-dns"><thead><tr><th>Type</th><th>Host</th><th>Value</th><th></th></tr></thead><tbody id="emMgRows"></tbody></table>
+        </div>
+        <label class="em-check"><input type="checkbox" name="bccSelf" value="1" <%= !_mb || _mb.bccSelf ? 'checked' : '' %>> Bcc me a copy, so sent emails also show up in my own inbox</label>
+      </div>
+
+      <div id="emSmtp" <%= _method === 'smtp' ? '' : 'hidden' %>>
       <div class="em-detect" id="emDetect" aria-live="polite">
         <i class="bi bi-magic"></i><span id="emDetectText"><%= _mb && _mb.provider && _prov[_mb.provider] ? _prov[_mb.provider].label : 'We will detect your email provider from the address.' %></span>
       </div>
@@ -174,10 +199,11 @@
           <input type="password" name="password" class="pnew-input" autocomplete="new-password" placeholder="<%= _mb && _mb.hasPassword ? 'Saved. Leave empty to keep it' : 'App password recommended' %>"></label>
       </div>
       <p class="em-help" id="emHelp"><%= _mb && _mb.provider && _prov[_mb.provider] ? _prov[_mb.provider].help : '' %></p>
+      <p class="em-help"><i class="bi bi-shield-lock"></i> Your password is stored encrypted and is only used to send emails you choose to send.</p>
+      </div>
 
       <label class="em-field"><span>Signature <span class="em-opt">added below every email</span></span>
         <textarea name="signature" class="pnew-input em-sig" rows="4" placeholder="Marsel&#10;Samyou USA · +1 …&#10;www.samyouusa.com"><%= _mb ? _mb.signature : '' %></textarea></label>
-      <p class="em-help"><i class="bi bi-shield-lock"></i> Your password is stored encrypted and is only used to send emails you choose to send.</p>
 
       <div class="em-actions">
         <button type="submit" class="pg-btn pg-btn-primary"><i class="bi bi-check2"></i>Save</button>
@@ -217,10 +243,46 @@
         })
         .catch(function () { dtext.textContent = 'Could not detect the provider. Enter your SMTP settings below.'; });
     }
-    email.addEventListener('blur', detect);
-    email.addEventListener('change', detect);
+    email.addEventListener('blur', function () { if (method() === 'smtp') detect(); });
+    email.addEventListener('change', function () { if (method() === 'smtp') detect(); });
     prov.addEventListener('change', function () { apply(prov.value, true); });
-    if (!host.value) detect();
+    var smtpBox = document.getElementById('emSmtp'), mgBox = document.getElementById('emMg');
+    function method() { var r = form.querySelector('input[name=method]:checked'); return r ? r.value : 'mailgun'; }
+    function syncMethod() {
+      var m = method();
+      smtpBox.hidden = m !== 'smtp'; mgBox.hidden = m !== 'mailgun';
+      host.required = port.required = m === 'smtp';
+      if (m === 'smtp' && !host.value) detect();
+      if (m === 'mailgun') mgStatus();
+    }
+    var mgEl = document.getElementById('emMgStatus'), mgRec = document.getElementById('emMgRecords'), mgRows = document.getElementById('emMgRows');
+    var mgFor = '';
+    function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function mgStatus() {
+      var v = email.value.trim(); if (!/@/.test(v) || v === mgFor) return; mgFor = v;
+      mgEl.className = 'em-mg-status'; mgEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Checking your domain in Mailgun…'; mgRec.hidden = true;
+      fetch('/profile/email/mailgun-status?email=' + encodeURIComponent(v), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var dom = esc(d.domain || v.split('@')[1]);
+          if (d.configured === false) { mgEl.className = 'em-mg-status is-warn'; mgEl.innerHTML = '<i class="bi bi-exclamation-circle"></i> Mailgun is not connected on the server yet.'; return; }
+          if (d.error || d.ok === false) { mgEl.className = 'em-mg-status is-warn'; mgEl.innerHTML = '<i class="bi bi-exclamation-circle"></i> ' + esc(d.error || 'Could not check Mailgun.'); return; }
+          if (d.exists === false) { mgEl.className = 'em-mg-status is-warn'; mgEl.innerHTML = '<i class="bi bi-exclamation-circle"></i> <b>' + dom + '</b> is not added in Mailgun yet. Add it under Mailgun → Sending → Domains, then reload this page to see the DNS records.'; return; }
+          if (d.active) { mgEl.className = 'em-mg-status is-ok'; mgEl.innerHTML = '<i class="bi bi-check-circle-fill"></i> <b>' + dom + '</b> is verified in Mailgun. You can send.'; }
+          else { mgEl.className = 'em-mg-status is-warn'; mgEl.innerHTML = '<i class="bi bi-exclamation-circle"></i> <b>' + dom + '</b> is added in Mailgun but not verified yet (' + esc(d.state) + '). Add the DNS records below.'; }
+          var recs = d.records || [];
+          if (recs.length && !d.active) {
+            mgRows.innerHTML = recs.map(function (x) {
+              return '<tr><td>' + esc(x.type) + '</td><td><code>' + esc(x.name) + '</code></td><td><code class="em-dns-val">' + esc(x.value) + '</code>' + (x.note ? '<small class="em-dns-note">' + esc(x.note) + '</small>' : '') + '</td><td>' + (x.valid ? '<span class="em-ok">✓ found</span>' : '<span class="em-miss">missing</span>') + '</td></tr>';
+            }).join('');
+            mgRec.hidden = false;
+          }
+        })
+        .catch(function () { mgEl.className = 'em-mg-status is-warn'; mgEl.textContent = 'Could not check Mailgun right now.'; });
+    }
+    form.querySelectorAll('input[name=method]').forEach(function (r) { r.addEventListener('change', syncMethod); });
+    email.addEventListener('blur', function () { if (method() === 'mailgun') mgStatus(); });
+    syncMethod();
 
     var test = document.getElementById('emTest'), out = document.getElementById('emTestResult');
     if (test) test.addEventListener('click', function () {

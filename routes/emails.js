@@ -150,7 +150,8 @@ router.post('/companies/:id/emails/send', async (req, res) => {
     if (/\[[^\]\n]{1,80}\]/.test(f.body) && req.body.confirmGaps !== '1') {
       return json(res, 409, { ok: false, code: 'GAPS', error: 'The email still has [placeholders] to fill in. Send anyway?' });
     }
-    const { settings, conn } = await mail.smtpConfig(userId);
+    const settings = await mail.getSettings(userId);
+    if (!settings) return json(res, 400, { ok: false, code: 'NO_MAILBOX', error: 'Set up your email in My Profile first.' });
     const fromAddr = { name: settings.displayName || req.session.user.name || '', email: settings.email };
     // The company's tracking address is always in Cc, so replies are logged
     const tracking = await mail.companyAddress(company);
@@ -162,16 +163,16 @@ router.post('/companies/:id/emails/send', async (req, res) => {
     let references = null;
     if (f.inReplyTo) references = f.inReplyTo;
     try {
-      const sent = await smtp.sendMail(conn, {
-        from: fromAddr, to: smtp.parseAddressList(f.to), cc, subject: f.subject,
+      const sent = await mail.sendAs(userId, {
+        to: smtp.parseAddressList(f.to), cc, subject: f.subject,
         text: f.body.trim() + (settings.signature ? '\n\n' + settings.signature : ''), html: htmlBody(f.body, settings.signature),
         inReplyTo: f.inReplyTo || null, references,
-      });
+      }, { fallbackName: req.session.user.name });
       await mail.markSent(draftId, { messageId: sent.messageId });
       if (!settings.verifiedAt) await mail.markVerified(userId, null);
       json(res, 200, { ok: true, id: draftId, accepted: sent.accepted });
     } catch (sendErr) {
-      const msg = smtp.friendlyError(sendErr, settings.provider);
+      const msg = mail.sendError(sendErr, settings);
       await mail.markFailed(draftId, msg);
       json(res, 502, { ok: false, id: draftId, error: 'Not sent: ' + msg + ' Your email is saved as a draft.' });
     }
