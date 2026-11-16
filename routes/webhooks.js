@@ -79,7 +79,7 @@ router.post('/webhooks/email', upload.any(), async (req, res) => {
   // Locate the target entity (project or task)
   const target = parseRecipient(recipient);
 
-  // Company tracking address (e.g. aaon@mail.samyou.se) → company email log
+  // Company tracking address (e.g. aaon@<EMAIL_DOMAIN>) → company email log
   if (!target) {
     try {
       const company = await mail.companyByAlias(String(recipient || '').split('@')[0]);
