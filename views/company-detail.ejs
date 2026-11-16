@@ -1,224 +1,298 @@
 <%
-  const typeIconMap = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-camera-video', Demo: 'bi-camera-video' };
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function d(v) { if (!v) return null; const x = v instanceof Date ? v : new Date(String(v).length <= 10 ? v + 'T00:00:00' : v); return isNaN(x) ? null : x; }
+  function fmt(v) { const x = d(v); return x ? x.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null; }
+  function fmtShort(v) { const x = d(v); if (!x) return null; return x.toLocaleDateString('en-US', x.getFullYear() === new Date().getFullYear() ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }); }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  function daysTo(v) { const x = d(v); if (!x) return null; x.setHours(0, 0, 0, 0); return Math.round((x - today) / 86400000); }
+  function money(n) { n = Number(n) || 0; return n >= 1e6 ? '$' + (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1e4 ? '$' + Math.round(n / 1e3) + 'K' : '$' + n.toLocaleString('en-US'); }
+  function initial(n) { return (n || '?').trim().charAt(0).toUpperCase(); }
+  const typeIcon = { Call: 'bi-telephone', Email: 'bi-envelope', LinkedIn: 'bi-linkedin', Meeting: 'bi-people', Demo: 'bi-easel' };
+
+  // ── Deals ──────────────────────────────────────────────────────────────────
+  const isClosed = (dl) => String(dl.stage || '').startsWith('Closed');
+  const openDeals = deals.filter(dl => !isClosed(dl));
+  const pipelineValue = openDeals.filter(dl => dl.amountSet !== false).reduce((s, dl) => s + (dl.amount || 0), 0);
+  const noValue = openDeals.filter(dl => dl.amountSet === false).length;
+  const wonDeals = deals.filter(dl => dl.stage === 'Closed Won');
+  const sortedDeals = deals.slice().sort((a, b) => (isClosed(a) - isClosed(b)) || ((b.amount || 0) - (a.amount || 0)));
+  const stageCls = s => ({ 'Closed Won': 'done', 'Closed Lost': 'cancelled', 'Negotiation': 'hold', 'Proposal / Price Quote': 'hold' }[s] || 'active');
+
+  // ── Projects ───────────────────────────────────────────────────────────────
+  const isActiveProject = p => !['Completed', 'Cancelled'].includes(p.status);
+  const activeProjects = projects.filter(isActiveProject);
+  const sortedProjects = projects.slice().sort((a, b) => (isActiveProject(b) - isActiveProject(a)) || String(a.endDate || '9999').localeCompare(String(b.endDate || '9999')));
+  const projCls = s => ({ 'Active': 'active', 'On Hold': 'hold', 'Completed': 'done', 'Cancelled': 'cancelled' }[s] || 'none');
+
+  // ── Activities: last touch + next follow-up ────────────────────────────────
+  const when = a => a.statusDate || a.date || (a.createdAt ? new Date(a.createdAt).toISOString().slice(0, 10) : '');
+  const sortedActs = activities.slice().sort((a, b) => String(when(b)).localeCompare(String(when(a))));
+  const lastAct = sortedActs[0] || null;
+  const daysSince = lastAct ? -daysTo(when(lastAct)) : null;
+  const openActs = activities.filter(a => a.result !== 'Completed');
+  const nextFollow = openActs.filter(a => a.dueDate).sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))[0] || null;
+  const nextDays = nextFollow ? daysTo(nextFollow.dueDate) : null;
+  function dueText(a) {
+    if (a.result === 'Completed') return { text: 'Done', cls: 'is-done' };
+    const n = daysTo(a.dueDate);
+    if (n === null) return { text: '', cls: '' };
+    if (n < 0) return { text: (-n) + 'd overdue', cls: 'is-overdue' };
+    if (n === 0) return { text: 'Due today', cls: 'is-today' };
+    return { text: 'Due ' + fmtShort(a.dueDate), cls: '' };
+  }
+  const ACT_LIMIT = 8;
+
+  const statusCls = { 'Client': 'done', 'Prospect': 'active', 'Partner': 'active', 'Active': 'active', 'Inactive': 'cancelled', 'Planned': 'hold', 'Lead': 'hold' }[company.status] || 'none';
+  const webHost = company.web ? String(company.web).replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
 %>
 
-<div class="pnew-page company-detail-page">
-  <a href="/companies" class="pnew-back-link"><i class="bi bi-arrow-left"></i> All companies</a>
+<div class="pg pj co">
 
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-    <div>
-      <% if (company.status) { %>
-        <div class="pnew-badge"><i class="bi bi-building"></i> <%= company.status %></div>
-      <% } %>
+  <nav class="pj-crumbs" aria-label="Breadcrumb">
+    <a href="/companies">Companies</a>
+    <% if (company.status) { %><i class="bi bi-chevron-right" aria-hidden="true"></i><a href="/companies"><%= company.status %></a><% } %>
+  </nav>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="pj-head">
+    <div class="co-id">
       <% if (company.logo) { %>
-        <img src="<%= company.logo %>" alt="<%= company.name %> logo"
-          style="height: 2.5rem; width: auto; max-width: 120px; object-fit: contain; display: block; margin-bottom: 0.4rem; border-radius: 6px;"
-          onerror="this.replaceWith(document.getElementById('co-logo-placeholder'))">
+        <span class="co-logo"><img src="<%= company.logo %>" alt="" onerror="this.parentNode.classList.add('is-fallback');this.remove();"><span class="co-logo-fb"><%= initial(company.name) %></span></span>
+      <% } else { %>
+        <span class="co-logo is-fallback"><span class="co-logo-fb"><%= initial(company.name) %></span></span>
       <% } %>
-      <span id="co-logo-placeholder" style="display:none;"></span>
-      <h1 class="pnew-hero"><%= company.name %></h1>
-      <p class="pnew-hero-sub"><%= company.industry || 'No industry set' %></p>
-      <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-top:0.25rem;">
-        <% if (company.createdAt) { %>
-          <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
-            Created<% if (company.createdByName) { %> by <strong><%= company.createdByName %></strong><% } %>
-            &nbsp;·&nbsp;<%= new Date(company.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
-          </span>
-        <% } %>
-        <% if (company.updatedAt && company.updatedByName) { %>
-          <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
-            Last edited by <strong><%= company.updatedByName %></strong>
-            &nbsp;·&nbsp;<%= new Date(company.updatedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
-          </span>
-        <% } %>
+      <div class="pj-head-main">
+        <h1 class="pj-title"><%= company.name %></h1>
+        <div class="pj-meta">
+          <% if (company.status) { %><span class="pj-status pj-status-<%= statusCls %>"><span class="pj-dot" aria-hidden="true"></span><%= company.status %></span><% } %>
+          <% if (company.industry) { %><span class="pj-meta-item"><i class="bi bi-tag" aria-hidden="true"></i><%= company.industry %></span><% } %>
+          <% if (webHost) { %><a class="pj-meta-item" href="<%= company.web %>" target="_blank" rel="noopener"><i class="bi bi-globe2" aria-hidden="true"></i><%= webHost %></a><% } %>
+          <% if (company.ownerName) { %><span class="pj-meta-item"><span class="pj-av pj-av-xs" style="background:oklch(0.52 0.18 250)"><%= initial(company.ownerName) %></span><%= company.ownerName %></span><% } %>
+        </div>
       </div>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <a href="/companies/<%= company.id %>/edit" class="pnew-btn-save"><i class="bi bi-pencil-square"></i> Edit</a>
+    <div class="pj-head-actions">
+      <a href="/companies/<%= company.id %>/activities/new" class="pg-btn"><i class="bi bi-journal-plus" aria-hidden="true"></i>Log activity</a>
+      <a href="/companies/<%= company.id %>/edit" class="pg-btn"><i class="bi bi-pencil" aria-hidden="true"></i>Edit</a>
+      <div class="dropdown">
+        <button type="button" class="pg-btn pg-btn-primary" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-plus-lg" aria-hidden="true"></i>New<i class="bi bi-chevron-down tn-caret" aria-hidden="true"></i></button>
+        <ul class="dropdown-menu dropdown-menu-end tn-menu">
+          <li><a class="dropdown-item" href="/companies/<%= company.id %>/projects/new"><i class="bi bi-folder2"></i>Project</a></li>
+          <li><a class="dropdown-item" href="/companies/<%= company.id %>/deals/new"><i class="bi bi-briefcase"></i>Deal</a></li>
+          <li><a class="dropdown-item" href="/companies/<%= company.id %>/contacts/new"><i class="bi bi-person-plus"></i>Contact</a></li>
+          <li><a class="dropdown-item" href="/companies/<%= company.id %>/activities/new"><i class="bi bi-journal-plus"></i>Activity</a></li>
+        </ul>
+      </div>
     </div>
-  </div>
+  </header>
 
-  <div class="pnew-grid">
-
-    <div class="pnew-main">
-
-      <!-- Company Info -->
-      <div class="pnew-summary-card">
-        <div class="pnew-summary-title">Company info</div>
-        <div class="pnew-summary-row"><span>Industry</span><span><%= company.industry || '—' %></span></div>
-        <div class="pnew-summary-row"><span>Status</span><span><%= company.status || '—' %></span></div>
-        <% if (company.web) { %>
-          <div class="pnew-summary-row"><span>Website</span><span><a href="<%= company.web %>" target="_blank" rel="noopener" style="color: var(--crm-accent); text-decoration: none; font-size: 0.8rem; word-break: break-all;"><%= company.web %></a></span></div>
-        <% } %>
-        <% if (company.billingAddress) { %>
-          <div class="pnew-summary-row"><span>Billing</span><span style="font-size:0.8rem;"><%= company.billingAddress %></span></div>
-        <% } %>
-        <% if (company.notes) { %>
-          <div class="pnew-summary-row"><span>Notes</span><span style="font-size:0.8rem;"><%= company.notes %></span></div>
-        <% } %>
-      </div>
-
-      <!-- Contacts -->
-      <div class="pnew-card">
-        <div class="pnew-products-header">
-          <div>
-            <h2 class="pnew-card-title">Contacts</h2>
-            <p class="pnew-card-sub"><%= contacts.length %> linked</p>
-          </div>
-          <a href="/companies/<%= company.id %>/contacts/new" class="pnew-btn-save">Add</a>
-        </div>
-        <div class="pnew-product-list">
-          <% if (!contacts.length) { %>
-            <div class="pnew-product-empty">No contacts linked.</div>
-          <% } %>
-          <% contacts.forEach(p => { %>
-            <a href="/contacts/<%= p.id %>" class="company-contact-row" style="text-decoration: none;">
-              <span class="company-contact-avatar"><%= (p.fullName||'?').trim().charAt(0).toUpperCase() %></span>
-              <span class="company-contact-info">
-                <span class="company-contact-name"><%= p.fullName %></span>
-                <% if (p.title) { %><span class="company-contact-title"><%= p.title %></span><% } %>
-              </span>
-              <span class="company-contact-reach">
-                <% if (p.email) { %><span class="company-contact-email"><%= p.email %></span><% } %>
-                <% if (p.phone) { %><span class="company-contact-phone"><%= p.phone %></span><% } %>
-              </span>
-            </a>
-          <% }) %>
-        </div>
-      </div>
-
-      <!-- Documents -->
-      <% if (attachments && attachments.length) { %>
-      <div class="pnew-card">
-        <h2 class="pnew-card-title">Documents</h2>
-        <div class="pnew-file-list">
-          <% attachments.forEach(f => { %>
-            <div class="pnew-file-row">
-              <i class="bi bi-file-earmark-text"></i>
-              <a href="<%= f.url %>" target="_blank" rel="noopener" class="pnew-file-name" style="text-decoration:none;"><%= f.filename %></a>
-              <% if (f.sizeBytes) { %>
-                <span class="pnew-file-size"><%= (f.sizeBytes / 1024).toFixed(0) %> KB</span>
-              <% } %>
-            </div>
-          <% }) %>
-        </div>
-      </div>
+  <!-- ── Account health strip ───────────────────────────────────────────── -->
+  <section class="pj-strip" aria-label="Account overview">
+    <div class="pj-stat">
+      <div class="pj-stat-label">Open pipeline</div>
+      <div class="pj-stat-value"><%= money(pipelineValue) %></div>
+      <div class="pj-stat-sub"><%= openDeals.length %> open deal<%= openDeals.length === 1 ? '' : 's' %><% if (noValue) { %> &middot; <%= noValue %> without value<% } %><% if (wonDeals.length) { %> &middot; <%= wonDeals.length %> won<% } %></div>
+    </div>
+    <div class="pj-stat">
+      <div class="pj-stat-label">Projects</div>
+      <div class="pj-stat-value"><%= activeProjects.length %><span> active</span></div>
+      <div class="pj-stat-sub"><%= projects.length %> total</div>
+    </div>
+    <div class="pj-stat <%= daysSince !== null && daysSince > 30 ? 'is-alert' : '' %>">
+      <div class="pj-stat-label">Last contact</div>
+      <% if (lastAct) { %>
+        <div class="pj-stat-value pj-stat-small"><%= daysSince <= 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : daysSince + ' days ago' %></div>
+        <a class="pj-stat-sub" href="/activities/<%= lastAct.id %>" title="<%= lastAct.name %>"><%= daysSince > 30 ? 'Going quiet · ' : '' %><%= lastAct.name || '(untitled)' %></a>
+      <% } else { %>
+        <div class="pj-stat-value pj-muted">Never</div><div class="pj-stat-sub">No activity logged yet</div>
       <% } %>
-
     </div>
+    <div class="pj-stat <%= nextDays !== null && nextDays < 0 ? 'is-alert' : '' %>">
+      <div class="pj-stat-label">Next follow-up</div>
+      <% if (nextFollow) { %>
+        <div class="pj-stat-value pj-stat-small pj-stat-due <%= nextDays < 0 ? 'is-overdue' : nextDays === 0 ? 'is-today' : '' %>"><%= nextDays < 0 ? (-nextDays) + 'd overdue' : nextDays === 0 ? 'Today' : fmtShort(nextFollow.dueDate) %></div>
+        <a class="pj-stat-sub" href="/activities/<%= nextFollow.id %>" title="<%= nextFollow.name %>"><%= nextFollow.name || '(untitled)' %></a>
+      <% } else { %>
+        <div class="pj-stat-value pj-muted">None</div><div class="pj-stat-sub"><a href="/companies/<%= company.id %>/activities/new" class="pj-link-btn">Schedule one</a></div>
+      <% } %>
+    </div>
+  </section>
 
-    <div class="pnew-aside">
+  <div class="pj-grid">
+    <!-- ── Main column ─────────────────────────────────────────────────── -->
+    <div class="pj-main">
 
       <!-- Projects -->
-      <div class="pnew-card">
-        <div class="pnew-products-header">
+      <section class="pj-card" aria-labelledby="coProjTitle">
+        <div class="pj-card-head">
           <div>
-            <h2 class="pnew-card-title">Projects</h2>
-            <p class="pnew-card-sub"><%= projects.length %> linked</p>
+            <h2 class="pj-card-title" id="coProjTitle">Projects <span class="pj-n"><%= projects.length %></span></h2>
+            <p class="pj-card-sub"><%= activeProjects.length %> active</p>
           </div>
-          <a href="/companies/<%= company.id %>/projects/new" class="pnew-btn-save">New</a>
+          <div class="pj-card-actions"><a href="/companies/<%= company.id %>/projects/new" class="pj-link-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i>New project</a></div>
         </div>
-        <div class="pnew-product-list">
-          <% if (!projects.length) { %>
-            <div class="pnew-product-empty">No projects yet.</div>
-          <% } %>
-          <% projects.forEach(p => { %>
-            <a href="/projects/<%= p.id %>" class="pnew-product-row" style="text-decoration: none;">
-              <span class="pnew-product-name"><%= p.name %></span>
-              <span class="pnew-product-sub"><%= p.createdAt ? new Date(p.createdAt).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : '—' %></span>
-            </a>
-          <% }) %>
+        <% if (!projects.length) { %>
+          <div class="pj-empty pj-empty-sm"><div>No projects with <%= company.name %> yet.</div></div>
+        <% } else { %>
+          <ul class="co-list">
+            <% sortedProjects.forEach(p => { const end = d(p.endDate); const n = daysTo(p.endDate); %>
+              <li class="co-row <%= isActiveProject(p) ? '' : 'is-muted' %>">
+                <span class="pj-status pj-status-<%= projCls(p.status) %> co-row-status"><span class="pj-dot" aria-hidden="true"></span><%= p.status || 'No status' %></span>
+                <a href="/projects/<%= p.id %>" class="co-row-name" title="<%= p.name %>"><%= p.name %></a>
+                <span class="co-row-meta <%= isActiveProject(p) && n !== null && n < 0 ? 'pj-red' : '' %>">
+                  <% if (end) { %><%= isActiveProject(p) && n < 0 ? 'Ended ' : 'Ends ' %><%= fmtShort(p.endDate) %><% } else if (p.startDate) { %>Started <%= fmtShort(p.startDate) %><% } else { %><span class="pj-muted">No dates</span><% } %>
+                </span>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </section>
+
+      <!-- Activity -->
+      <section class="pj-card" aria-labelledby="coActTitle">
+        <div class="pj-card-head">
+          <div>
+            <h2 class="pj-card-title" id="coActTitle">Activity <span class="pj-n"><%= activities.length %></span></h2>
+            <p class="pj-card-sub"><%= openActs.length %> open follow-up<%= openActs.length === 1 ? '' : 's' %></p>
+          </div>
+          <div class="pj-card-actions">
+            <% if (activities.length > ACT_LIMIT) { %><a href="/activities?tab=all&company=<%= company.id %>" class="pj-link-btn">View all</a><% } %>
+            <a href="/companies/<%= company.id %>/activities/new" class="pj-link-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i>Log activity</a>
+          </div>
         </div>
-      </div>
+        <% if (!activities.length) { %>
+          <div class="pj-empty pj-empty-sm"><div>No calls, emails or meetings logged yet.</div></div>
+        <% } else { %>
+          <ul class="co-list co-acts">
+            <% sortedActs.slice(0, ACT_LIMIT).forEach(a => { const dt = dueText(a); %>
+              <li class="co-row">
+                <span class="co-act-icon"><i class="bi <%= typeIcon[a.type] || 'bi-clock-history' %>" aria-hidden="true"></i></span>
+                <span class="co-act-main">
+                  <a href="/activities/<%= a.id %>" class="co-row-name" title="<%= a.name %>"><%= a.name || '(untitled)' %></a>
+                  <span class="co-act-sub"><%= [a.type, a.result].filter(Boolean).join(' · ') || 'No outcome yet' %></span>
+                </span>
+                <span class="co-act-right">
+                  <span class="co-act-date"><%= fmtShort(when(a)) || '' %></span>
+                  <% if (dt.text) { %><span class="pj-task-due <%= dt.cls %>"><%= dt.text %></span><% } %>
+                </span>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </section>
 
       <!-- Deals -->
-      <div class="pnew-card">
-        <div class="pnew-products-header">
+      <section class="pj-card" aria-labelledby="coDealTitle">
+        <div class="pj-card-head">
           <div>
-            <h2 class="pnew-card-title">Deals</h2>
-            <p class="pnew-card-sub"><%= deals.length %> total</p>
+            <h2 class="pj-card-title" id="coDealTitle">Deals <span class="pj-n"><%= deals.length %></span></h2>
+            <p class="pj-card-sub"><%= money(pipelineValue) %> open<% if (wonDeals.length) { %> &middot; <%= money(wonDeals.reduce((s, x) => s + (x.amount || 0), 0)) %> won<% } %></p>
           </div>
-          <a href="/companies/<%= company.id %>/deals/new" class="pnew-btn-save">New</a>
+          <div class="pj-card-actions"><a href="/companies/<%= company.id %>/deals/new" class="pj-link-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i>New deal</a></div>
         </div>
-        <div class="pnew-product-list">
-          <% if (!deals.length) { %>
-            <div class="pnew-product-empty">No deals yet.</div>
-          <% } %>
-          <% deals.forEach(d => { %>
-            <a href="/deals/<%= d.id %>" class="pnew-product-row" style="text-decoration: none;">
-              <span class="pnew-product-name">
-                <i class="bi bi-currency-dollar me-1" style="color: var(--crm-success); opacity: 0.8;"></i><%= d.name %>
-                <% if (d.stage) { %><span class="d-block"><span class="badge stage-badge stage-<%= (d.stage||'').replace(/\s+/g,'') %>"><%= d.stage %></span></span><% } %>
-              </span>
-              <span class="fw-semibold" style="color: var(--crm-success); font-size: 0.88rem;">$<%= (d.amount||0).toLocaleString() %></span>
-            </a>
-          <% }) %>
-        </div>
-      </div>
-
-      <!-- Activities -->
-      <div class="pnew-card">
-        <div class="pnew-products-header">
-          <div>
-            <h2 class="pnew-card-title">Activities</h2>
-            <p class="pnew-card-sub"><%= activities.length %> logged</p>
-          </div>
-          <a href="/companies/<%= company.id %>/activities/new" class="pnew-btn-save">New</a>
-        </div>
-        <div class="pnew-product-list">
-          <% if (!activities.length) { %>
-            <div class="pnew-product-empty">No activity logged yet.</div>
-          <% } %>
-          <% activities.forEach(a => { %>
-            <a href="/activities/<%= a.id %>" class="pnew-product-row" style="text-decoration: none;">
-              <span class="pnew-product-name"><%= a.name || '(untitled)' %></span>
-              <span class="pnew-product-sub"><%= a.statusDate || a.date || '—' %></span>
-            </a>
-          <% }) %>
-        </div>
-      </div>
-
+        <% if (!deals.length) { %>
+          <div class="pj-empty pj-empty-sm"><div>No deals yet.</div></div>
+        <% } else { %>
+          <ul class="co-list">
+            <% sortedDeals.forEach(dl => { %>
+              <li class="co-row <%= isClosed(dl) ? 'is-muted' : '' %>">
+                <span class="pj-status pj-status-<%= stageCls(dl.stage) %> co-row-status" title="<%= dl.stage || '' %>"><span class="pj-dot" aria-hidden="true"></span><%= ({ 'Proposal / Price Quote': 'Proposal', 'Needs Analysis': 'Needs analysis' })[dl.stage] || dl.stage || 'No stage' %></span>
+                <a href="/deals/<%= dl.id %>" class="co-row-name" title="<%= dl.name %>"><%= dl.name %></a>
+                <span class="co-row-amount"><%= dl.amountSet === false ? '' : '$' + (dl.amount || 0).toLocaleString('en-US') %><% if (dl.amountSet === false) { %><span class="pj-muted">No value</span><% } %></span>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </section>
     </div>
+
+    <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
+    <aside class="pj-side">
+
+      <section class="pj-card pj-side-card" aria-labelledby="coPeopleTitle">
+        <div class="co-side-head">
+          <h2 class="pj-side-title" id="coPeopleTitle">Contacts <span class="pj-n"><%= contacts.length %></span></h2>
+          <a href="/companies/<%= company.id %>/contacts/new" class="pj-link-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i>Add</a>
+        </div>
+        <% if (!contacts.length) { %>
+          <p class="pj-hint">No contacts yet. Add the people you work with at <%= company.name %>.</p>
+        <% } else { %>
+          <ul class="co-contacts">
+            <% contacts.forEach(p => { %>
+              <li class="co-contact <%= p.status === 'Left' ? 'is-left' : '' %>">
+                <span class="pj-av" style="background:oklch(0.55 0.04 260)"><%= initial(p.fullName) %></span>
+                <span class="co-contact-main">
+                  <a href="/contacts/<%= p.id %>" class="co-contact-name"><%= p.fullName %><% if (p.status === 'Left') { %> <span class="pj-muted">(left)</span><% } %></a>
+                  <% if (p.title) { %><span class="co-contact-title" title="<%= p.title %>"><%= p.title %></span><% } %>
+                  <span class="co-contact-reach">
+                    <% if (p.email) { %><a href="mailto:<%= p.email %>" title="<%= p.email %>"><i class="bi bi-envelope" aria-hidden="true"></i><span><%= p.email %></span></a><% } %>
+                    <% if (p.phone) { %><a href="tel:<%= String(p.phone).replace(/[^\d+]/g, '') %>"><i class="bi bi-telephone" aria-hidden="true"></i><span><%= p.phone %></span></a><% } %>
+                  </span>
+                </span>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </section>
+
+      <section class="pj-card pj-side-card" aria-labelledby="coDetailsTitle">
+        <h2 class="pj-side-title" id="coDetailsTitle">Details</h2>
+        <dl class="pj-dl">
+          <dt>Industry</dt><dd><%= company.industry || '—' %></dd>
+          <dt>Status</dt><dd><%= company.status || '—' %></dd>
+          <dt>Website</dt><dd><% if (company.web) { %><a href="<%= company.web %>" target="_blank" rel="noopener"><%= webHost %></a><% } else { %>—<% } %></dd>
+          <dt>Billing</dt><dd><%= company.billingAddress || '—' %></dd>
+          <% if (company.ownerName) { %><dt>Owner</dt><dd><%= company.ownerName %></dd><% } %>
+          <% if (company.groupName) { %><dt>Team</dt><dd><%= company.groupName %></dd><% } %>
+          <dt>Created</dt><dd><%= fmt(company.createdAt) || '—' %><% if (company.createdByName) { %> <span class="pj-muted">by <%= company.createdByName %></span><% } %></dd>
+          <% if (company.updatedAt && company.updatedByName) { %><dt>Last edited</dt><dd><%= fmt(company.updatedAt) %> <span class="pj-muted">by <%= company.updatedByName %></span></dd><% } %>
+        </dl>
+      </section>
+
+      <% if (company.notes) { %>
+        <section class="pj-card pj-side-card" aria-labelledby="coNotesTitle">
+          <h2 class="pj-side-title" id="coNotesTitle">Notes</h2>
+          <div class="co-notes"><%= company.notes %></div>
+        </section>
+      <% } %>
+
+      <section class="pj-card pj-side-card" aria-labelledby="coFilesTitle">
+        <h2 class="pj-side-title" id="coFilesTitle">Documents <span class="pj-n"><%= (attachments || []).length %></span></h2>
+        <% if (attachments && attachments.length) { %>
+          <ul class="pj-files">
+            <% attachments.forEach(f => {
+                 const ext = (f.filename || '').split('.').pop().toLowerCase();
+                 const ic = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel', csv: 'bi-file-earmark-excel', png: 'bi-file-earmark-image', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image', gif: 'bi-file-earmark-image', zip: 'bi-file-earmark-zip' }[ext] || 'bi-file-earmark'; %>
+              <li><a href="<%= f.url %>" target="_blank" rel="noopener"><i class="bi <%= ic %>" aria-hidden="true"></i><span><%= f.filename %></span><% if (f.sizeBytes) { %><span class="pj-muted co-file-size"><%= f.sizeBytes >= 1048576 ? (f.sizeBytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.sizeBytes / 1024)) + ' KB' %></span><% } %></a></li>
+            <% }) %>
+          </ul>
+        <% } %>
+        <form action="/companies/<%= company.id %>/attachments" method="POST" enctype="multipart/form-data" class="pj-upload" id="coUpload">
+          <input type="file" name="attachments" id="coAttachInput" multiple required hidden>
+          <label for="coAttachInput" class="pj-drop" id="coDrop">
+            <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+            <span id="coAttachLabel"><strong>Drop files</strong> or click to choose</span>
+          </label>
+          <button type="submit" class="pg-btn pg-btn-primary" id="coUploadBtn" hidden><i class="bi bi-upload" aria-hidden="true"></i>Upload</button>
+        </form>
+      </section>
+    </aside>
   </div>
 </div>
 
-<style>
-.company-project-block { display: flex; flex-direction: column; }
-.company-project-activities { padding: 0 0 0.25rem 1rem; display: flex; flex-direction: column; gap: 0; border-left: 2px solid var(--crm-border); margin: 0 0 0.25rem 1.2rem; }
-.company-activity-sub { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem; color: var(--crm-muted-fg); border-radius: 6px; transition: background 0.15s; }
-.company-activity-sub:hover { background: var(--crm-muted); color: var(--crm-fg); }
-.company-sub-indent { font-size: 0.7rem; opacity: 0.4; flex-shrink: 0; }
-.company-sub-name { flex: 1; }
-.company-sub-date { font-size: 0.75rem; opacity: 0.6; white-space: nowrap; }
-
-/* Wide contact rows */
-.company-contact-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 8px;
-  transition: background 0.15s;
-  color: var(--crm-fg);
-}
-.company-contact-row:hover { background: var(--crm-muted); }
-.company-contact-avatar {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: var(--crm-muted);
-  color: var(--crm-muted-fg);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.82rem; font-weight: 600;
-  flex-shrink: 0;
-  border: 1px solid var(--crm-border);
-}
-.company-contact-info {
-  display: flex; flex-direction: column; flex: 1; min-width: 0;
-}
-.company-contact-name { font-size: 0.88rem; font-weight: 600; color: var(--crm-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.company-contact-title { font-size: 0.75rem; color: var(--crm-muted-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.company-contact-reach {
-  display: flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; flex-shrink: 0;
-}
-.company-contact-email { font-size: 0.78rem; color: var(--crm-accent); }
-.company-contact-phone { font-size: 0.75rem; color: var(--crm-muted-fg); }
-</style>
+<script>
+(function () {
+  var input = document.getElementById('coAttachInput'), label = document.getElementById('coAttachLabel');
+  var drop = document.getElementById('coDrop'), btn = document.getElementById('coUploadBtn');
+  if (!input) return;
+  function show() {
+    var n = input.files ? input.files.length : 0;
+    label.innerHTML = n ? '<strong>' + n + ' file' + (n === 1 ? '' : 's') + '</strong> ready to upload' : '<strong>Drop files</strong> or click to choose';
+    btn.hidden = !n; drop.classList.toggle('has-files', !!n);
+  }
+  input.addEventListener('change', show);
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('is-over'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function () { drop.classList.remove('is-over'); }); });
+  drop.addEventListener('drop', function (e) { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) { input.files = e.dataTransfer.files; show(); } });
+})();
+</script>
