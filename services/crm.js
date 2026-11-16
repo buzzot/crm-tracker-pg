@@ -1419,6 +1419,7 @@ function mapComment(row) {
       to: manual.to || null,
       loggedBy: manual.by || null,
       loggedById: manual.byId || null,
+      via: manual.via || null,
       editedBy: manual.editedBy || null,
       editedAt: manual.editedAt || null,
       ai: manual.ai && typeof manual.ai === 'object' ? manual.ai : null,
@@ -1446,7 +1447,7 @@ function mapComment(row) {
 
 // Log an email / WeChat / other message by hand (copy-pasted from the mail client or WeChat).
 // Stored as a comment so it appears in the same timeline, at the time the message was sent.
-async function addManualMessage({ entityType, entityId, channel, direction, from, to, subject, body, sentAt, loggedById, loggedByName, files }) {
+async function addManualMessage({ entityType, entityId, channel, direction, from, to, subject, body, sentAt, loggedById, loggedByName, files, via }) {
   const ch = ['email', 'wechat', 'other'].includes(channel) ? channel : 'other';
   const dir = direction === 'out' ? 'out' : 'in';
   const text = String(body || '').trim();
@@ -1459,6 +1460,7 @@ async function addManualMessage({ entityType, entityId, channel, direction, from
   if (when.getTime() > Date.now() + 5 * 60 * 1000) throw new Error('The message date is in the future.');
 
   const meta = { v: 1, ch, dir, to: String(to || '').trim().slice(0, 300) || null, by: loggedByName || null, byId: loggedById || null };
+  if (via) meta.via = String(via).slice(0, 20);
   const type = ch === 'email' ? 'email' : ch === 'wechat' ? 'wechat' : 'message';
   const r = await query(
     `INSERT INTO comments (entity_type, entity_id, content, author_id, author_name, type, email_subject, link, created_at)

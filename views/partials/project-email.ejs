@@ -1,0 +1,177 @@
+<!-- Email composer: continue this project's conversation (AI draft → review → send) -->
+<dialog class="pe-dialog" id="peDialog" aria-labelledby="peTitle">
+  <form class="pe-in" id="peForm" autocomplete="off">
+    <header class="pe-head">
+      <div>
+        <h2 id="peTitle">Email · <%= project.name %></h2>
+        <p class="pe-from" id="peFrom">Loading…</p>
+      </div>
+      <button type="button" class="pe-x" data-pe-close aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    </header>
+
+    <div class="pe-body">
+      <div class="pe-alert" id="peAlert" hidden></div>
+
+      <div class="pe-row">
+        <label for="peTo">To</label>
+        <div class="pe-field">
+          <input type="text" id="peTo" name="to" placeholder="name@company.com, …" list="peContacts" required>
+          <datalist id="peContacts"></datalist>
+          <div class="pe-chips" id="peChips"></div>
+        </div>
+      </div>
+      <div class="pe-row">
+        <label for="peCc">Cc</label>
+        <div class="pe-field">
+          <input type="text" id="peCc" name="cc" placeholder="Optional">
+          <small class="pe-hint" id="peTrack"></small>
+        </div>
+      </div>
+      <div class="pe-row">
+        <label for="peSubject">Subject</label>
+        <div class="pe-field"><input type="text" id="peSubject" name="subject" required></div>
+      </div>
+
+      <div class="pe-ai" id="peAiBox">
+        <div class="pe-ai-top">
+          <span class="pe-ai-label"><i class="bi bi-stars"></i>AI draft</span>
+          <span class="pe-ai-ctx" id="peCtx"></span>
+        </div>
+        <div class="pe-ai-controls">
+          <input type="text" id="peInstr" placeholder="Optional: what should this email say? e.g. confirm samples ship next week, ask for the BOM">
+          <select id="peTone" aria-label="Tone">
+            <option value="">Professional</option>
+            <option value="friendly and brief">Friendly &amp; brief</option>
+            <option value="formal">Formal</option>
+          </select>
+          <select id="peLang" aria-label="Language"><option value="en">English</option><option value="zh">中文</option></select>
+          <button type="button" class="pg-btn" id="peDraft"><i class="bi bi-stars"></i><span>Draft</span></button>
+        </div>
+        <div class="pe-insight" id="peInsight" hidden></div>
+      </div>
+
+      <div class="pe-editor">
+        <textarea id="peBody" name="body" rows="12" placeholder="Write your email, or click Draft to let AI write it from the conversation."></textarea>
+        <div class="pe-loading" id="peLoading" hidden><span class="pe-spin"></span>Reading the conversation and writing a draft…</div>
+      </div>
+      <p class="pe-sig" id="peSig" hidden></p>
+    </div>
+
+    <footer class="pe-foot">
+      <span class="pe-status" id="peStatus" role="status" aria-live="polite"></span>
+      <button type="button" class="pg-btn" id="peRevise" hidden title="Ask AI to improve the text you edited"><i class="bi bi-magic"></i>Improve</button>
+      <button type="button" class="pg-btn" data-pe-close>Cancel</button>
+      <button type="submit" class="pg-btn pg-btn-primary" id="peSend"><i class="bi bi-send"></i>Send</button>
+    </footer>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  var PID = <%- JSON.stringify(project.id) %>;
+  var dlg = document.getElementById('peDialog'); if (!dlg) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var ctx = null, aiMeta = null, drafted = false;
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function alertMsg(html, kind) { var a = $('peAlert'); if (!html) { a.hidden = true; return; } a.className = 'pe-alert' + (kind ? ' is-' + kind : ''); a.innerHTML = html; a.hidden = false; }
+  function status(t, kind) { var s = $('peStatus'); s.textContent = t || ''; s.className = 'pe-status' + (kind ? ' is-' + kind : ''); }
+  function api(url, body) {
+    return fetch(url, { method: body ? 'POST' : 'GET', credentials: 'same-origin',
+      headers: body ? { 'Content-Type': 'application/json', Accept: 'application/json' } : { Accept: 'application/json' },
+      body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { j._status = r.status; if (!r.ok || !j.ok) throw j; return j; }); });
+  }
+  function busy(on) {
+    $('peLoading').hidden = !on; $('peBody').disabled = on; $('peDraft').disabled = on; $('peRevise').disabled = on; $('peSend').disabled = on;
+  }
+
+  function renderChips() {
+    var wrap = $('peChips'), cur = $('peTo').value.toLowerCase();
+    var list = (ctx.contacts || []).filter(function (c) { return c.email && cur.indexOf(c.email.toLowerCase()) === -1; }).slice(0, 6);
+    wrap.innerHTML = list.map(function (c) { return '<button type="button" class="pe-chip" data-email="' + esc(c.email) + '" data-name="' + esc(c.name) + '" title="' + esc(c.title || c.email) + '">+ ' + esc(c.name || c.email) + '</button>'; }).join('');
+  }
+  $('peChips').addEventListener('click', function (e) {
+    var b = e.target.closest('.pe-chip'); if (!b) return;
+    var v = $('peTo').value.trim().replace(/,\s*$/, '');
+    $('peTo').value = (v ? v + ', ' : '') + (b.dataset.name ? b.dataset.name + ' <' + b.dataset.email + '>' : b.dataset.email);
+    renderChips();
+  });
+  $('peTo').addEventListener('input', renderChips);
+
+  function draft(revise) {
+    if (!ctx || !ctx.aiEnabled) return;
+    alertMsg(''); busy(true); status('');
+    api('/projects/' + PID + '/email-draft-ai', {
+      to: $('peTo').value, instructions: $('peInstr').value, tone: $('peTone').value, language: $('peLang').value,
+      revise: !!revise, body: $('peBody').value,
+    }).then(function (d) {
+      if (!revise || !$('peSubject').value) $('peSubject').value = $('peSubject').value || d.subject;
+      $('peBody').value = d.body; drafted = true; aiMeta = { stage: d.stage, gaps: d.gaps };
+      var stageName = { first_contact: 'First contact', reply: 'They are waiting for our answer', follow_up: 'Follow-up: we wrote last', re_engage: 'Re-engaging after silence', ongoing: 'Ongoing conversation' }[d.stage] || d.stage;
+      var html = '<b>' + esc(stageName) + '</b>' + (d.stageReason ? ' · ' + esc(d.stageReason) : '');
+      if (d.gaps && d.gaps.length) html += '<div class="pe-gaps"><i class="bi bi-exclamation-triangle"></i>Fill in before sending: ' + d.gaps.map(esc).join(' · ') + '</div>';
+      $('peInsight').innerHTML = html; $('peInsight').hidden = false;
+      $('peRevise').hidden = false; $('peDraft').querySelector('span').textContent = 'Redraft';
+      highlightGaps();
+    }).catch(function (e) {
+      alertMsg(esc((e && e.error) || 'Could not write a draft. Try again.'), 'error');
+    }).then(function () { busy(false); $('peBody').focus(); });
+  }
+  function highlightGaps() {
+    var n = ($('peBody').value.match(/\[[^\]\n]{1,80}\]/g) || []).length;
+    status(n ? n + ' placeholder' + (n === 1 ? '' : 's') + ' to fill in [like this]' : '', n ? 'warn' : '');
+  }
+  $('peBody').addEventListener('input', highlightGaps);
+  $('peDraft').addEventListener('click', function () { draft(false); });
+  $('peRevise').addEventListener('click', function () { draft(true); });
+
+  function open() {
+    alertMsg(''); status(''); $('peInsight').hidden = true; $('peRevise').hidden = true; drafted = false; aiMeta = null;
+    $('peDraft').querySelector('span').textContent = 'Draft';
+    if (!dlg.open) dlg.showModal();
+    $('peFrom').textContent = 'Loading…';
+    api('/projects/' + PID + '/email-context').then(function (c) {
+      ctx = c;
+      if (!c.mailbox) {
+        $('peFrom').innerHTML = 'No sending address yet';
+        alertMsg('Set up your email in <a href="/profile#email">My Profile → Email</a> before sending. You can still draft here.', 'warn');
+      } else {
+        $('peFrom').textContent = 'From ' + (c.mailbox.name ? c.mailbox.name + ' <' + c.mailbox.email + '>' : c.mailbox.email);
+        if (c.mailbox.signature) { $('peSig').textContent = c.mailbox.signature; $('peSig').hidden = false; }
+      }
+      $('peContacts').innerHTML = (c.contacts || []).filter(function (x) { return x.email; }).map(function (x) { return '<option value="' + esc(x.name + ' <' + x.email + '>') + '">'; }).join('');
+      if (!$('peTo').value) $('peTo').value = (c.suggested || []).map(function (x) { return x.name ? x.name + ' <' + x.email + '>' : x.email; }).join(', ');
+      if (!$('peSubject').value) $('peSubject').value = c.subject || '';
+      $('peTrack').textContent = 'Replies come back to this project: ' + c.projectAddress + ' is added in Cc automatically.';
+      $('peCtx').textContent = c.historyCount ? 'Uses ' + c.historyCount + ' message' + (c.historyCount === 1 ? '' : 's') + (c.noteCount ? ' and ' + c.noteCount + ' internal note' + (c.noteCount === 1 ? '' : 's') : '') + ' from this project' : 'No messages yet: AI will write an opening email';
+      renderChips();
+      if (!c.aiEnabled) { $('peAiBox').hidden = true; }
+      else if (!$('peBody').value.trim()) draft(false);
+    }).catch(function (e) { alertMsg(esc((e && e.error) || 'Could not load email details.'), 'error'); });
+  }
+  document.addEventListener('click', function (e) { if (e.target.closest('[data-pe-open]')) { e.preventDefault(); open(); } });
+  dlg.querySelectorAll('[data-pe-close]').forEach(function (b) { b.addEventListener('click', function () { dlg.close(); }); });
+  dlg.addEventListener('cancel', function (e) { if ($('peLoading').hidden === false) e.preventDefault(); });
+
+  function send(confirmGaps) {
+    alertMsg(''); $('peSend').disabled = true; status('Sending…');
+    api('/projects/' + PID + '/email-send', {
+      to: $('peTo').value, cc: $('peCc').value, subject: $('peSubject').value, body: $('peBody').value,
+      aiMeta: aiMeta, confirmGaps: confirmGaps ? '1' : '',
+    }).then(function () {
+      status('Sent ✓', 'ok');
+      $('peBody').value = ''; $('peInstr').value = '';
+      setTimeout(function () { location.href = location.pathname + '#comments'; location.reload(); }, 700);
+    }).catch(function (e) {
+      $('peSend').disabled = false; status('');
+      if (e && e.code === 'GAPS') {
+        if (confirm(e.error)) return send(true);
+        return status('Fill in the [placeholders], then send.', 'warn');
+      }
+      if (e && e.code === 'NO_MAILBOX') return alertMsg('Set up your email in <a href="/profile#email">My Profile → Email</a> first. Your text is still here.', 'warn');
+      alertMsg(esc((e && e.error) || 'Could not send the email.'), 'error');
+    });
+  }
+  $('peForm').addEventListener('submit', function (e) { e.preventDefault(); send(false); });
+})();
+</script>

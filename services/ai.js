@@ -468,8 +468,9 @@ Decide the conversation stage from the history: first_contact (no prior emails w
 Language: ${ctx.language === 'zh' ? 'Simplified Chinese (keep product names and part numbers as written)' : 'English'}. Tone: ${ctx.tone || 'professional and warm'}.
 Return the result with the submit_draft tool.`;
 
-  const hist = (ctx.history || []).slice(-12).map((m) =>
-    `[${new Date(m.sentAt || m.createdAt).toISOString().slice(0, 10)}] ${m.direction === 'in' ? 'THEM' : 'US'} | from: ${m.from} | to: ${m.to}\nSubject: ${m.subject}\n${clip(m.body, 1500)}`).join('\n\n---\n\n');
+  const who = (m) => (m.direction === 'in' ? 'THEM' : m.direction === 'note' ? 'INTERNAL NOTE (context only, never quote)' : 'US');
+  const hist = (ctx.history || []).slice(-(ctx.historyLimit || 12)).map((m) =>
+    `[${new Date(m.sentAt || m.createdAt).toISOString().slice(0, 10)}] ${who(m)}${m.channel ? ' via ' + m.channel : ''} | from: ${m.from || ''}${m.to ? ' | to: ' + m.to : ''}${m.subject ? '\nSubject: ' + m.subject : ''}\n${clip(m.body, 1500)}`).join('\n\n---\n\n');
   const research = (ctx.research || []).map((r) => `#${r.id} ${r.title}${r.detail ? ' — ' + r.detail : ''} (${r.source}${r.date ? ', ' + r.date : ''})`).join('\n');
   const user = `GOAL: ${GOALS[ctx.goal] || GOALS.introduce}
 USER INSTRUCTIONS: ${ctx.instructions ? clip(ctx.instructions, 2000) : '(none)'}
@@ -480,7 +481,7 @@ COMPANY: ${ctx.company.name}${ctx.company.industry ? ' | industry: ' + ctx.compa
 OPEN DEALS: ${(ctx.deals || []).map((d) => `${d.name} [${d.stage}${d.amountSet !== false && d.amount ? ', $' + d.amount : ''}]`).join('; ') || 'none'}
 PROJECTS: ${(ctx.projects || []).map((p) => `${p.name} [${p.status || 'no status'}]${(p.products || []).length ? ' products: ' + p.products.map((x) => x.name).join(', ') : ''}`).join('; ') || 'none'}
 RECENT ACTIVITY: ${(ctx.activities || []).slice(0, 6).map((a) => `${a.statusDate || a.date || ''} ${a.type || ''}: ${a.name}${a.result ? ' (' + a.result + ')' : ''}`).join('; ') || 'none'}
-${ctx.replyTo ? 'REPLYING TO THIS THREAD (latest last).\n' : ''}EMAIL HISTORY (oldest first):
+${ctx.projectFocus ? 'THIS EMAIL CONTINUES THE CONVERSATION OF PROJECT: ' + ctx.projectFocus + '. Answer open questions from THEM, move the project to its next step, and keep it specific to this project.\n' : ''}${ctx.replyTo ? 'REPLYING TO THIS THREAD (latest last).\n' : ''}CONVERSATION HISTORY (oldest first; emails, WeChat and internal notes):
 ${hist || '(no previous emails)'}
 ${research ? '\nSELECTED RESEARCH:\n' + research : ''}`;
 

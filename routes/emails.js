@@ -190,4 +190,159 @@ router.get('/companies/:id/email-thread', async (req, res) => {
   } catch (e) { fail(res, e, 'Could not load the conversation.'); }
 });
 
+// ════ Project emails: continue the project's conversation by email ════════════
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const trackingDomain = () => process.env.EMAIL_DOMAIN || 'mg.samyoucrm.com';
+const projectAddress = (id) => `project-${id}@${trackingDomain()}`;
+
+async function projectFor(req, id) {
+  const visible = await crm.listProjects(req.session.user);
+  if (!visible.some((p) => p.id === id)) { const e = new Error('Project not found.'); e.status = 404; throw e; }
+  const project = await crm.getProjectDetail(id);
+  if (!project || !project.name) { const e = new Error('Project not found.'); e.status = 404; throw e; }
+  return project;
+}
+
+// Conversation → history entries for the AI (oldest first)
+function projectHistory(project) {
+  return (project.comments || []).slice().sort((a, b) => new Date(a.postedAt) - new Date(b.postedAt)).map((c) => {
+    const ai = c.manual && c.manual.ai;
+    const body = (ai && ai.text) || c.comment || '';
+    if (c.manual) return { direction: c.manual.direction, channel: c.manual.channel, from: c.author, to: c.manual.to || '', subject: c.emailSubject || '', body, sentAt: c.postedAt };
+    if (c.type === 'email') return { direction: 'in', channel: 'email', from: c.author, to: '', subject: c.emailSubject || '', body, sentAt: c.postedAt };
+    return { direction: 'note', from: c.author, body, sentAt: c.postedAt };
+  }).filter((m) => String(m.body).trim());
+}
+
+// Who to write to: people from the latest external messages, matched to company contacts
+function suggestRecipients(project, contacts, ownEmails) {
+  const own = new Set(ownEmails.map((e) => String(e || '').toLowerCase()));
+  const tracking = trackingDomain().toLowerCase();
+  const out = [], seen = new Set();
+  const add = (email, name) => {
+    const e = String(email || '').toLowerCase();
+    if (!e || seen.has(e) || own.has(e) || e.endsWith('@' + tracking) || /samyou|adentech/i.test(e.split('@')[1] || '')) return;
+    seen.add(e);
+    const c = contacts.find((x) => (x.email || '').toLowerCase() === e);
+    out.push({ email: e, name: (c && c.name) || name || '' });
+  };
+  const msgs = (project.comments || []).filter((c) => c.manual || c.type === 'email').sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
+  for (const c of msgs.slice(0, 6)) {
+    const dirIn = c.manual ? c.manual.direction === 'in' : true;
+    const text = dirIn ? String(c.author || '') : String((c.manual && c.manual.to) || '');
+    (text.match(EMAIL_RE) || []).forEach((e) => add(e));
+    // Names without emails ("Will, Karel") → match contacts by name
+    if (!(text.match(EMAIL_RE) || []).length) {
+      text.split(/[,;&]| and /i).map((x) => x.trim().toLowerCase()).filter(Boolean).forEach((n) => {
+        const c2 = contacts.find((x) => x.email && x.name && (x.name.toLowerCase() === n || x.name.toLowerCase().split(' ')[0] === n));
+        if (c2) add(c2.email, c2.name);
+      });
+    }
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+router.get('/projects/:id/email-context', async (req, res) => {
+  try {
+    const project = await projectFor(req, req.params.id);
+    const company = project.companies && project.companies[0];
+    const [detail, settings] = await Promise.all([
+      company ? crm.getCompanyDetail(company.id) : Promise.resolve(null),
+      mail.getSettings(req.session.user.id),
+    ]);
+    const contacts = ((detail && detail.contacts) || []).filter((c) => c.status !== 'Left').map((c) => ({ id: c.id, name: c.fullName, email: c.email, title: c.title }));
+    const lastSubject = (project.comments || []).filter((c) => c.emailSubject).sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt))[0];
+    let subject = lastSubject ? lastSubject.emailSubject : project.name;
+    if (lastSubject && !/^(re|回复)\s*[:：]/i.test(subject)) subject = 'Re: ' + subject;
+    const history = projectHistory(project);
+    json(res, 200, {
+      ok: true, aiEnabled: ai.isConfigured(),
+      project: { id: project.id, name: project.name, company: company ? { id: company.id, name: company.name } : null },
+      mailbox: settings ? { email: settings.email, name: settings.displayName, verified: !!settings.verifiedAt, signature: settings.signature, method: settings.method } : null,
+      contacts, suggested: suggestRecipients(project, contacts, [req.session.user.email, settings && settings.email]),
+      subject, projectAddress: projectAddress(project.id),
+      historyCount: history.filter((m) => m.direction !== 'note').length, noteCount: history.filter((m) => m.direction === 'note').length,
+    });
+  } catch (e) { fail(res, e, 'Could not load email details.'); }
+});
+
+router.post('/projects/:id/email-draft-ai', async (req, res) => {
+  try {
+    const project = await projectFor(req, req.params.id);
+    const b = req.body || {};
+    const company = project.companies && project.companies[0];
+    const [detail, settings] = await Promise.all([
+      company ? crm.getCompanyDetail(company.id) : Promise.resolve(null),
+      mail.getSettings(req.session.user.id),
+    ]);
+    const contacts = (detail && detail.contacts) || [];
+    const recipients = smtp.parseAddressList(b.to).map((a) => {
+      const c = contacts.find((x) => (x.email || '').toLowerCase() === a.email.toLowerCase());
+      return { name: (c && c.fullName) || a.name, email: a.email, title: c && c.title };
+    });
+    const history = projectHistory(project);
+    const result = await ai.draftEmail({
+      goal: b.goal || (history.length ? 'follow_up' : 'introduce'), tone: b.tone, language: b.language,
+      instructions: [b.instructions, (project.subtasks || []).filter((t) => t.status !== 'Completed').length
+        ? 'Open project tasks (context): ' + project.subtasks.filter((t) => t.status !== 'Completed').map((t) => t.name + (t.deadline ? ' (due ' + t.deadline + ')' : '')).join('; ') : ''].filter(Boolean).join('\n'),
+      currentDraft: b.revise ? b.body : '',
+      sender: { name: (settings && settings.displayName) || req.session.user.name, email: (settings && settings.email) || req.session.user.email, title: req.session.user.title },
+      recipients, company: (detail && detail.company) || company || { name: 'Unknown company' },
+      deals: ((detail && detail.deals) || []).filter((d) => !String(d.stage || '').startsWith('Closed')),
+      projects: [{ name: project.name, status: project.status, products: project.products || [] }],
+      activities: [], history, historyLimit: 15, replyTo: history.some((m) => m.direction !== 'note'), projectFocus: project.name,
+      research: [],
+    });
+    json(res, 200, { ok: true, ...result, historyCount: history.length });
+  } catch (e) { fail(res, e, 'Could not write a draft. Try again.'); }
+});
+
+router.post('/projects/:id/email-send', async (req, res) => {
+  const userId = req.session.user.id;
+  let draftId = req.body.id || null;
+  try {
+    const project = await projectFor(req, req.params.id);
+    const company = project.companies && project.companies[0];
+    const f = readForm(req.body);
+    const to = smtp.parseAddressList(f.to);
+    if (!to.length) return json(res, 400, { ok: false, error: 'Add at least one recipient.' });
+    if (!f.subject) return json(res, 400, { ok: false, error: 'Add a subject.' });
+    if (!f.body.trim()) return json(res, 400, { ok: false, error: 'The email is empty.' });
+    if (/\[[^\]\n]{1,80}\]/.test(f.body) && req.body.confirmGaps !== '1') {
+      return json(res, 409, { ok: false, code: 'GAPS', error: 'The email still has [placeholders] to fill in. Send anyway?' });
+    }
+    const settings = await mail.getSettings(userId);
+    if (!settings) return json(res, 400, { ok: false, code: 'NO_MAILBOX', error: 'Set up your email in My Profile first.' });
+    // The project address goes in Cc so the client's replies land in this conversation
+    const pAddr = projectAddress(project.id);
+    const cc = smtp.parseAddressList(f.cc).filter((a) => a.email.toLowerCase() !== pAddr.toLowerCase());
+    cc.push({ name: '', email: pAddr });
+    const fromAddr = { name: settings.displayName || req.session.user.name || '', email: settings.email };
+    if (company) {
+      draftId = await mail.saveDraft({ id: draftId, companyId: company.id, projectId: project.id, userId, from: smtp.formatAddress(fromAddr),
+        to: f.to, cc: cc.map(smtp.formatAddress).join(', '), subject: f.subject, body: f.body, ai: req.body.aiMeta || null });
+    }
+    try {
+      const sent = await mail.sendAs(userId, {
+        to, cc, subject: f.subject,
+        text: f.body.trim() + (settings.signature ? '\n\n' + settings.signature : ''), html: htmlBody(f.body, settings.signature),
+      }, { fallbackName: req.session.user.name });
+      if (draftId) await mail.markSent(draftId, { messageId: sent.messageId });
+      if (!settings.verifiedAt) await mail.markVerified(userId, null);
+      // Show it in the project conversation
+      await crm.addManualMessage({
+        entityType: 'project', entityId: project.id, channel: 'email', direction: 'out',
+        from: smtp.formatAddress(fromAddr), to: to.map((a) => a.name || a.email).join(', '), subject: f.subject,
+        body: f.body.trim(), loggedById: userId, loggedByName: req.session.user.name, via: 'crm',
+      });
+      json(res, 200, { ok: true, id: draftId });
+    } catch (sendErr) {
+      const msg = mail.sendError(sendErr, settings);
+      if (draftId) await mail.markFailed(draftId, msg);
+      json(res, 502, { ok: false, id: draftId, error: 'Not sent: ' + msg });
+    }
+  } catch (e) { fail(res, e, 'Could not send the email.'); }
+});
+
 module.exports = router;
