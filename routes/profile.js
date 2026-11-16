@@ -54,7 +54,7 @@ router.post('/profile', async (req, res, next) => {
       avatarColor: updated.avatarColor,
     };
     req.session.flash = { type: 'success', message: 'Profile updated.' };
-    res.redirect('/profile');
+    res.redirect('/profile#profile');
   } catch (err) { next(err); }
 });
 
@@ -66,8 +66,8 @@ router.post('/profile/avatar', upload.single('avatar'), async (req, res, next) =
       entityType: 'avatars', entityId: req.session.user.id, file: req.file
     });
     await crm.updateUserProfile(req.session.user.id, { avatarUrl: storagePath });
-    req.session.flash = { type: 'success', message: 'Avatar updated.' };
-    res.redirect('/profile');
+    req.session.flash = { type: 'success', message: 'Photo updated.' };
+    res.redirect('/profile#profile');
   } catch (err) { next(err); }
 });
 
@@ -83,13 +83,13 @@ router.post('/profile/password', async (req, res, next) => {
     // Verify current password
     if (!rawUser || !(await bcrypt.compare(currentPassword || '', rawUser.password_hash))) {
       req.session.flash = { type: 'error', message: 'Current password is incorrect.' };
-      return res.redirect('/profile');
+      return res.redirect('/profile#security');
     }
 
     // Match
     if (newPassword !== confirmPassword) {
       req.session.flash = { type: 'error', message: 'Passwords do not match.' };
-      return res.redirect('/profile');
+      return res.redirect('/profile#security');
     }
 
     // Strength
@@ -97,7 +97,7 @@ router.post('/profile/password', async (req, res, next) => {
     if (!strength.strong) {
       const failed = strength.rules.filter(r => !r.ok).map(r => r.label).join('; ');
       req.session.flash = { type: 'error', message: `Password too weak: ${failed}.` };
-      return res.redirect('/profile');
+      return res.redirect('/profile#security');
     }
 
     const hash = await bcrypt.hash(newPassword, 12);
@@ -106,7 +106,7 @@ router.post('/profile/password', async (req, res, next) => {
     // Clear must_change_password from session
     req.session.user = { ...req.session.user, mustChangePassword: false };
     req.session.flash = { type: 'success', message: 'Password changed successfully.' };
-    res.redirect('/profile');
+    res.redirect('/profile#security');
   } catch (err) { next(err); }
 });
 
@@ -124,7 +124,7 @@ router.post('/profile/email', async (req, res) => {
     const { email, displayName, provider, method, bccSelf, host, port, secure, user, password, signature } = req.body;
     const saved = await mail.saveSettings(req.session.user.id, { email, displayName, provider, method, bccSelf: bccSelf ? '1' : '0', host, port, secure, user, password, signature });
     if (wantsJson) return res.json({ ok: true, mailbox: saved });
-    req.session.flash = { type: 'success', message: 'Email settings saved. Send a test email to confirm they work.' };
+    req.session.flash = { type: 'success', message: 'Email settings saved.' };
     res.redirect('/profile#email');
   } catch (e) {
     if (wantsJson) return res.status(400).json({ ok: false, error: e.message });

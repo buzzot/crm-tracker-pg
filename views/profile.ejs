@@ -2,7 +2,6 @@
   const u = profileUser;
   const initial = (u.name || u.email || '?').trim().charAt(0).toUpperCase();
   const color = u.avatarColor || 'indigo';
-
   const AVATAR_COLORS = [
     { id:'indigo',  label:'Indigo',  bg:'oklch(0.50 0.20 270)' },
     { id:'blue',    label:'Blue',    bg:'oklch(0.52 0.18 250)' },
@@ -12,136 +11,146 @@
     { id:'rose',    label:'Rose',    bg:'oklch(0.52 0.20 10)'  },
     { id:'slate',   label:'Slate',   bg:'oklch(0.35 0.02 265)' },
   ];
-  const colorMap = {};
-  AVATAR_COLORS.forEach(c => colorMap[c.id] = c.bg);
+  const colorMap = {}; AVATAR_COLORS.forEach(c => colorMap[c.id] = c.bg);
   const avatarBg = colorMap[color] || colorMap['indigo'];
+
+  const _mb = typeof mailbox !== 'undefined' ? mailbox : null;
+  const _prov = typeof providers !== 'undefined' ? providers : {};
+  const _mbState = !_mb ? 'none' : _mb.verifiedAt ? 'ok' : _mb.lastError ? 'error' : 'untested';
+  const profileDone = !!(u.name && u.title && u.phone);
+  const emailLabel = { ok:'Connected', error:'Not working', untested:'Saved, not tested', none:'Not set up' }[_mbState];
+  const steps = [
+    { id:'profile',  icon:'bi-person',      label:'Profile',  state: profileDone ? 'ok' : 'todo', note: profileDone ? 'Complete' : 'Add title and phone' },
+    { id:'email',    icon:'bi-envelope',    label:'Email',    state: _mbState === 'ok' ? 'ok' : _mbState === 'error' ? 'bad' : 'todo', note: emailLabel },
+    { id:'security', icon:'bi-shield-lock', label:'Security', state: mustChange ? 'bad' : 'ok', note: mustChange ? 'Change password' : 'Password set' },
+  ];
+  const doneCount = steps.filter(s => s.state === 'ok').length;
 %>
 
-<div class="pnew-page" style="max-width:620px; margin:0 auto;">
+<div class="pf">
+
+  <!-- Header -->
+  <header class="pf-head">
+    <div class="pf-id">
+      <div class="prof-avatar-wrap">
+        <div class="prof-avatar" id="profAvatar" style="background:<%= avatarBg %>">
+          <% if (u.avatarUrl) { %>
+            <img src="<%= u.avatarUrl.startsWith('http') ? u.avatarUrl : '/media/' + u.avatarUrl %>" alt="" onerror="this.remove()">
+          <% } %>
+          <span id="profInitial"><%= initial %></span>
+        </div>
+      </div>
+      <div class="pf-id-text">
+        <h1><%= u.name || u.email %></h1>
+        <div class="pf-id-meta">
+          <span class="au-badge au-badge-<%= u.role %>"><%= u.role %></span>
+          <% if (u.title) { %><span><%= u.title %></span><span class="pf-dot">·</span><% } %>
+          <span><%= u.email %></span>
+        </div>
+      </div>
+    </div>
+    <div class="pf-setup" aria-label="Account setup">
+      <div class="pf-setup-top"><span>Account setup</span><b><%= doneCount %>/<%= steps.length %></b></div>
+      <div class="pf-setup-bar"><i style="width:<%= Math.round(doneCount / steps.length * 100) %>%"></i></div>
+    </div>
+  </header>
 
   <% if (mustChange) { %>
-  <div class="prof-must-change-banner">
+  <div class="pf-banner pf-banner-warn">
     <i class="bi bi-exclamation-triangle-fill"></i>
-    <div>
-      <strong>Password change required.</strong>
-      Please set a personal password before continuing.
-    </div>
+    <div><strong>Password change required.</strong> Set a personal password before you continue. <a href="#security">Change it now</a></div>
   </div>
   <% } %>
 
-  <!-- Hero -->
-  <div class="prof-hero">
-    <div class="prof-avatar-wrap">
-      <div class="prof-avatar" id="profAvatar" style="background:<%= avatarBg %>">
-        <% if (u.avatarUrl) { %>
-          <img src="<%= u.avatarUrl.startsWith('http') ? u.avatarUrl : '/media/' + u.avatarUrl %>"
-               alt="Avatar" onerror="this.style.display='none'">
-        <% } else { %>
-          <span id="profInitial"><%= initial %></span>
-        <% } %>
-      </div>
-      <!-- Upload avatar button -->
-      <form action="/profile/avatar" method="POST" enctype="multipart/form-data" id="avatarForm">
-        <label class="prof-avatar-upload" title="Upload photo">
-          <i class="bi bi-camera"></i>
-          <input type="file" name="avatar" accept="image/*" style="display:none" onchange="this.form.submit()">
-        </label>
-      </form>
-    </div>
+  <div class="pf-layout">
+    <!-- Section nav -->
+    <nav class="pf-nav" aria-label="Settings sections">
+      <% steps.forEach((s, i) => { %>
+        <a href="#<%= s.id %>" class="<%= i === 0 ? 'is-active' : '' %>">
+          <i class="bi <%= s.icon %>"></i>
+          <span class="pf-nav-text"><b><%= s.label %></b><small><%= s.note %></small></span>
+          <span class="pf-state pf-state-<%= s.state %>" aria-hidden="true"></span>
+        </a>
+      <% }) %>
+    </nav>
 
-    <div class="prof-hero-info">
-      <h1 class="pnew-hero"><%= u.name || u.email %></h1>
-      <% if (u.title) { %><p class="pnew-hero-sub"><%= u.title %></p><% } %>
-      <span class="au-badge au-badge-<%= u.role %>"><%= u.role %></span>
-    </div>
-  </div>
+    <div class="pf-main">
+      <% if (flash) { %>
+        <div class="pf-banner pf-banner-<%= flash.type === 'error' ? 'error' : 'ok' %>" role="status">
+          <i class="bi <%= flash.type === 'error' ? 'bi-exclamation-circle-fill' : 'bi-check-circle-fill' %>"></i>
+          <div><%= flash.message %></div>
+          <button type="button" class="pf-banner-x" aria-label="Dismiss" onclick="this.parentElement.remove()"><i class="bi bi-x-lg"></i></button>
+        </div>
+      <% } %>
 
-  <% if (flash) { %>
-    <div class="alert alert-<%= flash.type === 'error' ? 'danger' : 'success' %> alert-dismissible fade show mb-3" role="alert">
-      <%= flash.message %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
+      <!-- Profile -->
+      <section class="pf-card" id="profile" aria-labelledby="pfProfileTitle">
+        <div class="pf-card-head">
+          <div><h2 id="pfProfileTitle">Profile</h2><p>How you appear to your team on projects, tasks and activity.</p></div>
+        </div>
+        <form action="/profile" method="POST">
+          <div class="pf-body">
+            <div class="pf-avatar-row">
+              <div class="pf-avatar-mini" id="profAvatarMini" style="background:<%= avatarBg %>"><span><%= initial %></span><% if (u.avatarUrl) { %><img src="<%= u.avatarUrl.startsWith('http') ? u.avatarUrl : '/media/' + u.avatarUrl %>" alt="" onerror="this.remove()"><% } %></div>
+              <div>
+                <div class="pf-avatar-actions">
+                  <label class="pg-btn pf-upload" for="avatarFile"><i class="bi bi-upload"></i>Upload photo</label>
+                  <span class="pf-hint">or pick a colour</span>
+                </div>
+                <div class="prof-color-picker" id="colorPicker" role="radiogroup" aria-label="Avatar colour">
+                  <% AVATAR_COLORS.forEach(c => { %>
+                    <label class="prof-color-swatch <%= c.id === color ? 'selected' : '' %>" title="<%= c.label %>" style="background:<%= c.bg %>">
+                      <input type="radio" name="avatarColor" value="<%= c.id %>" class="visually-hidden" <%= c.id === color ? 'checked' : '' %> onchange="onColorChange(this, '<%= c.bg %>')">
+                      <% if (c.id === color) { %><i class="bi bi-check-lg"></i><% } %>
+                    </label>
+                  <% }) %>
+                </div>
+              </div>
+            </div>
 
-  <!-- Profile form -->
-  <form action="/profile" method="POST" class="pnew-card mb-3">
-    <div class="pnew-card-header-row" style="margin-bottom:1rem;">
-      <div class="pnew-card-header-text">
-        <span class="pnew-card-icon"><i class="bi bi-person-vcard"></i></span>
-        <h2 class="pnew-card-title">Personal Info</h2>
-      </div>
-    </div>
+            <div class="em-grid">
+              <label class="em-field"><span>Full name <b>*</b></span>
+                <input type="text" name="name" class="pnew-input" value="<%= u.name || '' %>" placeholder="Your name" required></label>
+              <label class="em-field"><span>Title</span>
+                <select name="title" class="pnew-input">
+                  <option value="">Choose a title</option>
+                  <% Object.values(ROLE_TITLES).flat().forEach(t => { %><option value="<%= t %>" <%= u.title === t ? 'selected' : '' %>><%= t %></option><% }) %>
+                </select></label>
+              <label class="em-field"><span>Login email</span>
+                <input type="email" class="pnew-input pf-readonly" value="<%= u.email %>" readonly tabindex="-1">
+                <small class="pf-hint"><i class="bi bi-lock"></i> Only an admin can change this.</small></label>
+              <label class="em-field"><span>Phone</span>
+                <input type="tel" name="phone" class="pnew-input" value="<%= u.phone || '' %>" placeholder="+1 (555) 000-0000"></label>
+            </div>
+          </div>
+          <div class="pf-foot">
+            <button type="submit" class="pg-btn pg-btn-primary"><i class="bi bi-check2"></i>Save profile</button>
+          </div>
+        </form>
+        <form action="/profile/avatar" method="POST" enctype="multipart/form-data" id="avatarForm" hidden>
+          <input type="file" name="avatar" id="avatarFile" accept="image/*" onchange="this.form.submit()">
+        </form>
+      </section>
 
-    <div class="pnew-classification-row mb-3">
-      <div>
-        <label class="pnew-field-label">Full name</label>
-        <input type="text" name="name" class="pnew-input" value="<%= u.name || '' %>" placeholder="Your name" required>
-      </div>
-      <div>
-        <label class="pnew-field-label">Title</label>
-        <select name="title" class="pnew-input">
-          <option value="">— none —</option>
-          <% Object.values(ROLE_TITLES).flat().forEach(t => { %>
-            <option value="<%= t %>" <%= u.title === t ? 'selected' : '' %>><%= t %></option>
-          <% }) %>
-        </select>
-      </div>
-    </div>
-
-    <div class="mb-3">
-      <label class="pnew-field-label">Email</label>
-      <div class="pnew-input" style="background:var(--crm-muted); color:var(--crm-muted-fg); cursor:default; user-select:text;">
-        <%= u.email %>
-      </div>
-      <div style="font-size:0.72rem; color:var(--crm-muted-fg); margin-top:0.25rem;">
-        <i class="bi bi-lock" style="font-size:0.65rem;"></i> Contact your admin to change your email.
-      </div>
-    </div>
-
-    <div class="mb-3">
-      <label class="pnew-field-label">Phone</label>
-      <input type="text" name="phone" class="pnew-input" value="<%= u.phone || '' %>" placeholder="+1 (555) 000-0000">
-    </div>
-
-    <!-- Avatar color picker -->
-    <div class="mb-3">
-      <label class="pnew-field-label">Avatar color</label>
-      <div class="prof-color-picker" id="colorPicker">
-        <% AVATAR_COLORS.forEach(c => { %>
-          <label class="prof-color-swatch <%= c.id === color ? 'selected' : '' %>" title="<%= c.label %>"
-                 style="background:<%= c.bg %>">
-            <input type="radio" name="avatarColor" value="<%= c.id %>" style="display:none;"
-                   <%= c.id === color ? 'checked' : '' %> onchange="onColorChange('<%= c.bg %>')">
-            <% if (c.id === color) { %><i class="bi bi-check-lg"></i><% } %>
-          </label>
-        <% }) %>
-      </div>
-    </div>
-
-    <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg me-1"></i>Save Profile</button>
-  </form>
-
-  <!-- Email: send from your own mailbox -->
-  <%
-    const _mb = typeof mailbox !== 'undefined' ? mailbox : null;
-    const _prov = typeof providers !== 'undefined' ? providers : {};
-    const _mbState = !_mb ? 'none' : _mb.verifiedAt ? 'ok' : _mb.lastError ? 'error' : 'untested';
-  %>
-  <section class="pnew-card mb-3 em-setup" id="email" aria-labelledby="emTitle">
-    <div class="pnew-card-header-row" style="margin-bottom:0.75rem;">
-      <div class="pnew-card-header-text">
-        <span class="pnew-card-icon"><i class="bi bi-envelope-at"></i></span>
-        <h2 class="pnew-card-title" id="emTitle">Email</h2>
-      </div>
-      <span class="em-status em-status-<%= _mbState %>">
-        <% if (_mbState === 'ok') { %><i class="bi bi-check-circle-fill"></i>Connected<% } else if (_mbState === 'error') { %><i class="bi bi-exclamation-circle-fill"></i>Not working<% } else if (_mbState === 'untested') { %><i class="bi bi-dash-circle"></i>Saved, not tested<% } else { %><i class="bi bi-circle"></i>Not connected<% } %>
-      </span>
-    </div>
-    <p class="em-intro">Send emails from the CRM using your own work address. Recipients see your address as the sender, replies come back to your inbox, and each company's tracking address is added in Cc so replies are logged automatically<% if (typeof trackingDomain !== 'undefined') { %> (for example <code>aaon@<%= trackingDomain %></code>)<% } %>.</p>
-    <% if (typeof mailboxError !== 'undefined' && mailboxError) { %><div class="em-alert"><%= mailboxError %></div><% } %>
-    <% if (_mb && _mb.lastError) { %><div class="em-alert"><i class="bi bi-exclamation-circle"></i> Last test failed: <%= _mb.lastError %></div><% } %>
-
-    <form action="/profile/email" method="POST" id="emForm" autocomplete="off">
+      <!-- Email -->
+      <section class="pf-card em-setup" id="email" aria-labelledby="emTitle">
+        <div class="pf-card-head">
+          <div>
+            <h2 id="emTitle">Email</h2>
+            <p>Send emails from the CRM as yourself. Each company's tracking address is added in Cc, so replies are logged on the company page<% if (typeof trackingDomain !== 'undefined') { %> (e.g. <code>aaon@<%= trackingDomain %></code>)<% } %>.</p>
+          </div>
+          <span class="em-status em-status-<%= _mbState %>">
+            <% if (_mbState === 'ok') { %><i class="bi bi-check-circle-fill"></i><% } else if (_mbState === 'error') { %><i class="bi bi-exclamation-circle-fill"></i><% } else if (_mbState === 'untested') { %><i class="bi bi-dash-circle"></i><% } else { %><i class="bi bi-circle"></i><% } %><%= emailLabel %>
+          </span>
+        </div>
+        <div class="pf-body pf-body-flush">
+          <% if (typeof mailboxError !== 'undefined' && mailboxError) { %><div class="em-alert"><%= mailboxError %></div><% } %>
+          <% if (_mb && _mb.lastError) { %><div class="em-alert"><i class="bi bi-exclamation-circle"></i> Last test failed: <%= _mb.lastError %></div><% } %>
+          <% if (_mbState === 'untested') { %><div class="pf-nudge"><i class="bi bi-send"></i> Settings saved. Click <b>Send test email</b> below to confirm everything works.</div><% } %>
+        </div>
+        <form action="/profile/email" method="POST" id="emForm" autocomplete="off">
+        <div class="pf-body">
+      <h3 class="pf-step"><span>1</span>Sender</h3>
       <div class="em-grid">
         <label class="em-field em-span2"><span>Your work email <b>*</b></span>
           <input type="email" name="email" id="emEmail" class="pnew-input" required value="<%= _mb ? _mb.email : (profileUser && profileUser.email) || '' %>" placeholder="marsel@samyouusa.com"></label>
@@ -150,6 +159,7 @@
       </div>
 
       <% var _method = _mb ? _mb.method : 'mailgun'; %>
+      <h3 class="pf-step"><span>2</span>Delivery</h3>
       <div class="em-method" role="radiogroup" aria-label="How to send">
         <label class="em-method-opt">
           <input type="radio" name="method" value="mailgun" <%= _method === 'mailgun' ? 'checked' : '' %>>
@@ -180,7 +190,7 @@
 
       <div class="em-grid">
         <label class="em-field"><span>Provider</span>
-          <select name="provider" id="emProvider" class="pnew-select">
+          <select name="provider" id="emProvider" class="pnew-input">
             <% Object.keys(_prov).forEach(k => { %><option value="<%= k %>" <%= _mb && _mb.provider === k ? 'selected' : '' %>><%= _prov[k].label %></option><% }) %>
           </select></label>
         <label class="em-field"><span>SMTP server <b>*</b></span>
@@ -188,7 +198,7 @@
         <div class="em-row">
           <label class="em-field"><span>Port</span><input type="number" name="port" id="emPort" class="pnew-input" required value="<%= _mb ? _mb.port : 465 %>" min="1" max="65535"></label>
           <label class="em-field"><span>Security</span>
-            <select name="secure" id="emSecure" class="pnew-select">
+            <select name="secure" id="emSecure" class="pnew-input">
               <option value="ssl" <%= !_mb || _mb.secure === 'ssl' ? 'selected' : '' %>>SSL (465)</option>
               <option value="starttls" <%= _mb && _mb.secure === 'starttls' ? 'selected' : '' %>>STARTTLS (587)</option>
             </select></label>
@@ -202,21 +212,20 @@
       <p class="em-help"><i class="bi bi-shield-lock"></i> Your password is stored encrypted and is only used to send emails you choose to send.</p>
       </div>
 
-      <label class="em-field"><span>Signature <span class="em-opt">added below every email</span></span>
+      <h3 class="pf-step"><span>3</span>Signature <span class="em-opt">added below every email</span></h3>
+      <label class="em-field"><span class="visually-hidden">Signature</span>
         <textarea name="signature" class="pnew-input em-sig" rows="4" placeholder="Marsel&#10;Samyou USA · +1 …&#10;www.samyouusa.com"><%= _mb ? _mb.signature : '' %></textarea></label>
 
-      <div class="em-actions">
-        <button type="submit" class="pg-btn pg-btn-primary"><i class="bi bi-check2"></i>Save</button>
-        <% if (_mb) { %><button type="button" class="pg-btn" id="emTest"><i class="bi bi-send"></i>Send test email</button><% } %>
+        </div>
+      <div class="pf-foot">
+        <% if (_mb) { %><button type="submit" form="emRemoveForm" class="pf-link-danger">Disconnect</button><% } %>
         <span class="em-test-result" id="emTestResult" role="status" aria-live="polite"></span>
+        <% if (_mb) { %><button type="button" class="pg-btn" id="emTest"><i class="bi bi-send"></i>Send test email</button><% } %>
+        <button type="submit" class="pg-btn pg-btn-primary"><i class="bi bi-check2"></i>Save email settings</button>
       </div>
     </form>
-    <% if (_mb) { %>
-      <form action="/profile/email/remove" method="POST" class="em-remove" onsubmit="return confirm('Disconnect your email from the CRM? Saved drafts are kept.')">
-        <button type="submit" class="pj-link-btn em-danger">Disconnect email</button>
-      </form>
-    <% } %>
-  </section>
+        <% if (_mb) { %><form action="/profile/email/remove" method="POST" id="emRemoveForm" hidden onsubmit="return confirm('Disconnect your email from the CRM? Saved drafts are kept.')"></form><% } %>
+      </section>
 
   <script>
   (function () {
@@ -296,79 +305,66 @@
   })();
   </script>
 
-  <!-- Password change -->
-  <form action="/profile/password" method="POST" class="pnew-card mb-3" id="pwdForm">
-    <div class="pnew-card-header-row" style="margin-bottom:1rem;">
-      <div class="pnew-card-header-text">
-        <span class="pnew-card-icon"><i class="bi bi-lock"></i></span>
-        <h2 class="pnew-card-title">Change Password</h2>
-      </div>
+      <!-- Security -->
+      <section class="pf-card<%= mustChange ? ' pf-card-attn' : '' %>" id="security" aria-labelledby="pfSecTitle">
+        <div class="pf-card-head">
+          <div><h2 id="pfSecTitle">Security</h2><p>Change the password you use to sign in. Use at least 8 characters with a mix of letters, numbers and symbols.</p></div>
+        </div>
+        <form action="/profile/password" method="POST" id="pwdForm">
+          <div class="pf-body">
+            <label class="em-field pf-half"><span>Current password</span>
+              <span class="pf-pw"><input type="password" name="currentPassword" id="curPwd" class="pnew-input" required autocomplete="current-password">
+              <button type="button" class="prof-eye-btn" onclick="toggleEye('curPwd','curEye')" aria-label="Show password"><i class="bi bi-eye" id="curEye"></i></button></span></label>
+            <div class="em-grid">
+              <label class="em-field"><span>New password</span>
+                <span class="pf-pw"><input type="password" name="newPassword" id="newPwd" class="pnew-input" required autocomplete="new-password" oninput="onPwdInput(this.value)">
+                <button type="button" class="prof-eye-btn" onclick="toggleEye('newPwd','newEye')" aria-label="Show password"><i class="bi bi-eye" id="newEye"></i></button></span></label>
+              <label class="em-field"><span>Confirm new password</span>
+                <span class="pf-pw"><input type="password" name="confirmPassword" id="confPwd" class="pnew-input" required autocomplete="new-password" oninput="onConfirmInput(this.value)">
+                <button type="button" class="prof-eye-btn" onclick="toggleEye('confPwd','confEye')" aria-label="Show password"><i class="bi bi-eye" id="confEye"></i></button></span>
+                <span class="prof-match-hint" id="matchHint"></span></label>
+            </div>
+            <div class="prof-strength-wrap" id="strengthWrap" style="display:none;">
+              <div class="prof-strength-bar"><div class="prof-strength-fill" id="strengthFill"></div></div>
+              <span class="prof-strength-label" id="strengthLabel"></span>
+              <ul class="prof-rules" id="pwdRules">
+                <li id="rule-len"><i class="bi bi-circle"></i> 8+ characters</li>
+                <li id="rule-upper"><i class="bi bi-circle"></i> Uppercase</li>
+                <li id="rule-lower"><i class="bi bi-circle"></i> Lowercase</li>
+                <li id="rule-num"><i class="bi bi-circle"></i> Number</li>
+                <li id="rule-sym"><i class="bi bi-circle"></i> Symbol</li>
+              </ul>
+            </div>
+          </div>
+          <div class="pf-foot">
+            <button type="submit" class="pg-btn pg-btn-primary" id="pwdSubmit"><i class="bi bi-shield-lock"></i>Change password</button>
+          </div>
+        </form>
+      </section>
     </div>
-
-    <div class="mb-3">
-      <label class="pnew-field-label">Current password</label>
-      <div style="position:relative;">
-        <input type="password" name="currentPassword" id="curPwd" class="pnew-input" style="padding-right:2.5rem;"
-               placeholder="Your current password" required autocomplete="current-password">
-        <button type="button" class="prof-eye-btn" onclick="toggleEye('curPwd','curEye')">
-          <i class="bi bi-eye" id="curEye"></i>
-        </button>
-      </div>
-    </div>
-
-    <div class="mb-2">
-      <label class="pnew-field-label">New password</label>
-      <div style="position:relative;">
-        <input type="password" name="newPassword" id="newPwd" class="pnew-input" style="padding-right:2.5rem;"
-               placeholder="Choose a strong password" required autocomplete="new-password"
-               oninput="onPwdInput(this.value)">
-        <button type="button" class="prof-eye-btn" onclick="toggleEye('newPwd','newEye')">
-          <i class="bi bi-eye" id="newEye"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- Strength meter -->
-    <div class="prof-strength-wrap" id="strengthWrap" style="display:none;">
-      <div class="prof-strength-bar">
-        <div class="prof-strength-fill" id="strengthFill"></div>
-      </div>
-      <span class="prof-strength-label" id="strengthLabel"></span>
-      <ul class="prof-rules" id="pwdRules">
-        <li id="rule-len"><i class="bi bi-circle"></i> 8+ characters</li>
-        <li id="rule-upper"><i class="bi bi-circle"></i> Uppercase (A–Z)</li>
-        <li id="rule-lower"><i class="bi bi-circle"></i> Lowercase (a–z)</li>
-        <li id="rule-num"><i class="bi bi-circle"></i> Number (0–9)</li>
-        <li id="rule-sym"><i class="bi bi-circle"></i> Special character</li>
-      </ul>
-    </div>
-
-    <div class="mb-3">
-      <label class="pnew-field-label">Confirm new password</label>
-      <div style="position:relative;">
-        <input type="password" name="confirmPassword" id="confPwd" class="pnew-input" style="padding-right:2.5rem;"
-               placeholder="Repeat new password" required autocomplete="new-password"
-               oninput="onConfirmInput(this.value)">
-        <button type="button" class="prof-eye-btn" onclick="toggleEye('confPwd','confEye')">
-          <i class="bi bi-eye" id="confEye"></i>
-        </button>
-      </div>
-      <div class="prof-match-hint" id="matchHint"></div>
-    </div>
-
-    <button type="submit" class="pnew-btn-save" id="pwdSubmit">
-      <i class="bi bi-shield-lock me-1"></i>Change Password
-    </button>
-  </form>
+  </div>
 </div>
 
 <script>
 // ── Color picker ──────────────────────────────────────────────────────────────
-function onColorChange(bg) {
+function onColorChange(input, bg) {
   document.getElementById('profAvatar').style.background = bg;
-  document.querySelectorAll('.prof-color-swatch').forEach(s => s.classList.remove('selected'));
-  event.target.closest('.prof-color-swatch').classList.add('selected');
+  const mini = document.getElementById('profAvatarMini'); if (mini) mini.style.background = bg;
+  document.querySelectorAll('.prof-color-swatch').forEach(s => { s.classList.remove('selected'); const i = s.querySelector('i'); if (i) i.remove(); });
+  const sw = input.closest('.prof-color-swatch'); sw.classList.add('selected');
+  sw.insertAdjacentHTML('beforeend', '<i class="bi bi-check-lg"></i>');
 }
+
+// ── Section nav: highlight the section in view ────────────────────────────────
+(function () {
+  const links = [...document.querySelectorAll('.pf-nav a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  if (!('IntersectionObserver' in window) || !secs.length) return;
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) links.forEach(a => a.classList.toggle('is-active', a.getAttribute('href') === '#' + e.target.id)); });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  secs.forEach(s => io.observe(s));
+})();
 
 // ── Password strength ─────────────────────────────────────────────────────────
 const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Strong'];
@@ -442,95 +438,7 @@ function toggleEye(inputId, iconId) {
 <% if (mustChange) { %>
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('curPwd')?.focus();
-  document.getElementById('pwdForm')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 <% } %>
 </script>
-
-<style>
-/* ── Must-change banner ── */
-.prof-must-change-banner {
-  display: flex; align-items: flex-start; gap: 0.75rem;
-  background: oklch(0.97 0.05 75);
-  border: 1px solid oklch(0.80 0.10 75);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
-  margin-bottom: 1.25rem;
-  font-size: 0.88rem;
-  color: oklch(0.45 0.12 60);
-}
-.prof-must-change-banner i { font-size: 1.1rem; margin-top: 0.1rem; flex-shrink:0; }
-
-/* ── Hero ── */
-.prof-hero {
-  display: flex; align-items: center; gap: 1.25rem;
-  margin-bottom: 1.75rem;
-}
-.prof-avatar-wrap { position: relative; flex-shrink: 0; }
-.prof-avatar {
-  width: 72px; height: 72px; border-radius: 18px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.75rem; font-weight: 700; color: #fff;
-  overflow: hidden;
-  transition: background 0.25s;
-}
-.prof-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.prof-avatar-upload {
-  position: absolute; bottom: -4px; right: -4px;
-  width: 26px; height: 26px; border-radius: 50%;
-  background: var(--crm-accent);
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 0.7rem; cursor: pointer;
-  border: 2px solid var(--crm-bg, #fff);
-  transition: opacity 0.15s;
-}
-.prof-avatar-upload:hover { opacity: 0.85; }
-
-/* ── Color picker ── */
-.prof-color-picker { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.prof-color-swatch {
-  width: 32px; height: 32px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; color: #fff; font-size: 0.85rem;
-  border: 3px solid transparent;
-  transition: border-color 0.15s, transform 0.15s;
-}
-.prof-color-swatch:hover { transform: scale(1.15); }
-.prof-color-swatch.selected { border-color: var(--crm-fg); }
-
-/* ── Strength meter ── */
-.prof-strength-wrap { margin-bottom: 1rem; }
-.prof-strength-bar {
-  height: 5px; border-radius: 999px;
-  background: var(--crm-border);
-  margin-bottom: 0.35rem;
-  overflow: hidden;
-}
-.prof-strength-fill {
-  height: 100%; border-radius: 999px;
-  width: 0; transition: width 0.3s, background 0.3s;
-}
-.prof-strength-label { font-size: 0.75rem; font-weight: 700; }
-.prof-rules {
-  list-style: none; padding: 0; margin: 0.5rem 0 0;
-  display: flex; flex-wrap: wrap; gap: 0.25rem 1rem;
-}
-.prof-rules li { font-size: 0.75rem; color: var(--crm-muted-fg); display: flex; align-items: center; gap: 0.3rem; }
-
-/* ── Match hint ── */
-.prof-match-hint { font-size: 0.75rem; margin-top: 0.3rem; min-height: 1em; }
-
-/* ── Eye toggle ── */
-.prof-eye-btn {
-  position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
-  background: none; border: none; color: var(--crm-muted-fg);
-  cursor: pointer; padding: 0.2rem; font-size: 0.9rem;
-}
-.prof-eye-btn:hover { color: var(--crm-fg); }
-
-/* ── Badge reuse ── */
-.au-badge { display:inline-block; padding:0.15rem 0.5rem; border-radius:999px; font-size:0.68rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }
-.au-badge-Admin   { background:#1f2a44; color:#fff; }
-.au-badge-Manager { background:oklch(0.52 0.18 250); color:#fff; }
-.au-badge-Staff   { background:var(--crm-muted); color:var(--crm-muted-fg); border:1px solid var(--crm-border); }
-</style>
