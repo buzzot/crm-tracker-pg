@@ -1,0 +1,262 @@
+<script>
+(function () {
+  var COMPANY = <%- JSON.stringify(company.id) %>;
+  var COMPANY_NAME = <%- JSON.stringify(company.name || 'this company').replace(/</g, '\\u003c') %>;
+  var base = '/companies/' + encodeURIComponent(COMPANY);
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function api(method, url, body) {
+    var opts = { method: method, credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+    if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    return fetch(url, opts).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { j._status = r.status; return r.ok && j.ok ? j : Promise.reject(j); }); });
+  }
+  function when(v) { var d = new Date(v); return isNaN(d) ? '' : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+
+  // ── Email log: filter + search ─────────────────────────────────────────────
+  var list = $('ceThreads'), filter = 'all', q = '';
+  function applyFilter() {
+    if (!list) return;
+    var shown = 0;
+    list.querySelectorAll('.ce-th').forEach(function (li) {
+      var st = li.getAttribute('data-state');
+      var okF = filter === 'all' || st === filter || (filter === 'draft' && li.getAttribute('data-has-draft') === '1');
+      var okQ = !q || li.getAttribute('data-search').indexOf(q) !== -1;
+      li.hidden = !(okF && okQ); if (!li.hidden) shown++;
+    });
+    $('ceNone').hidden = shown > 0;
+  }
+  document.querySelectorAll('[data-ef]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-ef]').forEach(function (x) { x.classList.toggle('is-on', x === b); x.setAttribute('aria-selected', x === b); });
+      filter = b.getAttribute('data-ef'); applyFilter();
+    });
+  });
+  if ($('ceSearch')) $('ceSearch').addEventListener('input', function (e) { q = e.target.value.trim().toLowerCase(); applyFilter(); });
+
+  // ── Conversation drawer ────────────────────────────────────────────────────
+  var drawer = $('ceDrawer'), bg = $('ceDrawerBg');
+  function closeDrawer() { drawer.hidden = true; bg.hidden = true; document.body.classList.remove('al-lock'); }
+  function openThread(key, draftId) {
+    if (draftId) { openComposer({ draftId: draftId }); return; }
+    drawer.hidden = false; bg.hidden = false; document.body.classList.add('al-lock');
+    $('ceDrawerBody').innerHTML = '<div class="ad ad-loading"><i class="w60"></i><i class="w90"></i><i class="w100 b"></i><i class="w70"></i></div>';
+    api('GET', base + '/email-thread?key=' + encodeURIComponent(key)).then(function (r) {
+      var t = r.thread;
+      var msgs = t.messages.filter(function (m) { return m.status !== 'draft' && m.status !== 'failed'; });
+      var draft = t.messages.filter(function (m) { return m.status === 'draft' || m.status === 'failed'; }).pop();
+      var last = msgs[msgs.length - 1];
+      var html = '<div class="ad"><div class="ad-head"><div class="ad-kicker"><i class="bi bi-envelope"></i>' + msgs.length + ' message' + (msgs.length === 1 ? '' : 's') + (t.projectName ? ' · ' + esc(t.projectName) : '') + '</div>' +
+        '<h2 class="ad-title" id="ceDrawerTitle">' + esc(t.subject) + '</h2>' +
+        (last ? '<div class="ce-dstate ce-st-' + t.state + '">' + (t.state === 'reply' ? 'They wrote last: your reply is expected' : t.state === 'waiting' ? 'You wrote last: waiting for their reply' : 'No activity for over 30 days') + '</div>' : '') +
+        '</div><div class="ad-actions">' +
+        (draft ? '<button type="button" class="ad-btn ad-btn-primary" data-open-draft="' + esc(draft.id) + '"><i class="bi bi-pencil"></i>Continue draft</button>'
+               : '<button type="button" class="ad-btn ad-btn-primary" id="ceReply"><i class="bi bi-stars"></i>Reply with AI</button>') +
+        '</div><ol class="ce-msgs">' + msgs.map(function (m) {
+          return '<li class="ce-msg ' + (m.direction === 'out' ? 'is-out' : 'is-in') + '"><div class="ce-msg-h"><b>' + esc(m.direction === 'out' ? (m.userName ? m.userName : 'You') : (m.from || 'Unknown')) + '</b><span>' + when(m.sentAt || m.createdAt) + '</span></div>' +
+            '<div class="ce-msg-meta">To: ' + esc(m.to || '—') + (m.cc ? ' · Cc: ' + esc(m.cc) : '') + (m.source && m.source !== 'email' ? ' · <a href="' + esc(m.sourceLink) + '">logged on ' + esc(m.source) + '</a>' : '') + '</div>' +
+            '<div class="ce-msg-body">' + esc(m.body) + '</div></li>';
+        }).join('') + '</ol></div>';
+      $('ceDrawerBody').innerHTML = html;
+      var rb = $('ceReply');
+      if (rb) rb.addEventListener('click', function () {
+        var lastIn = msgs.filter(function (m) { return m.direction === 'in'; }).pop();
+        var to = t.state === 'reply' && lastIn ? lastIn.from : (last ? last.to : '');
+        closeDrawer();
+        openComposer({ to: to, subject: /^re:/i.test(t.subject) ? t.subject : 'Re: ' + t.subject, threadKey: t.key, inReplyTo: last && last.messageId, goal: t.state === 'reply' ? 'answer' : t.state === 'quiet' ? 're_engage' : 'follow_up', reply: true });
+      });
+    }).catch(function (e) { $('ceDrawerBody').innerHTML = '<div class="ad-error">' + esc((e && e.error) || 'Could not load the conversation.') + '</div>'; });
+    drawer.focus();
+  }
+  if (list) {
+    list.addEventListener('click', function (e) { var li = e.target.closest('.ce-th'); if (li) openThread(li.getAttribute('data-key'), li.getAttribute('data-draft')); });
+    list.addEventListener('keydown', function (e) { var li = e.target.closest('.ce-th'); if (li && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openThread(li.getAttribute('data-key'), li.getAttribute('data-draft')); } });
+  }
+  $('ceDrawerClose').addEventListener('click', closeDrawer);
+  bg.addEventListener('click', closeDrawer);
+  document.addEventListener('click', function (e) { var b = e.target.closest('[data-open-draft]'); if (b) { closeDrawer(); openComposer({ draftId: b.getAttribute('data-open-draft') }); } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !drawer.hidden) closeDrawer(); });
+
+  // ── Composer ───────────────────────────────────────────────────────────────
+  var dlg = $('ceDialog'), form = $('ceForm'), ctx = null, state = {};
+  var goal = 'introduce', aiMeta = null, dirty = false;
+  var STAGES = { first_contact: 'First contact', follow_up: 'Follow-up', reply: 'Reply expected', re_engage: 'Re-engaging', ongoing: 'Ongoing conversation' };
+
+  function setGoal(g) {
+    goal = g;
+    document.querySelectorAll('#ceGoals [data-goal]').forEach(function (b) { var on = b.getAttribute('data-goal') === g; b.classList.toggle('is-on', on); b.setAttribute('aria-checked', on); });
+  }
+  document.querySelectorAll('#ceGoals [data-goal]').forEach(function (b) { b.addEventListener('click', function () { setGoal(b.getAttribute('data-goal')); }); });
+  function stage(title, text, kind) {
+    $('ceStageTitle').textContent = title; $('ceStageText').textContent = text ? ' ' + text : '';
+    $('ceStage').className = 'ce-stage' + (kind ? ' is-' + kind : '');
+  }
+
+  function renderResearch(items, createdAt) {
+    var ul = $('ceResearchList');
+    $('ceResearchAge').textContent = createdAt ? '· ' + new Date(createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+    $('ceResearchBtn').innerHTML = '<i class="bi bi-arrow-clockwise"></i>Refresh';
+    if (!items || !items.length) { ul.innerHTML = '<li class="pj-hint">No recent news found.</li>'; return; }
+    ul.innerHTML = items.map(function (r, i) {
+      return '<li><label><input type="checkbox" value="' + r.id + '"' + (i < 2 ? ' checked' : '') + '><span><b>' + esc(r.title) + '</b>' +
+        (r.detail ? '<em>' + esc(r.detail) + '</em>' : '') +
+        '<small>' + (r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.source || 'Source') + '</a>' : esc(r.source)) + (r.date ? ' · ' + esc(r.date) : '') + '</small></span></label></li>';
+    }).join('');
+  }
+  $('ceResearchBtn').addEventListener('click', function () {
+    var btn = this; btn.disabled = true; var label = btn.innerHTML;
+    btn.innerHTML = '<span class="logo-spin"></span>Researching… up to a minute';
+    api('POST', base + '/email-research', { refresh: ctx && ctx.research ? 1 : 0 })
+      .then(function (r) { ctx.research = { items: r.items, createdAt: r.createdAt }; renderResearch(r.items, r.createdAt); })
+      .catch(function (e) { $('ceResearchList').innerHTML = '<li class="ce-err">' + esc((e && e.error) || 'Research is not available right now.') + '</li>'; btn.innerHTML = label; })
+      .then(function () { btn.disabled = !(ctx && ctx.aiEnabled); });
+  });
+
+  function loadContext() {
+    if (ctx) return Promise.resolve(ctx);
+    return api('GET', base + '/email-context').then(function (r) {
+      ctx = r;
+      $('ceContacts').innerHTML = r.contacts.filter(function (c) { return c.email; }).map(function (c) { return '<option value="' + esc(c.name + ' <' + c.email + '>') + '">' + esc(c.title || '') + '</option>'; }).join('');
+      $('ceProject').innerHTML = '<option value="">Not linked</option>' + r.projects.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join('');
+      $('ceTrack').textContent = r.trackingAddress;
+      if (r.mailbox) {
+        $('ceFrom').innerHTML = esc((r.mailbox.name ? r.mailbox.name + ' ' : '') + '<' + r.mailbox.email + '>') + (r.mailbox.verified ? ' <span class="ce-ok"><i class="bi bi-check-circle-fill"></i> connected</span>' : ' <span class="ce-warn">not tested yet</span>');
+        $('ceSig').hidden = !r.mailbox.signature; $('ceSig').textContent = r.mailbox.signature || '';
+      } else {
+        $('ceFrom').innerHTML = '<span class="ce-warn">Your email is not connected.</span> <a href="/profile#email">Set it up in My Profile</a> to send from the CRM. You can still draft and copy.';
+      }
+      if (!r.aiEnabled) {
+        $('ceAi').classList.add('is-off'); $('ceWrite').disabled = true; $('ceResearchBtn').disabled = true;
+        $('ceAiMsg').innerHTML = 'AI is not set up. Add <code>ANTHROPIC_API_KEY</code> in Railway to enable drafting.';
+      }
+      if (r.research) renderResearch(r.research.items, r.research.createdAt);
+      return r;
+    });
+  }
+
+  function reset() {
+    form.reset(); $('ceId').value = ''; $('ceReplyTo').value = ''; aiMeta = null; dirty = false; state = {};
+    $('ceGaps').hidden = true; $('ceRevise').hidden = true; $('ceMsg').textContent = ''; $('ceSaved').textContent = '';
+    if (!ctx || ctx.aiEnabled) $('ceAiMsg').textContent = '';
+    $('ceDelete').hidden = true; $('ceInstr').value = '';
+    document.querySelector('[data-goal="answer"]').hidden = true;
+  }
+
+  function openComposer(o) {
+    o = o || {};
+    reset();
+    if (!dlg.open) dlg.showModal();
+    state = { threadKey: o.threadKey || null };
+    $('ceTitle').innerHTML = '<i class="bi bi-envelope"></i>' + (o.reply ? 'Reply' : 'New email') + ' · ' + esc(COMPANY_NAME);
+    stage('Checking the conversation…', '');
+    loadContext().then(function (c) {
+      if (o.draftId) {
+        return api('GET', '/emails/' + encodeURIComponent(o.draftId)).then(function (r) {
+          var m = r.message;
+          $('ceId').value = m.id; $('ceTo').value = m.to; $('ceSubject').value = m.subject; $('ceBodyText').value = m.body; $('ceReplyTo').value = m.inReplyTo || '';
+          $('ceProject').value = m.projectId || '';
+          $('ceCc').value = (m.cc || '').split(',').map(function (x) { return x.trim(); }).filter(function (x) { return x && x.toLowerCase().indexOf(String(c.trackingAddress).toLowerCase()) === -1; }).join(', ');
+          state.threadKey = m.threadKey; $('ceDelete').hidden = false;
+          if (m.status === 'failed') $('ceMsg').innerHTML = '<span class="ce-err">Last send failed: ' + esc(m.error || '') + '</span>';
+          stage('Draft', 'Last saved ' + when(m.updatedAt), '');
+          $('ceRevise').hidden = !c.aiEnabled;
+        });
+      }
+      if (o.to) $('ceTo').value = o.to;
+      if (o.subject) $('ceSubject').value = o.subject;
+      if (o.inReplyTo) $('ceReplyTo').value = o.inReplyTo;
+      if (o.reply) document.querySelector('[data-goal="answer"]').hidden = false;
+      setGoal(o.goal || (c.hasHistory ? 'follow_up' : 'introduce'));
+      if (o.reply) stage(o.goal === 'answer' ? 'Reply expected' : 'Follow-up', o.goal === 'answer' ? 'They wrote last.' : 'You wrote last.', o.goal === 'answer' ? 'warn' : '');
+      else if (!c.hasHistory) stage('First contact', 'No emails with ' + COMPANY_NAME + ' yet. Research can help personalise it.', 'new');
+      else stage('Ongoing relationship', 'Earlier emails will be used as context.', '');
+    }).catch(function (e) { stage('Could not load details', (e && e.error) || '', 'warn'); });
+    setTimeout(function () { ($('ceTo').value ? $('ceInstr') : $('ceTo')).focus(); }, 50);
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-compose]'); if (!b) return;
+    e.preventDefault(); openComposer({ to: b.getAttribute('data-to') || '' });
+  });
+
+  function collect(extra) {
+    var o = { id: $('ceId').value || null, to: $('ceTo').value, cc: $('ceCc').value, subject: $('ceSubject').value, body: $('ceBodyText').value,
+      projectId: $('ceProject').value || null, inReplyTo: $('ceReplyTo').value || null, aiMeta: aiMeta };
+    for (var k in (extra || {})) o[k] = extra[k];
+    return o;
+  }
+  function researchIds() { return Array.prototype.map.call(document.querySelectorAll('#ceResearchList input:checked'), function (i) { return +i.value; }); }
+
+  function write(revision) {
+    var btn = $('ceWrite'); btn.disabled = true;
+    var old = btn.innerHTML; btn.innerHTML = '<span class="logo-spin"></span>Writing…';
+    $('ceAiMsg').className = 'ce-ai-msg'; $('ceAiMsg').textContent = '';
+    var body = collect({ goal: goal, tone: $('ceTone').value, language: $('ceLang').value, threadKey: state.threadKey,
+      instructions: [$('ceInstr').value, revision || ''].filter(Boolean).join('\n'), revise: revision ? 1 : 0, researchIds: researchIds() });
+    api('POST', base + '/email-draft-ai', body).then(function (r) {
+      if (r.subject && !revision && !state.threadKey) $('ceSubject').value = r.subject;
+      $('ceBodyText').value = r.body;
+      aiMeta = { stage: r.stage, goal: goal, at: new Date().toISOString(), research: researchIds() };
+      stage(STAGES[r.stage] || 'Draft ready', r.stageReason || '', r.stage === 'reply' ? 'warn' : r.stage === 'first_contact' ? 'new' : '');
+      var g = $('ceGaps');
+      g.hidden = !(r.gaps && r.gaps.length);
+      g.innerHTML = r.gaps && r.gaps.length ? '<li class="ce-gaps-title"><i class="bi bi-exclamation-triangle"></i>Fill in before sending</li>' + r.gaps.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') : '';
+      $('ceRevise').hidden = false; dirty = true;
+      $('ceAiMsg').textContent = 'Draft written from ' + (r.historyCount ? r.historyCount + ' earlier email' + (r.historyCount === 1 ? '' : 's') : 'CRM details') + '. Edit freely.';
+    }).catch(function (e) { $('ceAiMsg').className = 'ce-ai-msg ce-err'; $('ceAiMsg').textContent = (e && e.error) || 'Could not write a draft.'; })
+      .then(function () { btn.disabled = !(ctx && ctx.aiEnabled); btn.innerHTML = old; });
+  }
+  $('ceWrite').addEventListener('click', function () { write(''); });
+  document.querySelectorAll('[data-revise]').forEach(function (b) { b.addEventListener('click', function () { write(b.getAttribute('data-revise')); }); });
+  ['ceTo', 'ceCc', 'ceSubject', 'ceBodyText'].forEach(function (id) { $(id).addEventListener('input', function () { dirty = true; }); });
+
+  function msg(t, kind) { $('ceMsg').innerHTML = kind === 'err' ? '<span class="ce-err">' + esc(t) + '</span>' : esc(t); }
+
+  $('ceSave').addEventListener('click', function () {
+    api('POST', base + '/emails/draft', collect()).then(function (r) {
+      $('ceId').value = r.id; $('ceDelete').hidden = false; dirty = false;
+      $('ceSaved').textContent = 'Draft saved ' + new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      msg('Draft saved. It appears under Drafts in the email list.');
+    }).catch(function (e) { msg((e && e.error) || 'Could not save.', 'err'); });
+  });
+
+  $('ceDelete').addEventListener('click', function () {
+    if (!$('ceId').value || !confirm('Delete this draft?')) return;
+    api('POST', '/emails/' + encodeURIComponent($('ceId').value) + '/delete').then(function () { dirty = false; dlg.close(); location.reload(); });
+  });
+
+  $('ceCopy').addEventListener('click', function () {
+    var sig = ctx && ctx.mailbox && ctx.mailbox.signature ? '\n\n' + ctx.mailbox.signature : '';
+    var text = $('ceBodyText').value.trim() + sig;
+    var cc = [ctx ? ctx.trackingAddress : '', $('ceCc').value].filter(Boolean).join(',');
+    var to = $('ceTo').value.split(',').map(function (x) { var m = x.match(/<([^>]+)>/); return (m ? m[1] : x).trim(); }).filter(Boolean).join(',');
+    var href = 'mailto:' + to + '?cc=' + encodeURIComponent(cc) + '&subject=' + encodeURIComponent($('ceSubject').value);
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () {
+      msg('Text copied. Paste it into the new message; the tracking address is already in Cc.');
+    }, function () { msg('Copy the text manually, then send it with the tracking address in Cc.'); });
+    window.location.href = href;
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!ctx || !ctx.mailbox) { msg('Connect your email in My Profile to send from the CRM, or use Copy to Outlook.', 'err'); return; }
+    var btn = $('ceSend'); btn.disabled = true; var old = btn.innerHTML; btn.innerHTML = '<span class="logo-spin"></span>Sending…';
+    function send(confirmGaps) {
+      return api('POST', base + '/emails/send', collect(confirmGaps ? { confirmGaps: '1' } : null)).then(function () {
+        dirty = false; msg('Sent.'); setTimeout(function () { dlg.close(); location.hash = 'emails'; location.reload(); }, 600);
+      }).catch(function (err) {
+        if (err && err.code === 'GAPS' && confirm(err.error)) return send(true);
+        if (err && err.id) { $('ceId').value = err.id; $('ceDelete').hidden = false; }
+        msg((err && err.error) || 'Could not send.', 'err');
+      });
+    }
+    send(false).then(function () { btn.disabled = false; btn.innerHTML = old; });
+  });
+
+  function tryClose() {
+    if (dirty && ($('ceBodyText').value.trim() || $('ceSubject').value.trim()) && !confirm('Close without saving? Use "Save draft" to keep it.')) return;
+    dlg.close();
+  }
+  dlg.addEventListener('cancel', function (e) { e.preventDefault(); tryClose(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg || e.target.closest('[data-ce-close]')) tryClose(); });
+})();
+</script>

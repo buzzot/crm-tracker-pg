@@ -42,6 +42,14 @@
   }
   const ACT_LIMIT = 8;
 
+  // ── Emails ─────────────────────────────────────────────────────────────────
+  const _threads = typeof emailThreads !== 'undefined' ? emailThreads : [];
+  const _track = typeof trackingAddress !== 'undefined' ? trackingAddress : null;
+  const _mbReady = typeof mailboxReady !== 'undefined' && mailboxReady;
+  const tCount = { all: _threads.length, reply: _threads.filter(t => t.state === 'reply').length, waiting: _threads.filter(t => t.state === 'waiting').length, draft: _threads.filter(t => t.state === 'draft' || t.drafts).length };
+  function who(addr) { const m = String(addr || '').match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>/); return m ? (m[1].trim() || m[2]) : String(addr || '').split(',')[0].trim(); }
+  function ago(v) { const x = d(v); if (!x) return ''; const s = Math.floor((Date.now() - x) / 1000); if (s < 3600) return Math.max(1, Math.floor(s / 60)) + 'm ago'; if (s < 86400) return Math.floor(s / 3600) + 'h ago'; if (s < 86400 * 7) return Math.floor(s / 86400) + 'd ago'; return fmtShort(v); }
+  const stateLabel = { reply: 'Needs reply', waiting: 'Awaiting them', draft: 'Draft', quiet: 'Quiet' };
   const statusCls = { 'Client': 'done', 'Prospect': 'active', 'Partner': 'active', 'Active': 'active', 'Inactive': 'cancelled', 'Planned': 'hold', 'Lead': 'hold' }[company.status] || 'none';
   const webHost = company.web ? String(company.web).replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
 %>
@@ -72,6 +80,7 @@
       </div>
     </div>
     <div class="pj-head-actions">
+      <button type="button" class="pg-btn ce-ai-btn" data-compose><i class="bi bi-stars" aria-hidden="true"></i>Draft email</button>
       <a href="/companies/<%= company.id %>/activities/new" class="pg-btn"><i class="bi bi-journal-plus" aria-hidden="true"></i>Log activity</a>
       <a href="/companies/<%= company.id %>/edit" class="pg-btn"><i class="bi bi-pencil" aria-hidden="true"></i>Edit</a>
       <div class="dropdown">
@@ -121,6 +130,51 @@
   <div class="pj-grid">
     <!-- ── Main column ─────────────────────────────────────────────────── -->
     <div class="pj-main">
+
+      <!-- Emails -->
+      <section class="pj-card" id="emails" aria-labelledby="coMailTitle">
+        <div class="pj-card-head">
+          <div>
+            <h2 class="pj-card-title" id="coMailTitle">Emails <span class="pj-n"><%= _threads.length %> conversation<%= _threads.length === 1 ? '' : 's' %></span></h2>
+            <p class="pj-card-sub"><% if (_track) { %>Replies to <code class="ce-code"><%= _track %></code> are logged here automatically<% } else { %>Email log<% } %></p>
+          </div>
+          <div class="pj-card-actions"><button type="button" class="pj-link-btn ce-ai-link" data-compose><i class="bi bi-stars" aria-hidden="true"></i>Draft email</button></div>
+        </div>
+        <% if (typeof emailError !== 'undefined' && emailError) { %>
+          <p class="pj-hint"><%= emailError %></p>
+        <% } else if (!_threads.length) { %>
+          <div class="pj-empty pj-empty-sm"><div>No emails with <%= company.name %> yet. <button type="button" class="pj-link-btn" data-compose>Draft the first one with AI</button></div></div>
+        <% } else { %>
+          <div class="ce-filter">
+            <div class="ce-seg" role="tablist" aria-label="Filter conversations">
+              <button type="button" class="is-on" data-ef="all" role="tab" aria-selected="true">All <span><%= tCount.all %></span></button>
+              <button type="button" data-ef="reply" role="tab" aria-selected="false">Needs reply <span class="<%= tCount.reply ? 'ce-red' : '' %>"><%= tCount.reply %></span></button>
+              <button type="button" data-ef="waiting" role="tab" aria-selected="false">Awaiting them <span><%= tCount.waiting %></span></button>
+              <button type="button" data-ef="draft" role="tab" aria-selected="false">Drafts <span><%= tCount.draft %></span></button>
+            </div>
+            <label class="ce-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="ceSearch" placeholder="Search subject, person or text" aria-label="Search emails"></label>
+          </div>
+          <ul class="ce-threads" id="ceThreads">
+            <% _threads.forEach(t => {
+                 const last = t.last || t.messages[t.messages.length - 1];
+                 const draft = t.messages.find(m => m.status === 'draft' || m.status === 'failed');
+                 const searchText = [t.subject, t.people.join(' '), t.messages.map(m => m.from + ' ' + m.to + ' ' + String(m.body).slice(0, 300)).join(' ')].join(' ').toLowerCase(); %>
+              <li class="ce-th ce-th-<%= t.state %>" tabindex="0" role="button" data-key="<%= t.key %>" data-state="<%= t.state %>" data-has-draft="<%= t.drafts ? 1 : 0 %>" <% if (t.state === 'draft' && draft) { %>data-draft="<%= draft.id %>"<% } %> data-search="<%= searchText %>">
+                <span class="ce-state ce-st-<%= t.state %>"><%= stateLabel[t.state] %></span>
+                <span class="ce-th-main">
+                  <span class="ce-th-top"><b><%= t.subject %></b><% if (t.projectName) { %><span class="ce-chip"><%= t.projectName %></span><% } %><% if (t.hasFailed) { %><span class="ce-chip ce-chip-red">Not sent</span><% } else if (t.drafts && t.state !== 'draft') { %><span class="ce-chip ce-chip-ai">Draft reply</span><% } %></span>
+                  <span class="ce-th-snip"><% if (last) { %><b><%= last.direction === 'out' ? 'You' : who(last.from) %>:</b> <%= String(last.body || '').replace(/\s+/g, ' ').slice(0, 160) %><% } %></span>
+                </span>
+                <span class="ce-th-right">
+                  <span><%= ago(t.lastAt) %></span>
+                  <span class="ce-th-n"><%= t.count %> <i class="bi bi-envelope" aria-hidden="true"></i></span>
+                </span>
+              </li>
+            <% }) %>
+          </ul>
+          <p class="pj-hint ce-none" id="ceNone" hidden>No conversations match.</p>
+        <% } %>
+      </section>
 
       <!-- Projects -->
       <section class="pj-card" aria-labelledby="coProjTitle">
@@ -226,6 +280,7 @@
                   <% if (p.title) { %><span class="co-contact-title" title="<%= p.title %>"><%= p.title %></span><% } %>
                   <span class="co-contact-reach">
                     <% if (p.email) { %><a href="mailto:<%= p.email %>" title="<%= p.email %>"><i class="bi bi-envelope" aria-hidden="true"></i><span><%= p.email %></span></a><% } %>
+                    <% if (p.email && p.status !== 'Left') { %><button type="button" class="ce-contact-ai" data-compose data-to="<%= p.fullName %> <<%= p.email %>>"><i class="bi bi-stars" aria-hidden="true"></i>Email with AI</button><% } %>
                     <% if (p.phone) { %><a href="tel:<%= String(p.phone).replace(/[^\d+]/g, '') %>"><i class="bi bi-telephone" aria-hidden="true"></i><span><%= p.phone %></span></a><% } %>
                   </span>
                 </span>
@@ -280,6 +335,89 @@
   </div>
 </div>
 
+<!-- ── AI email composer ─────────────────────────────────────────────── -->
+<dialog class="ce-dialog" id="ceDialog" aria-labelledby="ceTitle">
+  <div class="ce-head">
+    <h3 id="ceTitle"><i class="bi bi-envelope" aria-hidden="true"></i>New email · <%= company.name %></h3>
+    <span class="ce-saved" id="ceSaved"></span>
+    <button type="button" class="pj-copy-btn" data-ce-close aria-label="Close"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+  </div>
+  <div class="ce-body">
+    <!-- AI side -->
+    <div class="ce-ai" id="ceAi">
+      <div class="ce-ai-title"><i class="bi bi-stars" aria-hidden="true"></i>AI assistant</div>
+      <div class="ce-stage" id="ceStage"><span class="ce-stage-dot"></span><div><b id="ceStageTitle">Checking the conversation…</b><span id="ceStageText"></span></div></div>
+
+      <span class="ce-lbl">Goal</span>
+      <div class="ce-chips" id="ceGoals" role="radiogroup" aria-label="Goal">
+        <button type="button" data-goal="introduce" class="is-on">Introduce Samyou</button>
+        <button type="button" data-goal="meeting">Request meeting</button>
+        <button type="button" data-goal="quote">Quote</button>
+        <button type="button" data-goal="follow_up">Follow up</button>
+        <button type="button" data-goal="re_engage">Re-engage</button>
+        <button type="button" data-goal="answer" hidden>Answer their questions</button>
+      </div>
+
+      <label class="ce-lbl" for="ceInstr">What should it say? <span class="pj-muted">optional</span></label>
+      <textarea id="ceInstr" class="mm-input ce-instr" rows="3" placeholder="e.g. Mention we can ship BDQ50 samples in December and ask for their 2027 volumes"></textarea>
+
+      <div class="ce-row2">
+        <label><span class="ce-lbl">Tone</span><select id="ceTone" class="pj-select"><option value="professional and warm">Professional, warm</option><option value="formal">Formal</option><option value="friendly and brief">Friendly, brief</option><option value="direct">Direct</option></select></label>
+        <label><span class="ce-lbl">Language</span><select id="ceLang" class="pj-select"><option value="en">English</option><option value="zh">中文</option></select></label>
+      </div>
+
+      <div class="ce-research" id="ceResearchBox">
+        <div class="ce-lbl ce-lbl-row"><span>Research <span class="pj-muted" id="ceResearchAge"></span></span><button type="button" class="pj-link-btn" id="ceResearchBtn"><i class="bi bi-globe2" aria-hidden="true"></i>Research <%= company.name %></button></div>
+        <ul class="ce-research-list" id="ceResearchList"><li class="pj-hint">Recent news about the company that the email could mention. Tick what to use.</li></ul>
+      </div>
+
+      <div class="ce-ai-actions">
+        <button type="button" class="pg-btn pg-btn-primary" id="ceWrite"><i class="bi bi-stars" aria-hidden="true"></i>Write draft</button>
+        <span class="ce-revise" id="ceRevise" hidden>
+          <button type="button" class="pg-btn" data-revise="Make it shorter (under 100 words).">Shorter</button>
+          <button type="button" class="pg-btn" data-revise="Make it more formal.">More formal</button>
+          <button type="button" class="pg-btn" data-revise="Make it warmer and friendlier.">Friendlier</button>
+        </span>
+      </div>
+      <p class="ce-ai-msg" id="ceAiMsg" role="status" aria-live="polite"></p>
+      <p class="pj-hint">AI can be wrong. Check facts, and fill in anything in [brackets] before sending.</p>
+    </div>
+
+    <!-- Email side -->
+    <form class="ce-mail" id="ceForm" autocomplete="off">
+      <input type="hidden" name="id" id="ceId">
+      <input type="hidden" name="inReplyTo" id="ceReplyTo">
+      <div class="ce-f"><span>From</span><span id="ceFrom" class="ce-from"></span></div>
+      <div class="ce-f"><label for="ceTo">To</label><input id="ceTo" name="to" class="ce-input" list="ceContacts" placeholder="Name <email@company.com>, separate several with commas" required></div>
+      <datalist id="ceContacts"></datalist>
+      <div class="ce-f"><label for="ceCc">Cc</label><span class="ce-lock" id="ceLock" title="Added automatically so replies are logged in the CRM"><i class="bi bi-lock-fill" aria-hidden="true"></i><span id="ceTrack"><%= _track || '' %></span></span><input id="ceCc" name="cc" class="ce-input" placeholder="Add more"></div>
+      <div class="ce-f"><label for="ceSubject">Subject</label><input id="ceSubject" name="subject" class="ce-input ce-subject" required></div>
+      <div class="ce-f"><label for="ceProject">Project</label><select id="ceProject" name="projectId" class="pj-select ce-proj"><option value="">Not linked</option></select></div>
+      <div class="ce-editor-wrap">
+        <textarea id="ceBodyText" name="body" class="ce-editor" placeholder="Write your email, or let the AI draft it."></textarea>
+        <div class="ce-sig" id="ceSig" hidden></div>
+        <ul class="ce-gaps" id="ceGaps" hidden></ul>
+      </div>
+      <div class="ce-foot">
+        <button type="button" class="pj-link-btn ce-del" id="ceDelete" hidden>Delete draft</button>
+        <span class="ce-foot-msg" id="ceMsg" role="status" aria-live="polite"></span>
+        <span class="ce-foot-right">
+          <button type="button" class="pg-btn" id="ceSave">Save draft</button>
+          <button type="button" class="pg-btn" id="ceCopy" title="Copy the text and open a new message in your mail program">Copy to Outlook</button>
+          <button type="submit" class="pg-btn pg-btn-primary" id="ceSend"><i class="bi bi-send" aria-hidden="true"></i>Send</button>
+        </span>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- ── Conversation drawer ─────────────────────────────────────────── -->
+<div class="al-backdrop" id="ceDrawerBg" hidden></div>
+<aside class="al-drawer ce-drawer" id="ceDrawer" role="dialog" aria-modal="true" aria-labelledby="ceDrawerTitle" hidden tabindex="-1">
+  <button type="button" class="al-drawer-close" id="ceDrawerClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+  <div id="ceDrawerBody"></div>
+</aside>
+
 <script>
 (function () {
   var input = document.getElementById('coAttachInput'), label = document.getElementById('coAttachLabel');
@@ -296,3 +434,5 @@
   drop.addEventListener('drop', function (e) { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) { input.files = e.dataTransfer.files; show(); } });
 })();
 </script>
+
+<%- include('partials/company-email-script') %>

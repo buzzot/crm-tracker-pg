@@ -5,6 +5,7 @@ const crypto  = require('crypto');
 const multer  = require('multer');
 const { autoClean } = require('../services/autoclean');
 const crm     = require('../services/crm');
+const mail    = require('../services/mail');
 
 const router = express.Router();
 
@@ -77,6 +78,30 @@ router.post('/webhooks/email', upload.any(), async (req, res) => {
 
   // Locate the target entity (project or task)
   const target = parseRecipient(recipient);
+
+  // Company tracking address (e.g. aaon@mail.samyou.se) → company email log
+  if (!target) {
+    try {
+      const company = await mail.companyByAlias(String(recipient || '').split('@')[0]);
+      if (company) {
+        const result = await mail.recordInbound({
+          company,
+          from: from || sender || '',
+          to: req.body.To || req.body.to || '',
+          cc: req.body.Cc || req.body.cc || '',
+          subject: (subject || '(no subject)').trim(),
+          body,
+          messageId: req.body['Message-Id'] || req.body['message-id'] || null,
+          inReplyTo: req.body['In-Reply-To'] || req.body['in-reply-to'] || null,
+        });
+        console.log(`[webhook/email] Company email for ${company.name}:`, result.skipped || result.direction);
+        return;
+      }
+    } catch (err) {
+      console.error('[webhook/email] Company routing failed:', err.message);
+      return;
+    }
+  }
   if (!target) {
     console.warn('[webhook/email] Could not parse entity from recipient:', recipient);
     return;

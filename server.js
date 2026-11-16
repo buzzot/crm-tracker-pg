@@ -29,6 +29,7 @@ const contactsRoutes = require('./routes/contacts');
 const dealsRoutes = require('./routes/deals');
 const apiRoutes = require('./routes/api');
 const commentsRoutes = require('./routes/comments');
+const emailsRoutes = require('./routes/emails');
 const adminRoutes = require('./routes/admin');
 const profileRoutes = require('./routes/profile');
 const webhookRoutes = require('./routes/webhooks');
@@ -129,6 +130,7 @@ app.use(contactsRoutes);
 app.use(dealsRoutes);
 app.use(apiRoutes);
 app.use(commentsRoutes);
+app.use(emailsRoutes);
 app.use('/admin', requireAdmin, adminRoutes);
 app.use(reportsRoutes);
 

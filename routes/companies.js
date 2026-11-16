@@ -3,6 +3,8 @@ const express = require('express');
 const multer  = require('multer');
 const router  = express.Router();
 const crm     = require('../services/crm');
+const mail    = require('../services/mail');
+const ai      = require('../services/ai');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
@@ -113,7 +115,21 @@ router.get('/companies/:id', async (req, res, next) => {
         }
       }
     }
-    res.render('company-detail', { title: detail.company.name, ...detail });
+    // Email log + tracking address (optional: page still works if email tables are unavailable)
+    let emailThreads = [], trackingAddress = null, mailboxReady = false, emailError = null;
+    try {
+      const [threads, address, mb] = await Promise.all([
+        mail.companyThreads(detail.company.id), mail.companyAddress(detail.company), mail.getSettings(user.id),
+      ]);
+      emailThreads = threads; trackingAddress = address; mailboxReady = !!mb;
+    } catch (e) {
+      emailError = 'The email log is not available right now.';
+      console.error('[companies] email log:', e.message);
+    }
+    res.render('company-detail', {
+      title: detail.company.name, ...detail,
+      emailThreads, trackingAddress, mailboxReady, emailError, aiEnabled: ai.isConfigured(),
+    });
   } catch (err) { next(err); }
 });
 

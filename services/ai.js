@@ -21,7 +21,7 @@ function cacheSet(k, value) { if (cache.size > 500) cache.delete(cache.keys().ne
 // Call Claude. With `tool`, the model is forced to answer through that tool, so the API
 // returns an already-parsed object that matches the tool's JSON schema (no fragile
 // JSON-in-text parsing). Without `tool`, returns plain text.
-async function callClaude({ system, user, maxTokens = 900, tool = null, timeoutMs = TIMEOUT_MS }) {
+async function callClaude({ system, user, maxTokens = 900, tool = null, timeoutMs = TIMEOUT_MS, extraTools = null, toolChoiceAuto = false, model = null }) {
   if (!isConfigured()) {
     const err = new Error('AI is not set up. Add ANTHROPIC_API_KEY in Railway settings.');
     err.code = 'AI_NOT_CONFIGURED';
@@ -31,12 +31,15 @@ async function callClaude({ system, user, maxTokens = 900, tool = null, timeoutM
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const body = {
-      model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+      model: model || process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
       max_tokens: maxTokens,
       system,
       messages: [{ role: 'user', content: user }],   // string or [image…, text] blocks
     };
-    if (tool) { body.tools = [tool]; body.tool_choice = { type: 'tool', name: tool.name }; }
+    if (tool) {
+      body.tools = [...(extraTools || []), tool];
+      body.tool_choice = toolChoiceAuto ? { type: 'auto' } : { type: 'tool', name: tool.name };
+    }
     const res = await fetch(API_URL, {
       method: 'POST',
       signal: ctrl.signal,
@@ -381,7 +384,118 @@ function blocksToText(v) {
   return out.join('\n\n').trim();
 }
 
+// ── Company research (web search) for first-contact emails ──────────────────
+const RESEARCH_TOOL = {
+  name: 'submit_research',
+  description: 'Submit the research findings.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        description: '3 to 6 recent, relevant findings',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'One-line finding, factual' },
+            detail: { type: 'string', description: 'Why it matters for a supplier of HVAC inverter drives and controllers (1 sentence)' },
+            source: { type: 'string', description: 'Publication or site name' },
+            url: { type: 'string' },
+            date: { type: 'string', description: 'Approximate date, e.g. "Sep 2026"' },
+          },
+          required: ['title', 'source'],
+        },
+      },
+    },
+    required: ['items'],
+  },
+};
+
+async function researchCompany(company) {
+  const system = `You research a B2B prospect for Samyou, a supplier of inverter drives (VFD), controllers and electronics for HVAC/refrigeration equipment makers.
+Use web search to find RECENT (last 12–18 months) and relevant facts: new products or platforms, plant expansions, efficiency/refrigerant regulation impact, acquisitions, leadership changes, supplier/localisation moves, financial results.
+Only include facts you found in sources; include the URL. Then call submit_research.`;
+  const user = `Company: ${company.name}${company.web ? ' (' + company.web + ')' : ''}${company.industry ? ', industry: ' + company.industry : ''}${company.billingAddress ? ', located: ' + company.billingAddress : ''}.`;
+  const json = await callClaudeRetry({
+    system, user, maxTokens: 3000, tool: RESEARCH_TOOL, toolChoiceAuto: true, timeoutMs: 120000,
+    extraTools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
+    model: process.env.ANTHROPIC_RESEARCH_MODEL || null,
+  });
+  return (Array.isArray(json.items) ? json.items : []).slice(0, 6).map((x, i) => ({
+    id: i + 1,
+    title: String(x.title || '').trim().slice(0, 300),
+    detail: String(x.detail || '').trim().slice(0, 400),
+    source: String(x.source || '').trim().slice(0, 120),
+    url: /^https?:\/\//.test(String(x.url || '')) ? String(x.url).slice(0, 500) : '',
+    date: String(x.date || '').trim().slice(0, 40),
+  })).filter((x) => x.title);
+}
+
+// ── Email drafting ──────────────────────────────────────────────────────────
+const DRAFT_TOOL = {
+  name: 'submit_draft',
+  description: 'Submit the email draft.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      stage: { type: 'string', enum: ['first_contact', 'follow_up', 'reply', 're_engage', 'ongoing'] },
+      stage_reason: { type: 'string', description: 'One short sentence explaining the stage' },
+      subject: { type: 'string' },
+      body: { type: 'string', description: 'Plain-text email body. Greeting, short paragraphs, sign-off with the sender first name only (the signature is added automatically).' },
+      gaps: { type: 'array', items: { type: 'string' }, description: 'Facts you needed but did not have; they appear in the body as [square brackets]' },
+      used_research: { type: 'array', items: { type: 'integer' }, description: 'ids of research items mentioned' },
+    },
+    required: ['stage', 'subject', 'body'],
+  },
+};
+
+const GOALS = {
+  introduce: 'Introduce Samyou and open a conversation',
+  meeting: 'Ask for a short call or meeting',
+  quote: 'Send or discuss a quotation',
+  follow_up: 'Follow up on the last exchange',
+  re_engage: 'Re-engage after a period of silence',
+  answer: 'Answer their latest questions',
+  custom: 'Follow the user instructions',
+};
+
+async function draftEmail(ctx) {
+  const system = `You write business emails for ${ctx.sender.name || 'a salesperson'} at Samyou (inverter drives, controllers and electronics for HVAC/refrigeration OEMs; offices in the USA and China).
+Write like an experienced, friendly B2B account manager: specific, short (80–180 words unless replying to many questions), no hype, no clichés ("I hope this email finds you well"), one clear call to action.
+Use ONLY facts from the CRM context, the user's instructions and the selected research. Never invent prices, lead times, certifications, dates or customer names: if one is needed, write it as [square brackets] and list it in gaps.
+When research items are provided, mention at most two naturally and accurately.
+Decide the conversation stage from the history: first_contact (no prior emails with this person/company), reply (their message is the latest and expects an answer), follow_up (we wrote last and are waiting), re_engage (no exchange for 60+ days), ongoing.
+Language: ${ctx.language === 'zh' ? 'Simplified Chinese (keep product names and part numbers as written)' : 'English'}. Tone: ${ctx.tone || 'professional and warm'}.
+Return the result with the submit_draft tool.`;
+
+  const hist = (ctx.history || []).slice(-12).map((m) =>
+    `[${new Date(m.sentAt || m.createdAt).toISOString().slice(0, 10)}] ${m.direction === 'in' ? 'THEM' : 'US'} | from: ${m.from} | to: ${m.to}\nSubject: ${m.subject}\n${clip(m.body, 1500)}`).join('\n\n---\n\n');
+  const research = (ctx.research || []).map((r) => `#${r.id} ${r.title}${r.detail ? ' — ' + r.detail : ''} (${r.source}${r.date ? ', ' + r.date : ''})`).join('\n');
+  const user = `GOAL: ${GOALS[ctx.goal] || GOALS.introduce}
+USER INSTRUCTIONS: ${ctx.instructions ? clip(ctx.instructions, 2000) : '(none)'}
+${ctx.currentDraft ? 'CURRENT DRAFT TO REVISE:\n' + clip(ctx.currentDraft, 4000) + '\n' : ''}
+SENDER: ${ctx.sender.name} <${ctx.sender.email}>${ctx.sender.title ? ', ' + ctx.sender.title : ''}
+RECIPIENTS: ${(ctx.recipients || []).map((r) => `${r.name || ''} <${r.email}>${r.title ? ' (' + r.title + ')' : ''}`).join('; ') || '(not chosen yet)'}
+COMPANY: ${ctx.company.name}${ctx.company.industry ? ' | industry: ' + ctx.company.industry : ''}${ctx.company.status ? ' | status: ' + ctx.company.status : ''}${ctx.company.web ? ' | ' + ctx.company.web : ''}
+OPEN DEALS: ${(ctx.deals || []).map((d) => `${d.name} [${d.stage}${d.amountSet !== false && d.amount ? ', $' + d.amount : ''}]`).join('; ') || 'none'}
+PROJECTS: ${(ctx.projects || []).map((p) => `${p.name} [${p.status || 'no status'}]${(p.products || []).length ? ' products: ' + p.products.map((x) => x.name).join(', ') : ''}`).join('; ') || 'none'}
+RECENT ACTIVITY: ${(ctx.activities || []).slice(0, 6).map((a) => `${a.statusDate || a.date || ''} ${a.type || ''}: ${a.name}${a.result ? ' (' + a.result + ')' : ''}`).join('; ') || 'none'}
+${ctx.replyTo ? 'REPLYING TO THIS THREAD (latest last).\n' : ''}EMAIL HISTORY (oldest first):
+${hist || '(no previous emails)'}
+${research ? '\nSELECTED RESEARCH:\n' + research : ''}`;
+
+  const json = await callClaudeRetry({ system, user, maxTokens: 2000, tool: DRAFT_TOOL, timeoutMs: 90000 });
+  return {
+    stage: String(json.stage || 'ongoing'),
+    stageReason: String(json.stage_reason || '').trim().slice(0, 300),
+    subject: String(json.subject || '').trim().slice(0, 300),
+    body: String(json.body || '').replace(/\r/g, '').trim().slice(0, 12000),
+    gaps: (Array.isArray(json.gaps) ? json.gaps : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 10),
+    usedResearch: (Array.isArray(json.used_research) ? json.used_research : []).map(Number).filter(Number.isFinite),
+  };
+}
+
 // Back-compat: short TL;DR only
 async function summarizeMessage(c) { const f = await formatMessage(c); return { tldr: f.tldr, asks: f.asks }; }
 
-module.exports = { isConfigured, summarizeThread, summarizeMessage, formatMessage, imageAttachments, readImages, blocksToText, _parseJson: parseJson, _describeMessage: describeMessage };
+module.exports = { isConfigured, summarizeThread, summarizeMessage, formatMessage, imageAttachments, readImages, blocksToText, researchCompany, draftEmail, _parseJson: parseJson, _describeMessage: describeMessage };
