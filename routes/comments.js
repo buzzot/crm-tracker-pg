@@ -2,11 +2,13 @@
 // Single-message actions used from conversation threads:
 //   POST /comments/:id/edit     Admin only — correct text / sender / date / channel
 //   POST /comments/:id/delete   Admin only
-//   POST /comments/:id/summary  AI TL;DR of one long message (JSON)
+//   POST /comments/:id/format   AI clean reading view of one message (stored; JSON)
+//   POST /comments/:id/summary  same, kept for older pages
 const express = require('express');
 const router = express.Router();
 const crm = require('../services/crm');
 const ai = require('../services/ai');
+const { autoClean, cleanNow } = require('../services/autoclean');
 
 const ENTITY_PATH = { project: '/projects/', task: '/tasks/', activity: '/activities/', deal: '/deals/', contact: '/contacts/', product: '/products/' };
 const backTo = (c) => (c && ENTITY_PATH[c.entityType] ? ENTITY_PATH[c.entityType] + c.entityId + '#comments' : '/');
@@ -27,6 +29,7 @@ router.post('/comments/:id/edit', async (req, res, next) => {
       const base = backTo(c).replace('#comments', '');
       return res.redirect(base + '?msgError=' + encodeURIComponent(validation.message) + '#comments');
     }
+    autoClean(c.id);   // text may have changed: refresh the clean view in the background
     res.redirect(backTo(c));
   } catch (err) { next(err); }
 });
@@ -41,17 +44,17 @@ router.post('/comments/:id/delete', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/comments/:id/summary', async (req, res) => {
+async function formatHandler(req, res) {
   try {
-    const c = await crm.getComment(req.params.id);
-    if (!c) return res.status(404).json({ ok: false, error: 'Message not found.' });
-    const result = await ai.summarizeMessage(c);
+    const result = await cleanNow(req.params.id);
     res.json({ ok: true, ...result });
   } catch (err) {
-    const status = err.code === 'AI_NOT_CONFIGURED' ? 503 : 502;
-    if (!err.code) console.error('[ai] message summary failed:', err.message);
-    res.status(status).json({ ok: false, error: err.code ? err.message : 'Could not summarise this message.' });
+    const status = err.code === 'AI_NOT_CONFIGURED' ? 503 : err.message === 'Message not found.' ? 404 : err.code === 'NOT_EXTERNAL' ? 400 : 502;
+    if (!err.code && status === 502) console.error('[ai] message format failed:', err.message);
+    res.status(status).json({ ok: false, error: (err.code || status !== 502) ? err.message : 'Could not clean up this message.' });
   }
-});
+}
+router.post('/comments/:id/format', formatHandler);
+router.post('/comments/:id/summary', formatHandler);
 
 module.exports = router;

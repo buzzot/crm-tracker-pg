@@ -3,6 +3,7 @@
 const express = require('express');
 const crypto  = require('crypto');
 const multer  = require('multer');
+const { autoClean } = require('../services/autoclean');
 const crm     = require('../services/crm');
 
 const router = express.Router();
@@ -98,13 +99,15 @@ router.post('/webhooks/email', upload.any(), async (req, res) => {
   };
 
   try {
+    let saved;
     if (target.type === 'task') {
-      await crm.addTaskComment({ taskId: target.id, ...commentPayload });
+      saved = await crm.addTaskComment({ taskId: target.id, ...commentPayload });
     } else if (target.type === 'activity') {
-      await crm.addActivityComment({ activityId: target.id, ...commentPayload });
+      saved = await crm.addActivityComment({ activityId: target.id, ...commentPayload });
     } else {
-      await crm.addProjectComment({ projectId: target.id, ...commentPayload });
+      saved = await crm.addProjectComment({ projectId: target.id, ...commentPayload });
     }
+    autoClean(saved && saved.id);   // AI clean view for long emails (no-op if AI is off)
     console.log(`[webhook/email] Saved email from ${emailFrom} → ${target.type} ${target.id} | subject: ${emailSubject} | attachments: ${attachments.length}`);
   } catch (err) {
     console.error('[webhook/email] Failed to save email to database:', err.message || err);

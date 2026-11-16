@@ -3,6 +3,7 @@ const multer = require('multer');
 const router = express.Router();
 const crm = require('../services/crm');
 const ai = require('../services/ai');
+const { autoClean } = require('../services/autoclean');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -265,19 +266,20 @@ router.post('/projects/:id/summary', async (req, res) => {
 });
 
 // Log an email / WeChat message by hand (pasted from the mail client or WeChat).
-router.post('/projects/:id/messages', upload.array('attachment', 5), async (req, res, next) => {
+router.post('/projects/:id/messages', upload.array('attachment', 10), async (req, res, next) => {
   const back = `/projects/${req.params.id}`;
   try {
     const project = await crm.getProject(req.params.id);
     if (!project) return res.status(404).render('error', { title: 'Not found', message: 'Project not found.' });
     const user = req.session.user || {};
     const { channel, direction, from, to, subject, body, sentAtIso } = req.body;
-    await crm.addManualMessage({
+    const saved = await crm.addManualMessage({
       entityType: 'project', entityId: req.params.id,
       channel, direction, from, to, subject, body, sentAt: sentAtIso,
       loggedById: user.id || null, loggedByName: user.name || user.email || null,
       files: req.files,
     });
+    autoClean(saved && saved.id);   // AI clean view for long messages, in the background
     res.redirect(back + '#comments');
   } catch (err) {
     // Validation problems come back to the page as a short message
@@ -286,7 +288,7 @@ router.post('/projects/:id/messages', upload.array('attachment', 5), async (req,
 });
 
 // Post a note/comment on this project, attributed to the logged-in user.
-router.post('/projects/:id/comments', upload.array('attachment', 5), async (req, res, next) => {
+router.post('/projects/:id/comments', upload.array('attachment', 10), async (req, res, next) => {
   try {
     const { comment, link } = req.body;
     const author = (req.session.user && req.session.user.name) || 'Someone';

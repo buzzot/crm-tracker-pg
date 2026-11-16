@@ -68,27 +68,69 @@
   const _isAdmin = !!(currentUser && currentUser.role === 'Admin');
   const _aiOn = typeof aiEnabled !== 'undefined' && !!aiEnabled;
   function _esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
-  // Small per-message toolbar: AI TL;DR for long messages, Edit/Delete for admins
+  // Original text with the worst whitespace removed (no content changes)
+  function tidy(t) {
+    return String(t || '').replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/^\s+|\s+$/g, '');
+  }
+  // AI clean view (structured blocks) → escaped HTML
+  function renderClean(a) {
+    let h = '';
+    if (a.tldr) h += '<div class="msgv-tldr"><span class="msgv-tldr-label"><i class="bi bi-stars" aria-hidden="true"></i>In short</span>' + _esc(a.tldr) + '</div>';
+    if (a.asks && a.asks.length) h += '<div class="msgv-asks"><div class="msgv-asks-title">They ask</div><ul>' + a.asks.map(x => '<li>' + _esc(x) + '</li>').join('') + '</ul></div>';
+    h += '<div class="msgv-doc">';
+    (a.blocks || []).forEach(b => {
+      if (b.type === 'h') h += '<h4>' + _esc(b.text) + '</h4>';
+      else if (b.type === 'p') h += '<p>' + _esc(b.text).replace(/\n/g, '<br>') + '</p>';
+      else if (b.type === 'ul') h += '<ul>' + b.items.map(x => '<li>' + _esc(x) + '</li>').join('') + '</ul>';
+      else if (b.type === 'table') {
+        h += '<div class="msgv-table-wrap"><table class="msgv-table">';
+        if (b.headers && b.headers.length) h += '<thead><tr>' + b.headers.map(x => '<th>' + _esc(x) + '</th>').join('') + '</tr></thead>';
+        h += '<tbody>' + b.rows.map(r => '<tr>' + r.map(x => '<td>' + _esc(x) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+      }
+    });
+    return h + '</div>';
+  }
+  // Body of an email / logged message: clean view + original, or tidied original + clean-up button
+  function msgBody(c) {
+    const ai = c.manual && c.manual.ai;
+    const orig = tidy(c.comment);
+    const long = orig.length > 300;
+    if (ai) {
+      return '<div class="msgv" data-msgv>'
+        + '<div class="msgv-switch" role="tablist" aria-label="Message view">'
+        + '<button type="button" class="is-active" role="tab" aria-selected="true" data-view="clean"><i class="bi bi-stars" aria-hidden="true"></i>Clean view</button>'
+        + '<button type="button" role="tab" aria-selected="false" data-view="orig">Original</button></div>'
+        + '<div class="msgv-clean" data-pane="clean">' + renderClean(ai) + '</div>'
+        + '<div class="msgv-orig note-text" data-pane="orig" hidden>' + _esc(orig) + '</div>'
+        + '</div>';
+    }
+    let h = '<div class="msgv" data-msgv>'
+      + '<div class="msgv-orig note-text' + (long ? ' is-collapsed' : '') + '" data-orig>' + _esc(orig) + '</div>';
+    if (long) {
+      h += '<div class="msgv-actions">'
+        + '<button type="button" class="pj-link-btn" data-expand>Show full message</button>'
+        + '<button type="button" class="msgv-cta" data-ai-clean="' + _esc(c.id) + '"><i class="bi bi-stars" aria-hidden="true"></i>Make it easy to read</button>'
+        + '</div>';
+    }
+    return h + '</div>';
+  }
+  // Admin-only message menu
   function msgTools(c) {
-    const long = String(c.comment || '').length > 400;
-    if (!long && !_isAdmin) return '';
+    if (!_isAdmin) return '';
     const kind = c.manual ? 'logged' : (c.type === 'email' ? 'email' : 'comment');
     const edit = {
       id: c.id, kind, content: c.comment || '', from: c.author || '', to: c.manual ? (c.manual.to || '') : '',
       subject: c.emailSubject || '', sentAt: c.postedAt ? new Date(c.postedAt).toISOString() : '',
       channel: c.manual ? c.manual.channel : (c.type === 'email' ? 'email' : ''), direction: c.manual ? c.manual.direction : 'in',
     };
-    let h = '<span class="msg-tools">';
-    if (long) h += '<button type="button" class="msg-tool" data-ai-msg="' + _esc(c.id) + '" title="Summarise this message with AI"><i class="bi bi-stars" aria-hidden="true"></i><span>Summarize</span></button>';
-    if (_isAdmin) {
-      h += '<span class="dropdown"><button type="button" class="msg-tool msg-tool-icon" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Message actions"><i class="bi bi-three-dots" aria-hidden="true"></i></button>'
-        + '<ul class="dropdown-menu dropdown-menu-end tn-menu">'
-        + '<li><button type="button" class="dropdown-item" data-edit-msg="' + _esc(JSON.stringify(edit)) + '"><i class="bi bi-pencil"></i>Edit</button></li>'
-        + '<li><form action="/comments/' + _esc(c.id) + '/delete" method="POST" class="m-0" onsubmit="return confirm(\'Delete this message permanently? Attachments on it are removed too.\')">'
-        + '<button type="submit" class="dropdown-item msg-danger"><i class="bi bi-trash"></i>Delete</button></form></li>'
-        + '</ul></span>';
-    }
-    return h + '</span>';
+    const external = kind !== 'comment';
+    return '<span class="msg-tools"><span class="dropdown"><button type="button" class="msg-tool msg-tool-icon" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Message actions"><i class="bi bi-three-dots" aria-hidden="true"></i></button>'
+      + '<ul class="dropdown-menu dropdown-menu-end tn-menu">'
+      + '<li><button type="button" class="dropdown-item" data-edit-msg="' + _esc(JSON.stringify(edit)) + '"><i class="bi bi-pencil"></i>Edit</button></li>'
+      + (external ? '<li><button type="button" class="dropdown-item" data-ai-clean="' + _esc(c.id) + '"><i class="bi bi-stars"></i>' + (c.manual && c.manual.ai ? 'Redo clean view' : 'Create clean view') + '</button></li>' : '')
+      + '<li><form action="/comments/' + _esc(c.id) + '/delete" method="POST" class="m-0" onsubmit="return confirm(\'Delete this message permanently? Attachments on it are removed too.\')">'
+      + '<button type="submit" class="dropdown-item msg-danger"><i class="bi bi-trash"></i>Delete</button></form></li>'
+      + '</ul></span></span>';
   }
 %>
 
@@ -273,10 +315,16 @@
             <textarea name="body" id="mmBody" class="mm-input mm-textarea" rows="6"
               placeholder="Paste the email or WeChat text here. Pasted email headers (From, To, Subject, Date) fill the fields above. Paste a screenshot to attach it."></textarea></label>
           <div class="mm-foot">
-            <label class="mm-attach">
-              <i class="bi bi-paperclip" aria-hidden="true"></i><span id="mmFileLabel">Attach files or screenshots</span>
-              <input type="file" name="attachment" id="mmFiles" multiple hidden>
-            </label>
+<div class="dz" data-dz>
+              <input type="file" name="attachment" id="mmFiles" multiple hidden data-dz-input>
+              <div class="dz-zone" data-dz-zone tabindex="0" role="button" aria-label="Add attachments: drop files, paste a screenshot, or press Enter to browse">
+                <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+                <span><strong>Drop files</strong> or paste a screenshot · <span class="dz-browse">browse</span></span>
+                <span class="dz-limit">up to 10 files, 25 MB each</span>
+              </div>
+              <ul class="dz-list" data-dz-list></ul>
+              <p class="dz-error" data-dz-error hidden></p>
+            </div>
             <div class="mm-actions">
               <button type="button" class="pg-btn" data-mm-mode="comment">Cancel</button>
               <button type="submit" class="pg-btn pg-btn-primary"><i class="bi bi-check2" aria-hidden="true"></i>Save to project</button>
@@ -291,11 +339,16 @@
               <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a comment..." required></textarea>
             </div>
             <div class="note-compose-footer">
-              <label class="note-link-field" style="cursor: pointer;">
-                <i class="bi bi-paperclip"></i>
-                <span id="projectCommentFileLabel">Attach</span>
-                <input type="file" name="attachment" multiple style="display: none;" id="projectCommentFileInput">
-              </label>
+<div class="dz" data-dz>
+                <input type="file" name="attachment" id="projectCommentFileInput" multiple hidden data-dz-input>
+                <div class="dz-zone" data-dz-zone tabindex="0" role="button" aria-label="Add attachments: drop files, paste a screenshot, or press Enter to browse">
+                  <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+                  <span><strong>Drop files</strong> or paste a screenshot · <span class="dz-browse">browse</span></span>
+                  <span class="dz-limit">up to 10 files, 25 MB each</span>
+                </div>
+                <ul class="dz-list" data-dz-list></ul>
+                <p class="dz-error" data-dz-error hidden></p>
+            </div>
               <button type="submit" class="pg-btn pg-btn-primary pj-send"><i class="bi bi-send" aria-hidden="true"></i>Send</button>
             </div>
           </div>
@@ -314,7 +367,7 @@
                 const chIcon = ch === 'email' ? 'bi-envelope-fill' : ch === 'wechat' ? 'bi-wechat' : 'bi-chat-dots-fill';
                 const when = c.postedAt ? new Date(c.postedAt) : null;
               %>
-              <div class="note-item mm-item mm-<%= ch %>">
+              <div class="note-item mm-item mm-<%= ch %>" id="msg-<%= c.id %>">
                 <div class="note-item-head">
                   <span class="note-avatar mm-avatar mm-avatar-<%= ch %>"><i class="bi <%= chIcon %>" aria-hidden="true"></i></span>
                   <div class="note-email-meta">
@@ -327,8 +380,7 @@
                   <span class="text-muted small note-item-time" title="<%= when ? when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '' %>"><%= noteTimeAgo(c.postedAt) %></span><%- msgTools(c) %>
                 </div>
                 <div class="note-bubble mm-bubble mm-bubble-<%= ch %>">
-                  <div class="note-text" style="white-space: pre-wrap;"><%= c.comment %></div>
-                  <div class="ai-tldr" id="tldr-<%= c.id %>" hidden></div>
+                  <%- msgBody(c) %>
                   <% if (c.attachments && c.attachments.length) { %>
                     <div class="d-flex flex-wrap gap-2 mt-2">
                       <% c.attachments.forEach(file => { %>
@@ -340,7 +392,7 @@
                 </div>
               </div>
             <% } else if (c.type === 'email') { %>
-              <div class="note-item note-item-email">
+              <div class="note-item note-item-email" id="msg-<%= c.id %>">
                 <div class="note-item-head">
                   <span class="note-avatar note-avatar-email"><i class="bi bi-envelope-fill"></i></span>
                   <div class="note-email-meta">
@@ -350,8 +402,7 @@
                   <span class="text-muted small note-item-time"><%= noteTimeAgo(c.postedAt) %></span><%- msgTools(c) %>
                 </div>
                 <div class="note-bubble note-email-bubble">
-                  <div class="note-text" style="white-space: pre-wrap;"><%= c.comment %></div>
-                  <div class="ai-tldr" id="tldr-<%= c.id %>" hidden></div>
+                  <%- msgBody(c) %>
                 </div>
               </div>
             <% } else { %>
@@ -363,7 +414,6 @@
                 </div>
                 <div class="note-bubble">
                   <div class="note-text"><%= c.comment %></div>
-                  <div class="ai-tldr" id="tldr-<%= c.id %>" hidden></div>
                   <% if (c.link) { %>
                     <a href="<%= c.link %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-link-45deg"></i><%= c.link %></a>
                   <% } %>
@@ -504,16 +554,7 @@
             var imgs = Array.prototype.filter.call(cd.items || [], function (it) { return it.kind === 'file' && it.type.indexOf('image/') === 0; })
               .map(function (it) { return it.getAsFile(); }).filter(Boolean);
             var text = cd.getData('text/plain');
-            if (imgs.length) {
-              var dt = new DataTransfer();
-              Array.prototype.forEach.call(files.files || [], function (f) { dt.items.add(f); });
-              imgs.forEach(function (f, i) {
-                var ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-                dt.items.add(new File([f], 'screenshot-' + Date.now() + (i ? '-' + i : '') + '.' + ext, { type: f.type }));
-              });
-              files.files = dt.files; updateFiles();
-              if (!text) { e.preventDefault(); return; }
-            }
+            if (imgs.length && !text) return;   // screenshots: handled by the attachment drop zone
             var parsed = text && parseHeaders(text);
             if (parsed) {
               e.preventDefault();
@@ -527,6 +568,7 @@
           });
 
           function updateFiles() {
+            if (!fileLabel) return;
             var n = files.files ? files.files.length : 0;
             fileLabel.textContent = n ? n + ' file' + (n === 1 ? '' : 's') + ' attached' : 'Attach files or screenshots';
           }
@@ -884,25 +926,105 @@
     });
   }
 
-  // ── AI: one-message TL;DR ─────────────────────────────────────────────
+  // ── Message view: Clean / Original, expand, AI clean-up ─────────────────
   document.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-ai-msg]'); if (!b) return;
-    var id = b.getAttribute('data-ai-msg'), box = document.getElementById('tldr-' + id);
-    if (!box) return;
-    if (!box.hidden && box.getAttribute('data-done')) { box.hidden = true; return; }
-    box.hidden = false;
-    if (aiBtn && aiBtn.getAttribute('data-ai-on') !== '1') { box.className = 'ai-tldr is-info'; box.innerHTML = notSetUp(); return; }
-    if (box.getAttribute('data-done')) return;
-    box.className = 'ai-tldr is-loading'; box.innerHTML = '<i class="bi bi-stars"></i> Summarising…';
-    b.disabled = true;
-    post('/comments/' + encodeURIComponent(id) + '/summary')
-      .then(function (d) {
-        box.className = 'ai-tldr'; box.setAttribute('data-done', '1');
-        box.innerHTML = '<div><span class="ai-badge"><i class="bi bi-stars"></i>TL;DR</span> ' + esc(d.tldr) + '</div>' +
-          (d.asks && d.asks.length ? '<ul class="ai-asks">' + d.asks.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>' : '');
-      })
-      .catch(function (err) { box.className = 'ai-tldr is-error'; box.textContent = (err && err.error) || 'Could not summarise this message.'; })
-      .then(function () { b.disabled = false; });
+    var tab = e.target.closest('[data-msgv] [data-view]');
+    if (tab) {
+      var box = tab.closest('[data-msgv]'), view = tab.getAttribute('data-view');
+      box.querySelectorAll('[data-view]').forEach(function (t) { var on = t === tab; t.classList.toggle('is-active', on); t.setAttribute('aria-selected', on); });
+      box.querySelectorAll('[data-pane]').forEach(function (p) { p.hidden = p.getAttribute('data-pane') !== view; });
+      return;
+    }
+    var ex = e.target.closest('[data-expand]');
+    if (ex) {
+      var o = ex.closest('[data-msgv]').querySelector('[data-orig]');
+      var open = o.classList.toggle('is-collapsed') === false;
+      ex.textContent = open ? 'Show less' : 'Show full message';
+      return;
+    }
+    var cl = e.target.closest('[data-ai-clean]');
+    if (cl) {
+      var id = cl.getAttribute('data-ai-clean');
+      var item = document.getElementById('msg-' + id);
+      var actions = item && item.querySelector('.msgv-actions');
+      if (aiBtn && aiBtn.getAttribute('data-ai-on') !== '1') {
+        if (actions) { actions.insertAdjacentHTML('beforeend', '<span class="msgv-note">' + notSetUp() + '</span>'); cl.disabled = true; }
+        else alert(notSetUp().replace(/<[^>]+>/g, ''));
+        return;
+      }
+      cl.disabled = true;
+      var label = cl.innerHTML; cl.innerHTML = '<span class="logo-spin" aria-hidden="true"></span>Cleaning up…';
+      post('/comments/' + encodeURIComponent(id) + '/format')
+        .then(function () { location.hash = 'msg-' + id; location.reload(); })
+        .catch(function (err) {
+          cl.disabled = false; cl.innerHTML = label;
+          var msg = (err && err.error) || 'Could not clean up this message.';
+          if (actions) actions.insertAdjacentHTML('beforeend', '<span class="msgv-note is-error">' + esc(msg) + '</span>'); else alert(msg);
+        });
+    }
+  });
+
+  // ── Attachment drop zones (drag & drop, paste, browse) ────────────────────
+  var MAX_FILES = 10, MAX_BYTES = 25 * 1024 * 1024;
+  function fmtSize(b) { return b < 1024 ? b + ' B' : b < 1048576 ? Math.round(b / 1024) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+  function fileIcon(f) {
+    var t = f.type || '', n = (f.name || '').toLowerCase();
+    if (t.indexOf('image/') === 0) return 'bi-file-earmark-image';
+    if (/\.pdf$/.test(n)) return 'bi-file-earmark-pdf';
+    if (/\.(xlsx?|csv)$/.test(n)) return 'bi-file-earmark-excel';
+    if (/\.docx?$/.test(n)) return 'bi-file-earmark-word';
+    if (/\.(zip|rar|7z)$/.test(n)) return 'bi-file-earmark-zip';
+    return 'bi-file-earmark';
+  }
+  document.querySelectorAll('[data-dz]').forEach(function (dzEl) {
+    var input = dzEl.querySelector('[data-dz-input]'), zone = dzEl.querySelector('[data-dz-zone]');
+    var list = dzEl.querySelector('[data-dz-list]'), errEl = dzEl.querySelector('[data-dz-error]');
+    var form = dzEl.closest('form'), files = [], urls = [];
+    function sync() {
+      var dt = new DataTransfer(); files.forEach(function (f) { dt.items.add(f); }); input.files = dt.files;
+      urls.forEach(URL.revokeObjectURL); urls = [];
+      list.innerHTML = files.map(function (f, i) {
+        var thumb = '';
+        if ((f.type || '').indexOf('image/') === 0) { var u = URL.createObjectURL(f); urls.push(u); thumb = '<img src="' + u + '" alt="">'; }
+        return '<li class="dz-chip">' + (thumb || '<i class="bi ' + fileIcon(f) + '" aria-hidden="true"></i>') +
+          '<span class="dz-name" title="' + esc(f.name) + '">' + esc(f.name) + '</span><span class="dz-size">' + fmtSize(f.size) + '</span>' +
+          '<button type="button" class="dz-rm" data-i="' + i + '" aria-label="Remove ' + esc(f.name) + '"><i class="bi bi-x"></i></button></li>';
+      }).join('');
+      dzEl.classList.toggle('has-files', files.length > 0);
+    }
+    function add(list2) {
+      var skipped = [];
+      Array.prototype.forEach.call(list2 || [], function (f, i) {
+        if (!f) return;
+        if (!f.name || f.name === 'image.png') {
+          var ext = ((f.type || '').split('/')[1] || 'png').replace('jpeg', 'jpg');
+          f = new File([f], 'screenshot-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + (i ? '-' + i : '') + '.' + ext, { type: f.type });
+        }
+        if (f.size > MAX_BYTES) { skipped.push(f.name + ' is over 25 MB'); return; }
+        if (files.length >= MAX_FILES) { skipped.push('only ' + MAX_FILES + ' files per message'); return; }
+        if (files.some(function (x) { return x.name === f.name && x.size === f.size; })) return;
+        files.push(f);
+      });
+      errEl.hidden = !skipped.length; errEl.textContent = skipped.length ? 'Skipped: ' + skipped.join('; ') + '.' : '';
+      sync();
+    }
+    zone.addEventListener('click', function () { input.click(); });
+    zone.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+    input.addEventListener('change', function () { var picked = Array.prototype.slice.call(input.files); add(picked); });
+    list.addEventListener('click', function (e) { var b = e.target.closest('.dz-rm'); if (!b) return; files.splice(+b.getAttribute('data-i'), 1); errEl.hidden = true; sync(); });
+    // Drop anywhere on the form (textarea included), highlight the zone
+    ['dragenter', 'dragover'].forEach(function (t) { form.addEventListener(t, function (e) { if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1) { e.preventDefault(); zone.classList.add('is-over'); } }); });
+    form.addEventListener('dragleave', function (e) { if (!form.contains(e.relatedTarget)) zone.classList.remove('is-over'); });
+    form.addEventListener('drop', function (e) { if (!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); zone.classList.remove('is-over'); add(e.dataTransfer.files); });
+    // Paste screenshots / copied files while typing in this form
+    form.addEventListener('paste', function (e) {
+      var cd = e.clipboardData; if (!cd) return;
+      var pasted = Array.prototype.filter.call(cd.items || [], function (it) { return it.kind === 'file'; }).map(function (it) { return it.getAsFile(); }).filter(Boolean);
+      if (!pasted.length) return;
+      if (!cd.getData('text/plain')) e.preventDefault();
+      add(pasted);
+    });
+    form.addEventListener('reset', function () { files = []; sync(); });
   });
 
   // ── Admin: edit a message ─────────────────────────────────────────────

@@ -134,21 +134,59 @@ ${picked.join('\n\n---\n\n')}`;
   return value;
 }
 
-const SYSTEM_ONE = `You summarise a single business email or chat message for a busy CRM user at Samyou (HVAC controllers and inverter drives).
-The message may be in English or Chinese; write in English, keeping names, part numbers and figures exactly as written.
-Reply with ONLY a JSON object: {"tldr":"one or two sentences","asks":["specific requests or questions addressed to the reader, if any"]}`;
+const SYSTEM_FORMAT = `You turn one raw business email or chat message into a clean, easy-to-read version for a CRM at Samyou (HVAC controllers and inverter drives).
+Rules:
+- Keep ALL facts, numbers, part numbers, dates, names and requests. Never invent or change information.
+- Write in English. If the message is in Chinese, translate it faithfully.
+- Remove noise: repeated blank lines, email signatures, legal disclaimers, "sent from my phone", tracking lines. Keep the greeting and sign-off name short.
+- If the text contains a table that was pasted as one cell per line (e.g. "Input", "Size", "Voltage" followed by values), rebuild it as a table.
+- Use short paragraphs, bullet lists for enumerations, and headings only when the message has clear sections.
+- If quoted earlier emails are included, keep only the newest message and add one paragraph "Earlier messages in the thread were quoted and omitted."
+Reply with ONLY a JSON object:
+{"tldr":"one or two sentences: what this message is about and what it wants",
+ "asks":["concrete requests or questions addressed to the reader"],
+ "blocks":[ {"type":"p","text":"..."} | {"type":"h","text":"..."} | {"type":"ul","items":["..."]} | {"type":"table","headers":["..."],"rows":[["..."]]} ]}`;
 
-async function summarizeMessage(c) {
-  const key = 'msg:' + c.id + ':' + String(c.comment || '').length + ':' + (c.emailSubject || '');
+function cleanBlocks(blocks) {
+  const out = [];
+  for (const b of Array.isArray(blocks) ? blocks.slice(0, 80) : []) {
+    if (!b || typeof b !== 'object') continue;
+    const str = (v) => String(v == null ? '' : v).trim().slice(0, 4000);
+    if ((b.type === 'p' || b.type === 'h') && str(b.text)) out.push({ type: b.type, text: str(b.text) });
+    else if (b.type === 'ul' && Array.isArray(b.items)) {
+      const items = b.items.map(str).filter(Boolean).slice(0, 50);
+      if (items.length) out.push({ type: 'ul', items });
+    } else if (b.type === 'table' && Array.isArray(b.rows)) {
+      const headers = (Array.isArray(b.headers) ? b.headers : []).map(str).slice(0, 12);
+      const rows = b.rows.filter(Array.isArray).slice(0, 60).map((r) => r.map(str).slice(0, 12));
+      if (rows.length) out.push({ type: 'table', headers, rows });
+    }
+  }
+  return out;
+}
+
+// Clean, structured reading version of one message (+ TL;DR). Result is stored on the comment.
+async function formatMessage(c) {
+  const key = 'fmt:' + c.id + ':' + String(c.comment || '').length + ':' + (c.emailSubject || '');
   const hit = cacheGet(key); if (hit) return { ...hit, cached: true };
-  const text = await callClaude({ system: SYSTEM_ONE, user: describeMessage(c), maxTokens: 400 });
-  const json = parseJson(text) || { tldr: text, asks: [] };
+  const raw = String(c.comment || '').replace(/\r/g, '');
+  const user = describeMessage({ ...c, comment: raw.length > 14000 ? raw.slice(0, 14000) + ' …[truncated]' : raw });
+  const text = await callClaude({ system: SYSTEM_FORMAT, user, maxTokens: 2500 });
+  const json = parseJson(text);
+  if (!json) { const e = new Error('AI returned an unreadable result. Try again.'); e.code = 'AI_BAD_OUTPUT'; throw e; }
   const value = {
-    tldr: String(json.tldr || '').trim(),
-    asks: (Array.isArray(json.asks) ? json.asks : []).slice(0, 6).map((x) => String(x).trim()).filter(Boolean),
+    tldr: String(json.tldr || '').trim().slice(0, 600),
+    asks: (Array.isArray(json.asks) ? json.asks : []).slice(0, 8).map((x) => String(x).trim()).filter(Boolean),
+    blocks: cleanBlocks(json.blocks),
+    model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+    at: new Date().toISOString(),
   };
+  if (!value.blocks.length && !value.tldr) { const e = new Error('AI returned an empty result. Try again.'); e.code = 'AI_BAD_OUTPUT'; throw e; }
   cacheSet(key, value);
   return value;
 }
 
-module.exports = { isConfigured, summarizeThread, summarizeMessage, _parseJson: parseJson, _describeMessage: describeMessage };
+// Back-compat: short TL;DR only
+async function summarizeMessage(c) { const f = await formatMessage(c); return { tldr: f.tldr, asks: f.asks }; }
+
+module.exports = { isConfigured, summarizeThread, summarizeMessage, formatMessage, _parseJson: parseJson, _describeMessage: describeMessage };

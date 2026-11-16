@@ -1408,6 +1408,7 @@ function mapComment(row) {
       loggedById: manual.byId || null,
       editedBy: manual.editedBy || null,
       editedAt: manual.editedAt || null,
+      ai: manual.ai && typeof manual.ai === 'object' ? manual.ai : null,
     } : null,
     id: row.id,
     comment: row.content,
@@ -1511,6 +1512,20 @@ async function updateComment(id, { content, from, to, subject, sentAt, channel, 
     [id, text, sender.slice(0, 300), subj, type, MANUAL_PREFIX + JSON.stringify(meta), when.toISOString()]
   );
   return getComment(id);
+}
+
+// Store the AI clean view on an external message (email / WeChat / logged).
+// Lives in the same MANUAL:{json} metadata; inbound webhook emails are converted
+// to that format (subject is already in email_subject, so nothing is lost).
+async function setCommentAi(id, aiData) {
+  const cur = await query('SELECT id, type, link FROM comments WHERE id=$1', [id]);
+  const row = cur.rows[0];
+  if (!row) throw new Error('Message not found.');
+  const manual = parseManualMeta(row.link);
+  if (!manual && row.type !== 'email') throw new Error('Only emails and logged messages can be cleaned up.');
+  const meta = manual || { v: 1, ch: 'email', dir: 'in', to: null, by: null, byId: null };
+  meta.ai = aiData;
+  await query('UPDATE comments SET link=$2 WHERE id=$1', [id, MANUAL_PREFIX + JSON.stringify(meta)]);
 }
 
 async function deleteComment(id) {
@@ -1848,6 +1863,7 @@ module.exports = {
   getComment,
   updateComment,
   deleteComment,
+  setCommentAi,
   completeActivity,
   deleteActivity,
   getActivityDetail,
