@@ -1,23 +1,8 @@
 <%
-  function fmtDate(value) {
-    if (!value) return null;
-    const d = new Date(value + 'T00:00:00');
-    if (isNaN(d.getTime())) return null;
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-  function fmtCreated(iso) {
-    if (!iso) return '—';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-  const startLabel = fmtDate(project.startDate);
-  const endLabel = fmtDate(project.endDate);
-  let windowLabel = '—';
-  if (startLabel && endLabel) windowLabel = `${startLabel} – ${endLabel}`;
-  else if (startLabel) windowLabel = `From ${startLabel}`;
-  else if (endLabel) windowLabel = `Until ${endLabel}`;
-
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function dayStr(v) { if (!v) return null; const d = v instanceof Date ? v : new Date(String(v).length <= 10 ? v + 'T00:00:00' : v); return isNaN(d) ? null : d; }
+  function fmtDate(v, opts) { const d = dayStr(v); return d ? d.toLocaleDateString('en-US', opts || { month: 'short', day: 'numeric', year: 'numeric' }) : null; }
+  function fmtShort(v) { const d = dayStr(v); if (!d) return null; const sameYear = d.getFullYear() === new Date().getFullYear(); return d.toLocaleDateString('en-US', sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }); }
   function noteTimeAgo(iso) {
     if (!iso) return '';
     const then = new Date(iso);
@@ -36,128 +21,173 @@
   const youInitial = ((typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || '?').trim().charAt(0).toUpperCase();
   const orderedComments = (project.comments || []).slice().reverse();
 
-  const subtaskIds = new Set(project.subtasks.map(t => t.id));
-  const linkableTasks = (typeof allTasks !== 'undefined' ? allTasks : []).filter(t => !subtaskIds.has(t.id));
+  const _avatarPalette = ['oklch(0.50 0.20 270)','oklch(0.52 0.18 250)','oklch(0.48 0.18 300)','oklch(0.52 0.14 195)','oklch(0.52 0.16 160)','oklch(0.55 0.18 25)','oklch(0.52 0.20 10)','oklch(0.48 0.16 230)'];
+  function avatarBg(name) { let h = 0; for (let i = 0; i < (name || '').length; i++) h = (name.charCodeAt(i) + ((h << 5) - h)) | 0; return _avatarPalette[Math.abs(h) % _avatarPalette.length]; }
+  function initial(n) { return (n || '?').trim().charAt(0).toUpperCase(); }
 
-  const _avatarPalette = [
-    'oklch(0.50 0.20 270)', // indigo
-    'oklch(0.52 0.18 250)', // blue
-    'oklch(0.48 0.18 300)', // purple
-    'oklch(0.52 0.14 195)', // teal
-    'oklch(0.52 0.16 160)', // emerald
-    'oklch(0.55 0.18 25)',  // orange
-    'oklch(0.52 0.20 10)',  // rose
-    'oklch(0.48 0.16 230)', // cyan
-  ];
-  function avatarBg(name) {
-    let h = 0;
-    for (let i = 0; i < (name || '').length; i++) h = (name.charCodeAt(i) + ((h << 5) - h)) | 0;
-    return _avatarPalette[Math.abs(h) % _avatarPalette.length];
+  // ── Window ─────────────────────────────────────────────────────────────────
+  const startLabel = fmtDate(project.startDate), endLabel = fmtDate(project.endDate);
+  const windowLabel = startLabel && endLabel ? `${startLabel} – ${endLabel}` : startLabel ? `From ${startLabel}` : endLabel ? `Until ${endLabel}` : null;
+
+  // ── Tasks: progress, next deadline, overdue ───────────────────────────────
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  function daysTo(v) { const d = dayStr(v); if (!d) return null; d.setHours(0, 0, 0, 0); return Math.round((d - today) / 86400000); }
+  const tasks = (project.subtasks || []).slice();
+  const isDone = t => t.status === 'Completed';
+  const doneCount = tasks.filter(isDone).length;
+  const openTasks = tasks.filter(t => !isDone(t));
+  const overdueTasks = openTasks.filter(t => { const n = daysTo(t.deadline); return n !== null && n < 0; });
+  // Next upcoming deadline (overdue ones are counted separately in the strip)
+  const nextTask = openTasks.filter(t => { const n = daysTo(t.deadline); return n !== null && n >= 0; }).sort((a, b) => String(a.deadline).localeCompare(String(b.deadline)))[0] || null;
+  const pct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+  // Open tasks first (by deadline, undated last), completed last
+  tasks.sort((a, b) => {
+    if (isDone(a) !== isDone(b)) return isDone(a) ? 1 : -1;
+    if (!a.deadline && !b.deadline) return 0;
+    if (!a.deadline) return 1; if (!b.deadline) return -1;
+    return String(a.deadline).localeCompare(String(b.deadline));
+  });
+  function dueLabel(t) {
+    if (isDone(t)) return { text: 'Done', cls: 'is-done' };
+    const n = daysTo(t.deadline);
+    if (n === null) return { text: 'No deadline', cls: 'is-muted' };
+    if (n < 0) return { text: (-n) + 'd overdue', cls: 'is-overdue' };
+    if (n === 0) return { text: 'Due today', cls: 'is-today' };
+    if (n === 1) return { text: 'Due tomorrow', cls: '' };
+    return { text: 'Due ' + fmtShort(t.deadline), cls: '' };
   }
+  const statusCls = { 'To Do': 'todo', 'In Progress': 'progress', 'Blocked': 'blocked', 'Completed': 'done' };
+
+  const lastUpdate = orderedComments[0] || null;
+  const subtaskIds = new Set((project.subtasks || []).map(t => t.id));
+  const linkableTasks = (typeof allTasks !== 'undefined' ? allTasks : []).filter(t => !subtaskIds.has(t.id));
+  const _canManage = currentUser && ['Admin', 'Manager', 'Head R&D Controllers', 'Head R&D VFD'].includes(currentUser.role);
+  const _canRd = currentUser && ['Admin', 'Head R&D Controllers', 'Head R&D VFD'].includes(currentUser.role);
+  const projStatusCls = { 'Active': 'active', 'On Hold': 'hold', 'Completed': 'done', 'Cancelled': 'cancelled' }[project.status] || 'none';
+  const primaryCompany = (project.companies || [])[0] || null;
 %>
 
-<div class="pnew-page project-detail-page">
-  <a href="/projects" class="pnew-back-link"><i class="bi bi-arrow-left"></i> All projects</a>
+<div class="pg pj">
 
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-    <div>
-      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
-        <% if (project.status) { %>
-          <div class="pnew-badge"><i class="bi bi-folder2-open"></i> <%= project.status %></div>
-        <% } %>
-        <% if (project.isRdIssue) { %>
-          <div class="pnew-badge" style="background:oklch(0.92 0.06 245); color:oklch(0.35 0.18 245); border-color:oklch(0.78 0.10 245);"><i class="bi bi-cpu-fill"></i> R&amp;D Issue</div>
-        <% } %>
-      </div>
-      <h1 class="pnew-hero"><%= project.name %></h1>
-      <p class="pnew-hero-sub">
-        <%= project.category || 'No category set' %><% if (project.companies.length) { %> &middot; <%= project.companies.map(c => c.name).join(', ') %><% } %>
-      </p>
-      <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-top:0.35rem;">
-        <% if (project.createdAt) { %>
-          <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
-            Created<% if (project.createdByName) { %> by <strong><%= project.createdByName %></strong><% } %>
-            &nbsp;·&nbsp;<%= new Date(project.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
-          </span>
-        <% } %>
-        <% if (project.updatedAt && project.updatedByName) { %>
-          <span style="font-size:0.72rem; color:var(--crm-muted-fg);">
-            Last edited by <strong><%= project.updatedByName %></strong>
-            &nbsp;·&nbsp;<%= new Date(project.updatedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) %>
-          </span>
-        <% } %>
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <nav class="pj-crumbs" aria-label="Breadcrumb">
+    <a href="/projects">Projects</a>
+    <% if (primaryCompany) { %><i class="bi bi-chevron-right" aria-hidden="true"></i><a href="/companies/<%= primaryCompany.id %>"><%= primaryCompany.name %></a><% } %>
+  </nav>
+
+  <header class="pj-head">
+    <div class="pj-head-main">
+      <h1 class="pj-title"><%= project.name %></h1>
+      <div class="pj-meta">
+        <span class="pj-status pj-status-<%= projStatusCls %>"><span class="pj-dot" aria-hidden="true"></span><%= project.status || 'No status' %></span>
+        <% if (project.isRdIssue) { %><span class="pj-chip pj-chip-rd"><i class="bi bi-cpu" aria-hidden="true"></i>R&amp;D issue</span><% } %>
+        <% if (primaryCompany) { %><a class="pj-meta-item" href="/companies/<%= primaryCompany.id %>"><i class="bi bi-building" aria-hidden="true"></i><%= (project.companies || []).map(c => c.name).join(', ') %></a><% } %>
+        <% if (project.category) { %><span class="pj-meta-item"><i class="bi bi-tag" aria-hidden="true"></i><%= project.category %></span><% } %>
+        <% if (project.ownerName) { %><span class="pj-meta-item"><span class="pj-av pj-av-xs" style="background:<%- avatarBg(project.ownerName) %>"><%= initial(project.ownerName) %></span><%= project.ownerName %></span><% } %>
+        <% if (windowLabel) { %><span class="pj-meta-item"><i class="bi bi-calendar3" aria-hidden="true"></i><%= windowLabel %></span><% } %>
       </div>
     </div>
-    <a href="/projects/<%= project.id %>/edit" class="pnew-btn-save"><i class="bi bi-pencil-square"></i> Edit project</a>
-  </div>
+    <div class="pj-head-actions">
+      <a href="#comments" class="pg-btn" data-pj-log><i class="bi bi-envelope-paper" aria-hidden="true"></i>Log message</a>
+      <a href="/projects/<%= project.id %>/edit" class="pg-btn"><i class="bi bi-pencil" aria-hidden="true"></i>Edit</a>
+      <a href="/projects/<%= project.id %>/tasks/new" class="pg-btn pg-btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i>New task</a>
+    </div>
+  </header>
 
-  <div class="pnew-grid">
-    <div class="pnew-main">
+  <!-- ── Progress strip ─────────────────────────────────────────────────── -->
+  <section class="pj-strip" aria-label="Project progress">
+    <div class="pj-stat">
+      <div class="pj-stat-label">Tasks</div>
+      <div class="pj-stat-value"><%= doneCount %><span>/<%= tasks.length %> done</span></div>
+      <div class="pj-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= pct %>" aria-label="<%= pct %>% of tasks done"><span style="width:<%= pct %>%"></span></div>
+    </div>
+    <div class="pj-stat">
+      <div class="pj-stat-label">Next deadline</div>
+      <% if (nextTask) { const nl = dueLabel(nextTask); %>
+        <div class="pj-stat-value pj-stat-due <%= nl.cls %>"><%= fmtShort(nextTask.deadline) %></div>
+        <a class="pj-stat-sub" href="/tasks/<%= nextTask.id %>" title="<%= nextTask.name %>"><%= nextTask.name %></a>
+      <% } else { %>
+        <div class="pj-stat-value pj-muted">None</div><div class="pj-stat-sub">No upcoming deadlines</div>
+      <% } %>
+    </div>
+    <div class="pj-stat <%= overdueTasks.length ? 'is-alert' : '' %>">
+      <div class="pj-stat-label">Overdue</div>
+      <div class="pj-stat-value"><%= overdueTasks.length %><span> task<%= overdueTasks.length === 1 ? '' : 's' %></span></div>
+      <div class="pj-stat-sub"><%= overdueTasks.length ? 'Needs attention' : 'On track' %></div>
+    </div>
+    <div class="pj-stat">
+      <div class="pj-stat-label">Last update</div>
+      <% if (lastUpdate) { %>
+        <div class="pj-stat-value pj-stat-small"><%= noteTimeAgo(lastUpdate.postedAt) %></div>
+        <a class="pj-stat-sub" href="#comments"><%= lastUpdate.manual ? ({ email: 'Email', wechat: 'WeChat', other: 'Message' }[lastUpdate.manual.channel] || 'Message') + (lastUpdate.manual.direction === 'out' ? ' to ' + (lastUpdate.manual.to || 'contact') : ' from ' + lastUpdate.author) : (lastUpdate.type === 'email' ? 'Email from ' : 'Comment by ') + lastUpdate.author %></a>
+      <% } else { %>
+        <div class="pj-stat-value pj-muted">None</div><div class="pj-stat-sub">No comments or messages yet</div>
+      <% } %>
+    </div>
+  </section>
+
+  <div class="pj-grid">
+    <!-- ── Main column ─────────────────────────────────────────────────── -->
+    <div class="pj-main">
 
       <% if (project.description) { %>
-      <div class="pnew-card">
-        <h2 class="pnew-card-title">Description</h2>
-        <p class="pnew-card-sub" style="white-space: pre-wrap;"><%= project.description %></p>
-      </div>
+        <section class="pj-card pj-brief" aria-label="Description">
+          <div class="pj-brief-text" id="pjBrief"><%= project.description %></div>
+          <button type="button" class="pj-link-btn" id="pjBriefMore" hidden>Show more</button>
+        </section>
       <% } %>
 
-      <div class="pnew-card">
-        <div class="pnew-products-header">
+      <!-- Tasks -->
+      <section class="pj-card" id="tasks" aria-labelledby="pjTasksTitle">
+        <div class="pj-card-head">
           <div>
-            <h2 class="pnew-card-title">Related products</h2>
-            <p class="pnew-card-sub">Products tagged to this project.</p>
+            <h2 class="pj-card-title" id="pjTasksTitle">Tasks <span class="pj-n"><%= tasks.length %></span></h2>
+            <p class="pj-card-sub"><%= openTasks.length %> open<% if (overdueTasks.length) { %> &middot; <span class="pj-red"><%= overdueTasks.length %> overdue</span><% } %></p>
           </div>
-          <span class="pnew-product-count"><%= project.products.length %> linked</span>
-        </div>
-        <div class="pnew-product-list">
-          <% if (!project.products.length) { %>
-            <div class="pnew-product-empty">No products yet.</div>
-          <% } %>
-          <% project.products.forEach(p => { %>
-            <a href="/products/<%= p.id %>" class="pnew-product-row" style="text-decoration: none;">
-              <span class="pnew-product-name"><%= p.name %></span>
-              <% if (p.category) { %><span class="pnew-product-sub"><%= p.category %></span><% } %>
-            </a>
-          <% }) %>
-        </div>
-      </div>
-
-      <div class="pnew-card">
-        <h2 class="pnew-card-title">Attachments</h2>
-        <p class="pnew-card-sub"><%= project.attachments.length %> file<%= project.attachments.length === 1 ? '' : 's' %></p>
-
-        <div class="pnew-file-list">
-          <% project.attachments.forEach(file => { %>
-            <div class="pnew-file-row">
-              <i class="bi bi-file-earmark"></i>
-              <a href="<%= file.url %>" target="_blank" rel="noopener" class="pnew-file-name" style="text-decoration: none;"><%= file.filename %></a>
-            </div>
-          <% }) %>
+          <div class="pj-card-actions">
+            <button type="button" class="pj-link-btn" data-bs-toggle="collapse" data-bs-target="#linkTaskForm" aria-expanded="false" aria-controls="linkTaskForm"><i class="bi bi-link-45deg" aria-hidden="true"></i>Link existing</button>
+            <a href="/projects/<%= project.id %>/tasks/new" class="pj-link-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i>New task</a>
+          </div>
         </div>
 
-        <form action="/projects/<%= project.id %>/attachments" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mt-3">
-          <input type="file" name="attachments" id="projectAttachInput" multiple required style="display:none;">
-          <label for="projectAttachInput" class="pnew-btn-cancel" style="cursor:pointer; margin:0;">
-            <i class="bi bi-paperclip"></i>
-            <span id="projectAttachLabel">Choose files</span>
-          </label>
-          <button type="submit" class="pnew-btn-save"><i class="bi bi-upload"></i> Upload</button>
-        </form>
-        <script>
-          (function(){
-            var inp = document.getElementById('projectAttachInput');
-            var lbl = document.getElementById('projectAttachLabel');
-            if (inp && lbl) inp.addEventListener('change', function(){
-              var n = inp.files ? inp.files.length : 0;
-              lbl.textContent = n ? (n + ' file' + (n===1?'':'s') + ' selected') : 'Choose files';
-            });
-          })();
-        </script>
-      </div>
+        <div class="collapse" id="linkTaskForm">
+          <form action="/projects/<%= project.id %>/tasks/link" method="POST" class="pj-inline-form">
+            <select name="taskId" class="pj-select" required aria-label="Task to link">
+              <option value="">Select a task to link</option>
+              <% linkableTasks.forEach(t => { %><option value="<%= t.id %>"><%= t.name || '(untitled)' %></option><% }) %>
+            </select>
+            <button type="submit" class="pg-btn pg-btn-primary">Link</button>
+          </form>
+          <% if (!linkableTasks.length) { %><p class="pj-hint">No other unlinked tasks available.</p><% } %>
+        </div>
 
-      <div class="pnew-card" id="comments">
-        <h2 class="pnew-card-title">Comments (<%= (project.comments || []).length %>)</h2>
-        <p class="pnew-card-sub">Notes, plus emails and WeChat messages logged to this project.</p>
+        <% if (!tasks.length) { %>
+          <div class="pj-empty">
+            <i class="bi bi-list-check" aria-hidden="true"></i>
+            <div><strong>No tasks yet.</strong> Break the project into steps so everyone knows what's next.</div>
+            <a href="/projects/<%= project.id %>/tasks/new" class="pg-btn pg-btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i>Add first task</a>
+          </div>
+        <% } else { %>
+          <ul class="pj-tasks">
+            <% tasks.forEach(t => { const dl = dueLabel(t); const sc = statusCls[t.status] || 'todo'; %>
+              <li class="pj-task <%= isDone(t) ? 'is-done' : '' %> <%= dl.cls === 'is-overdue' ? 'is-overdue' : '' %>">
+                <span class="pj-task-status pj-ts-<%= sc %>" title="<%= t.status || 'To Do' %>" aria-hidden="true"><% if (isDone(t)) { %><i class="bi bi-check"></i><% } %></span>
+                <a href="/tasks/<%= t.id %>" class="pj-task-name" title="<%= t.name %>"><%= t.name || '(untitled)' %></a>
+                <span class="pj-task-state pj-ts-text-<%= sc %>"><%= t.status || 'To Do' %></span>
+                <span class="pj-task-people">
+                  <% (t.assignees || []).slice(0, 3).forEach(a => { %><span class="pj-av pj-av-xs" style="background:<%- avatarBg(a.name) %>" title="<%= a.name %>"><%= initial(a.name) %></span><% }) %>
+                  <% if ((t.assignees || []).length > 3) { %><span class="pj-av pj-av-xs pj-av-more">+<%= t.assignees.length - 3 %></span><% } %>
+                </span>
+                <span class="pj-task-due <%= dl.cls %>"><%= dl.text %></span>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </section>
+
+      <section class="pj-card" id="comments" aria-labelledby="pjConvTitle">
+        <div class="pj-card-head"><div><h2 class="pj-card-title" id="pjConvTitle">Conversation <span class="pj-n"><%= (project.comments || []).length %></span></h2>
+          <p class="pj-card-sub">Comments, plus emails and WeChat messages logged to this project</p></div></div>
 
         <div class="mm-switch" role="tablist" aria-label="Add to this project">
           <button type="button" class="mm-switch-btn is-active" role="tab" aria-selected="true" data-mm-mode="comment"><i class="bi bi-chat-left-text" aria-hidden="true"></i>Comment</button>
@@ -233,7 +263,7 @@
                 <span id="projectCommentFileLabel">Attach</span>
                 <input type="file" name="attachment" multiple style="display: none;" id="projectCommentFileInput">
               </label>
-              <button type="submit" class="note-post-btn"><i class="bi bi-send-fill me-1"></i>Send</button>
+              <button type="submit" class="pg-btn pg-btn-primary pj-send"><i class="bi bi-send" aria-hidden="true"></i>Send</button>
             </div>
           </div>
         </form>
@@ -313,7 +343,7 @@
             <% } %>
           <% }) %>
         </div>
-      </div>
+      </section>
 
       <script>
         (function () {
@@ -546,311 +576,389 @@
         })();
       </script>
 
+      <!-- Files -->
+      <section class="pj-card" id="files" aria-labelledby="pjFilesTitle">
+        <div class="pj-card-head">
+          <div>
+            <h2 class="pj-card-title" id="pjFilesTitle">Files <span class="pj-n"><%= project.attachments.length %></span></h2>
+          </div>
+        </div>
+        <% if (project.attachments.length) { %>
+          <ul class="pj-files">
+            <% project.attachments.forEach(file => {
+                 const ext = (file.filename || '').split('.').pop().toLowerCase();
+                 const ic = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel', csv: 'bi-file-earmark-excel', png: 'bi-file-earmark-image', jpg: 'bi-file-earmark-image', jpeg: 'bi-file-earmark-image', gif: 'bi-file-earmark-image', zip: 'bi-file-earmark-zip' }[ext] || 'bi-file-earmark'; %>
+              <li><a href="<%= file.url %>" target="_blank" rel="noopener"><i class="bi <%= ic %>" aria-hidden="true"></i><span><%= file.filename %></span><i class="bi bi-box-arrow-up-right pj-files-open" aria-hidden="true"></i></a></li>
+            <% }) %>
+          </ul>
+        <% } %>
+        <form action="/projects/<%= project.id %>/attachments" method="POST" enctype="multipart/form-data" class="pj-upload" id="pjUpload">
+          <input type="file" name="attachments" id="projectAttachInput" multiple required hidden>
+          <label for="projectAttachInput" class="pj-drop" id="pjDrop">
+            <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+            <span id="projectAttachLabel"><strong>Drop files</strong> or click to choose</span>
+          </label>
+          <button type="submit" class="pg-btn pg-btn-primary" id="pjUploadBtn" hidden><i class="bi bi-upload" aria-hidden="true"></i>Upload</button>
+        </form>
+      </section>
     </div>
 
-    <div class="pnew-aside">
-      <div class="pnew-summary-card">
-        <div class="pnew-summary-title">Overview</div>
-        <div class="pnew-summary-row"><span>Company</span><span><%= project.companies.length ? project.companies.map(c => c.name).join(', ') : '—' %></span></div>
-        <% if (project.deals && project.deals.length) { %>
-          <div class="pnew-summary-row"><span>Deal</span><span><%= project.deals.map(d => d.name).join(', ') %></span></div>
-        <% } %>
-        <div class="pnew-summary-row"><span>Status</span><span><%= project.status || '—' %></span></div>
-        <div class="pnew-summary-row"><span>Category</span><span><%= project.category || '—' %></span></div>
-        <div class="pnew-summary-row"><span>Products</span><span><%= project.products.length %></span></div>
-        <div class="pnew-summary-row"><span>Subtasks</span><span><%= project.subtasks.length %></span></div>
-        <div class="pnew-summary-row"><span>Window</span><span><%= windowLabel %></span></div>
-        <div class="pnew-summary-row"><span>Files</span><span><%= project.attachments.length %></span></div>
-        <div class="pnew-summary-row"><span>Created</span><span><%= fmtCreated(project.createdAt) %></span></div>
-        <div class="pnew-summary-row pnew-summary-row--email">
-          <span>Project email</span>
-          <span class="project-email-chip">
-            <% const _projEmail = 'project-' + project.id + '@' + emailDomain; %>
-            <span class="project-email-addr" id="projEmailAddr"><%= _projEmail %></span>
-            <button type="button" class="project-email-copy" title="Copy address" onclick="(function(btn){navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(function(){btn.innerHTML='<i class=\'bi bi-check-lg\'></i>';setTimeout(function(){btn.innerHTML='<i class=\'bi bi-copy\'></i>';},1500)});})(this)"><i class="bi bi-copy"></i></button>
-          </span>
-        </div>
-        <p class="project-email-hint">Set Reply-To this address when emailing clients — their replies appear here automatically.</p>
-      </div>
+    <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
+    <aside class="pj-side">
 
-      <% if (currentUser && ['Admin', 'Head R&D Controllers', 'Head R&D VFD'].includes(currentUser.role)) { %>
-      <div class="pnew-card rd-toggle-card <%= project.isRdIssue ? 'rd-toggle-card--on' : '' %>">
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem;">
-          <div>
-            <h2 class="pnew-card-title" style="margin-bottom:0.2rem;"><i class="bi bi-cpu"></i> R&amp;D Issue</h2>
-            <p class="pnew-card-sub mb-0" style="font-size:0.75rem;">
-              When on, Engineering team can see this project if assigned to a task here.
-            </p>
-          </div>
-          <form action="/projects/<%= project.id %>/toggle-rd" method="POST" style="flex-shrink:0; margin-top:0.1rem;">
-            <button type="submit" class="rd-switch" title="<%= project.isRdIssue ? 'Disable R&D' : 'Enable R&D' %>">
-              <span class="rd-switch-track <%= project.isRdIssue ? 'rd-switch-track--on' : '' %>">
-                <span class="rd-switch-thumb"></span>
-              </span>
-            </button>
-          </form>
-        </div>
-        <% if (project.isRdIssue) { %>
-          <div class="rd-active-note">
-            <i class="bi bi-check-circle-fill"></i> Visible to R&amp;D engineers assigned here
-          </div>
-        <% } %>
-      </div>
-      <% } %>
-
-      <%
-        const _canManage = currentUser && ['Admin', 'Manager', 'Head R&D Controllers', 'Head R&D VFD'].includes(currentUser.role);
-      %>
-
-      <!-- Owner -->
-      <div class="pnew-card">
-        <div class="d-flex justify-content-between align-items-start gap-2">
-          <div>
-            <h2 class="pnew-card-title">Owner</h2>
-            <p class="pnew-card-sub">Responsible for this project.</p>
-          </div>
-          <% if (_canManage) { %>
-            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#projOwnerPicker">
-              <i class="bi bi-pencil"></i>
-            </button>
+      <section class="pj-card pj-side-card" aria-labelledby="pjDetailsTitle">
+        <h2 class="pj-side-title" id="pjDetailsTitle">Details</h2>
+        <dl class="pj-dl">
+          <dt>Company</dt>
+          <dd><% if ((project.companies || []).length) { %><% project.companies.forEach((c, i) => { %><a href="/companies/<%= c.id %>"><%= c.name %></a><%= i < project.companies.length - 1 ? ', ' : '' %><% }) %><% } else { %><span class="pj-muted">—</span><% } %></dd>
+          <% if (project.deals && project.deals.length) { %>
+            <dt>Deal</dt><dd><% project.deals.forEach((d, i) => { %><a href="/deals/<%= d.id %>"><%= d.name %></a><%= i < project.deals.length - 1 ? ', ' : '' %><% }) %></dd>
           <% } %>
-        </div>
-        <% if (project.ownerId) { %>
-          <div class="d-flex align-items-center gap-2">
-            <span class="proj-people-av" style="background:<%- avatarBg(project.ownerName) %>"><%= (project.ownerName||'?').charAt(0).toUpperCase() %></span>
-            <span style="font-size:0.875rem;font-weight:600;"><%= project.ownerName %></span>
+          <dt>Status</dt><dd><%= project.status || '—' %></dd>
+          <dt>Category</dt><dd><%= project.category || '—' %></dd>
+          <dt>Window</dt><dd><%= windowLabel || '—' %></dd>
+          <dt>Products</dt>
+          <dd>
+            <% if (project.products.length) { %>
+              <span class="pj-tags"><% project.products.forEach(pr => { %><a href="/products/<%= pr.id %>" class="pj-tag" title="<%= pr.category || '' %>"><%= pr.name %></a><% }) %></span>
+            <% } else { %><span class="pj-muted">None</span><% } %>
+          </dd>
+          <dt>Created</dt><dd><%= fmtDate(project.createdAt) || '—' %><% if (project.createdByName) { %> <span class="pj-muted">by <%= project.createdByName %></span><% } %></dd>
+          <% if (project.updatedAt && project.updatedByName) { %>
+            <dt>Last edited</dt><dd><%= fmtDate(project.updatedAt) %> <span class="pj-muted">by <%= project.updatedByName %></span></dd>
+          <% } %>
+        </dl>
+      </section>
+
+      <section class="pj-card pj-side-card" aria-labelledby="pjPeopleTitle">
+        <h2 class="pj-side-title" id="pjPeopleTitle">People</h2>
+
+        <div class="pj-person-row">
+          <div class="pj-person-label">Owner</div>
+          <div class="pj-person-val">
+            <% if (project.ownerId) { %><span class="pj-av" style="background:<%- avatarBg(project.ownerName) %>"><%= initial(project.ownerName) %></span><span><%= project.ownerName %></span><% } else { %><span class="pj-muted">Not set</span><% } %>
           </div>
-        <% } else { %>
-          <p class="pnew-card-sub mb-0">No owner set.</p>
-        <% } %>
+          <% if (_canManage) { %><button type="button" class="pj-link-btn" data-bs-toggle="collapse" data-bs-target="#projOwnerPicker" aria-expanded="false">Change</button><% } %>
+        </div>
         <% if (_canManage) { %>
-          <div class="collapse mt-3" id="projOwnerPicker">
-            <form action="/projects/<%= project.id %>/owner" method="POST">
-              <select name="ownerId" class="form-select form-select-sm mb-2">
-                <option value="">— Remove owner —</option>
-                <% (project.teamUsers || []).forEach(u => { %>
-                  <option value="<%= u.id %>" <%= project.ownerId === u.id ? 'selected' : '' %>>
-                    <%= u.name %><% if (u.title) { %> · <%= u.title %><% } %>
-                  </option>
-                <% }) %>
+          <div class="collapse" id="projOwnerPicker">
+            <form action="/projects/<%= project.id %>/owner" method="POST" class="pj-inline-form">
+              <select name="ownerId" class="pj-select" aria-label="Owner">
+                <option value="">No owner</option>
+                <% (project.teamUsers || []).forEach(u => { %><option value="<%= u.id %>" <%= project.ownerId === u.id ? 'selected' : '' %>><%= u.name %><% if (u.title) { %> · <%= u.title %><% } %></option><% }) %>
               </select>
-              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
+              <button type="submit" class="pg-btn pg-btn-primary">Save</button>
             </form>
           </div>
         <% } %>
-      </div>
 
-      <!-- Auditor -->
-      <div class="pnew-card">
-        <div class="d-flex justify-content-between align-items-start gap-2">
-          <div>
-            <h2 class="pnew-card-title">Auditor</h2>
-            <p class="pnew-card-sub">Manager overseeing this project.</p>
+        <div class="pj-person-row">
+          <div class="pj-person-label">Auditor</div>
+          <div class="pj-person-val">
+            <% if (project.auditorName) { %><span class="pj-av" style="background:<%- avatarBg(project.auditorName) %>"><%= initial(project.auditorName) %></span><span><%= project.auditorName %></span><% } else { %><span class="pj-muted">Not set</span><% } %>
           </div>
-          <% if (_canManage) { %>
-            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#projAuditorPicker">
-              <i class="bi bi-pencil"></i>
-            </button>
-          <% } %>
+          <% if (_canManage) { %><button type="button" class="pj-link-btn" data-bs-toggle="collapse" data-bs-target="#projAuditorPicker" aria-expanded="false">Change</button><% } %>
         </div>
-        <% if (project.auditorName) { %>
-          <div class="d-flex align-items-center gap-2">
-            <span class="proj-people-av" style="background:<%- avatarBg(project.auditorName) %>"><%= project.auditorName.charAt(0).toUpperCase() %></span>
-            <span style="font-size:0.875rem;font-weight:600;"><%= project.auditorName %></span>
-          </div>
-        <% } else { %>
-          <p class="pnew-card-sub mb-0">No auditor set.</p>
-        <% } %>
         <% if (_canManage) { %>
-          <div class="collapse mt-3" id="projAuditorPicker">
-            <form action="/projects/<%= project.id %>/auditor" method="POST">
-              <select name="auditorId" class="form-select form-select-sm mb-2">
-                <option value="">— Remove auditor —</option>
-                <% (project.teamUsers || []).filter(u => ['Admin','Manager','Head R&D Controllers','Head R&D VFD'].includes(u.role)).forEach(u => { %>
-                  <option value="<%= u.id %>" <%= project.auditorId === u.id ? 'selected' : '' %>>
-                    <%= u.name %><% if (u.title) { %> · <%= u.title %><% } %>
-                  </option>
-                <% }) %>
+          <div class="collapse" id="projAuditorPicker">
+            <form action="/projects/<%= project.id %>/auditor" method="POST" class="pj-inline-form">
+              <select name="auditorId" class="pj-select" aria-label="Auditor">
+                <option value="">No auditor</option>
+                <% (project.teamUsers || []).filter(u => ['Admin','Manager','Head R&D Controllers','Head R&D VFD'].includes(u.role)).forEach(u => { %><option value="<%= u.id %>" <%= project.auditorId === u.id ? 'selected' : '' %>><%= u.name %><% if (u.title) { %> · <%= u.title %><% } %></option><% }) %>
               </select>
-              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
+              <button type="submit" class="pg-btn pg-btn-primary">Save</button>
             </form>
           </div>
         <% } %>
-      </div>
 
-      <!-- Assigned to -->
-      <div class="pnew-card">
-        <div class="d-flex justify-content-between align-items-start gap-2">
-          <div>
-            <h2 class="pnew-card-title">Assigned to</h2>
-            <p class="pnew-card-sub">Everyone working on this project.</p>
+        <div class="pj-person-row pj-person-row-top">
+          <div class="pj-person-label">Team</div>
+          <div class="pj-person-val pj-team">
+            <% if (project.assignees && project.assignees.length) { %>
+              <% project.assignees.forEach(a => { %><span class="pj-team-item"><span class="pj-av" style="background:<%- avatarBg(a.name) %>"><%= initial(a.name) %></span><span><%= a.name %></span></span><% }) %>
+            <% } else { %><span class="pj-muted">No one assigned</span><% } %>
           </div>
-          <% if (_canManage) { %>
-            <button type="button" class="pnew-btn-save" data-bs-toggle="collapse" data-bs-target="#projAssigneePicker">
-              <i class="bi bi-person-plus"></i> Edit
-            </button>
-          <% } %>
+          <% if (_canManage) { %><button type="button" class="pj-link-btn" data-bs-toggle="collapse" data-bs-target="#projAssigneePicker" aria-expanded="false">Edit</button><% } %>
         </div>
-        <% if (project.assignees && project.assignees.length) { %>
-          <div class="d-flex flex-column gap-1">
-            <% project.assignees.forEach(a => { %>
-              <div class="d-flex align-items-center gap-2">
-                <span class="proj-people-av" style="background:<%- avatarBg(a.name) %>"><%= (a.name||'?').charAt(0).toUpperCase() %></span>
-                <span style="font-size:0.85rem;"><%= a.name %></span>
-              </div>
-            <% }) %>
-          </div>
-        <% } else { %>
-          <p class="pnew-card-sub mb-0">No one assigned yet.</p>
-        <% } %>
         <% if (_canManage) { %>
-          <div class="collapse mt-3" id="projAssigneePicker">
+          <div class="collapse" id="projAssigneePicker">
             <form action="/projects/<%= project.id %>/assignees" method="POST">
-              <div class="d-flex flex-column gap-1 mb-3" style="max-height:180px;overflow-y:auto;">
+              <div class="pj-checklist">
                 <% (project.teamUsers || []).forEach(u => { %>
-                  <label class="task-people-check">
-                    <input type="checkbox" name="userIds" value="<%= u.id %>"
-                      <%= (project.assigneeIds || []).includes(u.id) ? 'checked' : '' %>>
-                    <span class="proj-people-av" style="width:24px;height:24px;font-size:0.7rem;background:<%- avatarBg(u.name) %>"><%= (u.name||'?').charAt(0).toUpperCase() %></span>
-                    <span style="font-size:0.85rem;"><%= u.name %><% if (u.title) { %> <span style="opacity:0.5;">· <%= u.title %></span><% } %></span>
+                  <label class="pj-check">
+                    <input type="checkbox" name="userIds" value="<%= u.id %>" <%= (project.assigneeIds || []).includes(u.id) ? 'checked' : '' %>>
+                    <span class="pj-av pj-av-xs" style="background:<%- avatarBg(u.name) %>"><%= initial(u.name) %></span>
+                    <span><%= u.name %><% if (u.title) { %> <span class="pj-muted">· <%= u.title %></span><% } %></span>
                   </label>
                 <% }) %>
               </div>
-              <button type="submit" class="pnew-btn-save w-100 justify-content-center"><i class="bi bi-check-lg"></i> Save</button>
+              <button type="submit" class="pg-btn pg-btn-primary pj-full">Save team</button>
             </form>
           </div>
         <% } %>
-      </div>
+      </section>
 
-      <div class="pnew-card">
-        <h2 class="pnew-card-title">Related tasks</h2>
-        <p class="pnew-card-sub"><%= project.subtasks.length %> total</p>
-
-        <div class="pnew-product-list">
-          <% if (!project.subtasks.length) { %>
-            <div class="pnew-product-empty">No related tasks yet.</div>
-          <% } %>
-          <% project.subtasks.forEach(t => { %>
-            <a href="/tasks/<%= t.id %>" class="pnew-product-row" style="text-decoration: none;">
-              <span class="pnew-product-name"><%= t.name || '(untitled)' %></span>
-              <% if (t.status) { %><span class="pnew-product-sub"><%= t.status %></span><% } %>
-            </a>
-          <% }) %>
+      <section class="pj-card pj-side-card" aria-labelledby="pjEmailTitle">
+        <h2 class="pj-side-title" id="pjEmailTitle">Project email</h2>
+        <% const _projEmail = 'project-' + project.id + '@' + emailDomain; %>
+        <div class="pj-copy">
+          <span class="pj-copy-text" id="projEmailAddr" title="<%= _projEmail %>"><%= _projEmail %></span>
+          <button type="button" class="pj-copy-btn" id="pjCopyEmail" aria-label="Copy project email address"><i class="bi bi-copy" aria-hidden="true"></i></button>
         </div>
-
-        <div class="d-flex gap-2 mt-3">
-          <button type="button" class="pnew-btn-cancel" style="flex: 1; justify-content: center;" onclick="document.getElementById('linkTaskForm').style.display = document.getElementById('linkTaskForm').style.display === 'none' ? 'block' : 'none';"><i class="bi bi-link-45deg"></i> Link existing task</button>
-          <a href="/projects/<%= project.id %>/tasks/new" class="pnew-btn-save" style="flex: 1; justify-content: center; text-decoration: none;">New Task</a>
-        </div>
-
-        <div id="linkTaskForm" style="display: none;" class="mt-3">
-          <form action="/projects/<%= project.id %>/tasks/link" method="POST" class="d-flex gap-2">
-            <select name="taskId" class="pnew-select" required>
-              <option value="">— Select a task —</option>
-              <% linkableTasks.forEach(t => { %>
-                <option value="<%= t.id %>"><%= t.name || '(untitled)' %></option>
-              <% }) %>
-            </select>
-            <button type="submit" class="pnew-btn-save"><i class="bi bi-check-lg"></i></button>
-          </form>
-          <% if (!linkableTasks.length) { %>
-            <p class="text-muted small mb-0 mt-2">No other unlinked tasks available.</p>
-          <% } %>
-        </div>
-      </div>
+        <p class="pj-hint">Put this address in Reply-To or CC when emailing the client. Their replies appear in the conversation automatically.</p>
+      </section>
 
       <% if (project.linkedActivities && project.linkedActivities.length) { %>
-        <div class="pnew-card">
-          <div class="pnew-card-header-row">
-            <h2 class="pnew-card-title"><i class="bi bi-clock-history me-1" style="color:var(--crm-accent);font-size:0.9em;"></i> Source activities</h2>
-          </div>
-          <div class="pnew-product-list">
+        <section class="pj-card pj-side-card" aria-labelledby="pjSrcTitle">
+          <h2 class="pj-side-title" id="pjSrcTitle">Source activities</h2>
+          <ul class="pj-links">
             <% project.linkedActivities.forEach(act => { %>
-              <a href="/activities/<%= act.id %>" class="pnew-product-row" style="text-decoration:none;">
-                <span class="pnew-product-name"><%= act.name || '(untitled)' %></span>
-                <span class="pnew-product-sub"><%= act.type || '' %><% if (act.result) { %><% if (act.type) { %> · <% } %><%= act.result %><% } %></span>
-              </a>
+              <li><a href="/activities/<%= act.id %>"><span><%= act.name || '(untitled)' %></span><span class="pj-muted"><%= [act.type, act.result].filter(Boolean).join(' · ') %></span></a></li>
             <% }) %>
-          </div>
-        </div>
+          </ul>
+        </section>
       <% } %>
 
-      <div class="pnew-tip-card">
-        <i class="bi bi-pencil-square"></i>
-        <div class="pnew-tip-title">Need changes?</div>
-        <div class="pnew-tip-text">Update identity, classification, products, and timeline from the <a href="/projects/<%= project.id %>/edit">edit page</a>.</div>
-      </div>
-    </div>
+      <% if (_canRd) { %>
+        <section class="pj-card pj-side-card pj-setting <%= project.isRdIssue ? 'is-on' : '' %>">
+          <div class="pj-setting-text">
+            <h2 class="pj-side-title"><i class="bi bi-cpu" aria-hidden="true"></i> R&amp;D issue</h2>
+            <p class="pj-hint"><%= project.isRdIssue ? 'Visible to Engineering members assigned to a task here.' : 'Turn on to let assigned Engineering members see this project.' %></p>
+          </div>
+          <form action="/projects/<%= project.id %>/toggle-rd" method="POST">
+            <button type="submit" class="pj-switch <%= project.isRdIssue ? 'is-on' : '' %>" role="switch" aria-checked="<%= project.isRdIssue ? 'true' : 'false' %>" aria-label="R&amp;D issue"><span></span></button>
+          </form>
+        </section>
+      <% } %>
+    </aside>
   </div>
 </div>
 
-<style>
-/* People avatars */
-.proj-people-av {
-  width: 32px; height: 32px;
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.78rem; font-weight: 700;
-  color: #fff;
-  flex-shrink: 0;
-  letter-spacing: 0.02em;
-}
-.task-people-check {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.3rem 0.4rem; border-radius: 6px;
-  cursor: pointer; transition: background 0.12s;
-}
-.task-people-check:hover { background: var(--crm-muted); }
+<script>
+(function () {
+  // "Log message" header button opens the composer in log mode
+  var logBtn = document.querySelector('[data-pj-log]');
+  if (logBtn) logBtn.addEventListener('click', function (e) {
+    var sw = document.querySelector('[data-mm-mode="message"]');
+    if (sw) { e.preventDefault(); sw.click(); document.getElementById('comments').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  });
 
-.rd-toggle-card {
-  border: 1.5px solid var(--crm-border);
-  transition: border-color 0.2s;
+  // Long descriptions collapse to a few lines
+  var brief = document.getElementById('pjBrief'), more = document.getElementById('pjBriefMore');
+  if (brief && more && brief.scrollHeight > brief.clientHeight + 4) {
+    more.hidden = false;
+    more.addEventListener('click', function () { var open = brief.classList.toggle('is-open'); more.textContent = open ? 'Show less' : 'Show more'; });
+  }
+
+  // Copy project email
+  var copy = document.getElementById('pjCopyEmail');
+  if (copy) copy.addEventListener('click', function () {
+    navigator.clipboard.writeText(document.getElementById('projEmailAddr').textContent.trim()).then(function () {
+      copy.innerHTML = '<i class="bi bi-check-lg"></i>'; setTimeout(function () { copy.innerHTML = '<i class="bi bi-copy"></i>'; }, 1500);
+    });
+  });
+
+  // Files: click or drop, then upload
+  var input = document.getElementById('projectAttachInput'), label = document.getElementById('projectAttachLabel');
+  var drop = document.getElementById('pjDrop'), btn = document.getElementById('pjUploadBtn');
+  function show() {
+    var n = input.files ? input.files.length : 0;
+    label.innerHTML = n ? '<strong>' + n + ' file' + (n === 1 ? '' : 's') + '</strong> ready to upload' : '<strong>Drop files</strong> or click to choose';
+    btn.hidden = !n; drop.classList.toggle('has-files', !!n);
+  }
+  if (input) {
+    input.addEventListener('change', show);
+    ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('is-over'); }); });
+    ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function () { drop.classList.remove('is-over'); }); });
+    drop.addEventListener('drop', function (e) {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.files.length) { input.files = e.dataTransfer.files; show(); }
+    });
+  }
+})();
+</script>
+
+<style>
+/* Project page (pj-*) — reuses pg-* buttons/tokens from style.css */
+.pj { padding-bottom: 4rem; }
+.pj-crumbs { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 0.8rem; }
+.pj-crumbs a { color: var(--crm-muted-fg); text-decoration: none; }
+.pj-crumbs a:hover { color: var(--crm-accent); }
+.pj-crumbs i { font-size: 0.6rem; color: var(--crm-muted-fg); opacity: .7; }
+
+.pj-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 16px; }
+.pj-head-main { min-width: 0; }
+.pj-title { margin: 0 0 8px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif; font-size: 1.5rem; font-weight: 650; letter-spacing: -0.015em; line-height: 1.25; color: var(--crm-fg); }
+.pj-head-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.pj-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 0.82rem; color: var(--crm-muted-fg); }
+.pj-meta-item { display: inline-flex; align-items: center; gap: 6px; color: var(--crm-muted-fg); text-decoration: none; }
+a.pj-meta-item:hover { color: var(--crm-accent); }
+.pj-meta-item i { font-size: 0.8rem; opacity: .8; }
+.pj-status { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+.pj-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pj-status-active { background: oklch(0.95 0.03 258); color: oklch(0.45 0.16 258); }
+.pj-status-hold { background: oklch(0.96 0.045 80); color: oklch(0.48 0.12 65); }
+.pj-status-done { background: oklch(0.95 0.04 160); color: oklch(0.45 0.12 160); }
+.pj-status-cancelled, .pj-status-none { background: var(--crm-muted); color: var(--crm-muted-fg); }
+.pj-chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+.pj-chip-rd { background: oklch(0.95 0.03 230); color: oklch(0.42 0.14 240); }
+
+/* Progress strip */
+.pj-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; background: #fff; border: 1px solid var(--crm-border); border-radius: 10px; box-shadow: 0 1px 2px rgb(16 24 40 / 0.04); }
+.pj-stat { padding: 12px 16px; min-width: 0; }
+.pj-stat + .pj-stat { border-left: 1px solid var(--crm-border-soft); }
+.pj-stat-label { font-size: 0.72rem; font-weight: 600; color: var(--crm-muted-fg); margin-bottom: 4px; }
+.pj-stat-value { font-size: 1.15rem; font-weight: 650; letter-spacing: -0.01em; color: var(--crm-fg); line-height: 1.3; font-variant-numeric: tabular-nums; }
+.pj-stat-value span { font-size: 0.8rem; font-weight: 500; color: var(--crm-muted-fg); }
+.pj-stat-small { font-size: 0.95rem; }
+.pj-stat-sub { display: block; margin-top: 2px; font-size: 0.75rem; color: var(--crm-muted-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+a.pj-stat-sub:hover { color: var(--crm-accent); }
+.pj-stat-due.is-overdue { color: var(--crm-danger); }
+.pj-stat-due.is-today { color: oklch(0.52 0.15 60); }
+.pj-stat.is-alert .pj-stat-value { color: var(--crm-danger); }
+.pj-stat.is-alert .pj-stat-sub { color: var(--crm-danger); }
+.pj-bar { height: 4px; margin-top: 8px; border-radius: 2px; background: var(--crm-muted); overflow: hidden; }
+.pj-bar span { display: block; height: 100%; border-radius: 2px; background: var(--crm-success); }
+
+/* Layout */
+.pj-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.pj-main, .pj-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pj-card { background: #fff; border: 1px solid var(--crm-border); border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 2px rgb(16 24 40 / 0.04); }
+.pj-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.pj-card-title { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif; font-size: 0.95rem; font-weight: 650; color: var(--crm-fg); }
+.pj-card-sub { margin: 2px 0 0; font-size: 0.78rem; color: var(--crm-muted-fg); }
+.pj-card-actions { display: flex; gap: 14px; flex-shrink: 0; }
+.pj-n { margin-left: 4px; font-size: 0.8rem; font-weight: 500; color: var(--crm-muted-fg); }
+.pj-muted { color: var(--crm-muted-fg); }
+.pj-red { color: var(--crm-danger); font-weight: 600; }
+.pj-hint { margin: 6px 0 0; font-size: 0.75rem; color: var(--crm-muted-fg); line-height: 1.45; }
+.pj-link-btn { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 0.8rem; font-weight: 600; color: var(--crm-accent); text-decoration: none; cursor: pointer; white-space: nowrap; }
+.pj-link-btn:hover { color: oklch(0.45 0.2 258); text-decoration: underline; }
+.pj-link-btn:focus-visible { outline: 2px solid var(--crm-accent); outline-offset: 2px; border-radius: 4px; }
+.pj-inline-form { display: flex; gap: 8px; margin: 0 0 12px; }
+.pj-select { flex: 1; min-width: 0; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--crm-border); border-radius: 8px; font-size: 0.82rem; color: var(--crm-fg); -webkit-appearance: none; appearance: none; box-shadow: 0 1px 2px rgb(16 24 40 / 0.06);
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748b' fill='none' stroke-width='1.4'/%3E%3C/svg%3E") no-repeat right 10px center; }
+.pj-select:focus { outline: 0; border-color: var(--crm-accent); }
+.pj-full { width: 100%; justify-content: center; }
+
+/* Description */
+.pj-brief { padding: 14px 18px; }
+.pj-brief-text { white-space: pre-wrap; font-size: 0.875rem; line-height: 1.6; color: var(--crm-fg); max-height: 6.4em; overflow: hidden; }
+.pj-brief-text.is-open { max-height: none; }
+.pj-brief .pj-link-btn { margin-top: 6px; }
+
+/* Tasks */
+.pj-tasks { list-style: none; margin: 0 -18px -16px; padding: 0; border-top: 1px solid var(--crm-border-soft); }
+.pj-task { display: grid; grid-template-columns: 18px minmax(0, 1fr) 96px 72px 112px; align-items: center; gap: 12px; min-height: 44px; padding: 6px 18px; border-bottom: 1px solid var(--crm-border-soft); }
+.pj-task:last-child { border-bottom: 0; border-radius: 0 0 10px 10px; }
+.pj-task:hover { background: oklch(0.985 0.004 250); }
+.pj-task-status { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--crm-border); display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #fff; }
+.pj-ts-progress { border-color: var(--crm-info); background: conic-gradient(var(--crm-info) 0 50%, transparent 50% 100%); }
+.pj-ts-blocked { border-color: var(--crm-danger); }
+.pj-ts-done { border-color: var(--crm-success); background: var(--crm-success); }
+.pj-task-name { font-size: 0.875rem; font-weight: 550; color: var(--crm-fg); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pj-task-name:hover { color: var(--crm-accent); }
+.pj-task.is-done .pj-task-name { color: var(--crm-muted-fg); font-weight: 500; text-decoration: line-through; text-decoration-color: var(--crm-border); }
+.pj-task-state { font-size: 0.75rem; color: var(--crm-muted-fg); white-space: nowrap; }
+.pj-ts-text-progress { color: oklch(0.48 0.15 235); }
+.pj-ts-text-blocked { color: var(--crm-danger); font-weight: 600; }
+.pj-task-people { display: flex; }
+.pj-task-people .pj-av + .pj-av { margin-left: -6px; }
+.pj-task-due { font-size: 0.78rem; font-weight: 500; text-align: right; white-space: nowrap; color: var(--crm-fg); font-variant-numeric: tabular-nums; }
+.pj-task-due.is-overdue { color: var(--crm-danger); font-weight: 600; }
+.pj-task-due.is-today { color: oklch(0.52 0.15 60); font-weight: 600; }
+.pj-task-due.is-muted, .pj-task-due.is-done { color: var(--crm-muted-fg); font-weight: 400; }
+.pj-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0 6px; text-align: center; font-size: 0.85rem; color: var(--crm-muted-fg); }
+.pj-empty > i { font-size: 1.4rem; opacity: .6; }
+.pj-empty strong { color: var(--crm-fg); }
+
+/* Avatars */
+.pj-av { width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 700; color: #fff; border: 2px solid #fff; box-sizing: content-box; }
+.pj-av-xs { width: 20px; height: 20px; font-size: 0.6rem; }
+.pj-meta .pj-av { border: 0; }
+.pj-av-more { background: var(--crm-muted); color: var(--crm-muted-fg); }
+
+/* Conversation card tweaks (existing composer/thread inside) */
+#comments .note-compose-box { border-radius: 10px; }
+.pj-send { height: 30px; }
+
+/* Files */
+.pj-files { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pj-files a { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 7px; font-size: 0.85rem; color: var(--crm-fg); text-decoration: none; }
+.pj-files a:hover { background: var(--crm-muted); }
+.pj-files a > span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pj-files i { color: var(--crm-muted-fg); }
+.pj-files-open { opacity: 0; font-size: 0.75rem; }
+.pj-files a:hover .pj-files-open { opacity: 1; }
+.pj-upload { display: flex; gap: 8px; align-items: stretch; margin: 0; }
+.pj-drop { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin: 0; padding: 8px 12px; border: 1.5px dashed var(--crm-border); border-radius: 8px; font-size: 0.8rem; color: var(--crm-muted-fg); cursor: pointer; transition: border-color .12s, background .12s; }
+.pj-drop:hover, .pj-drop.is-over { border-color: oklch(0.55 0.2 258 / 0.5); background: oklch(0.985 0.006 258); }
+.pj-drop.has-files { border-style: solid; color: var(--crm-fg); }
+.pj-drop strong { color: var(--crm-fg); font-weight: 600; }
+.pj-upload [hidden] { display: none !important; }
+.pj-upload .pg-btn { height: auto; }
+
+/* Sidebar */
+.pj-side-card { padding: 14px 16px; }
+.pj-side-title { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif; font-size: 0.8rem; font-weight: 650; color: var(--crm-fg); }
+.pj-dl { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px 10px; margin: 0; font-size: 0.82rem; }
+.pj-dl dt { font-weight: 500; color: var(--crm-muted-fg); }
+.pj-dl dd { margin: 0; color: var(--crm-fg); word-break: break-word; }
+.pj-dl a { color: var(--crm-fg); text-decoration: none; }
+.pj-dl a:hover { color: var(--crm-accent); text-decoration: underline; }
+.pj-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.pj-tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border: 1px solid var(--crm-border); border-radius: 6px; font-size: 0.75rem; font-weight: 600; background: #fff; }
+.pj-dl a.pj-tag:hover { text-decoration: none; border-color: oklch(0.55 0.2 258 / 0.45); color: var(--crm-accent); }
+
+.pj-person-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--crm-border-soft); }
+.pj-person-row:first-of-type { border-top: 0; padding-top: 0; }
+.pj-person-row-top { align-items: start; }
+.pj-person-label { font-size: 0.8rem; font-weight: 500; color: var(--crm-muted-fg); }
+.pj-person-val { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 0.85rem; font-weight: 550; color: var(--crm-fg); }
+.pj-person-val .pj-av { border: 0; }
+.pj-team { flex-direction: column; align-items: flex-start; gap: 6px; }
+.pj-team-item { display: inline-flex; align-items: center; gap: 8px; }
+.pj-side .collapse .pj-inline-form, .pj-side .collapse form { margin: 0 0 10px; }
+.pj-checklist { max-height: 200px; overflow-y: auto; margin-bottom: 8px; padding: 4px; border: 1px solid var(--crm-border-soft); border-radius: 8px; }
+.pj-check { display: flex; align-items: center; gap: 8px; margin: 0; padding: 5px 6px; border-radius: 6px; font-size: 0.82rem; cursor: pointer; }
+.pj-check:hover { background: var(--crm-muted); }
+.pj-check .pj-av { border: 0; }
+
+.pj-copy { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 4px 0 10px; border: 1px solid var(--crm-border); border-radius: 8px; background: oklch(0.985 0.003 250); }
+.pj-copy-text { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; color: var(--crm-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pj-copy-btn { width: 26px; height: 26px; border: 0; border-radius: 6px; background: none; color: var(--crm-muted-fg); cursor: pointer; }
+.pj-copy-btn:hover { background: var(--crm-muted); color: var(--crm-fg); }
+
+.pj-links { list-style: none; margin: 0; padding: 0; }
+.pj-links a { display: flex; flex-direction: column; padding: 6px 0; border-top: 1px solid var(--crm-border-soft); font-size: 0.82rem; color: var(--crm-fg); text-decoration: none; }
+.pj-links li:first-child a { border-top: 0; padding-top: 0; }
+.pj-links a:hover span:first-child { color: var(--crm-accent); }
+.pj-links .pj-muted { font-size: 0.72rem; }
+
+.pj-setting { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.pj-setting .pj-side-title { margin-bottom: 2px; }
+.pj-setting .pj-hint { margin: 0; }
+.pj-setting.is-on { border-color: oklch(0.8 0.08 240); background: oklch(0.985 0.01 240); }
+.pj-setting form { margin: 0; }
+.pj-switch { position: relative; width: 36px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: var(--crm-border); cursor: pointer; transition: background .15s; flex-shrink: 0; }
+.pj-switch span { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.2); transition: left .15s; }
+.pj-switch.is-on { background: oklch(0.55 0.17 240); }
+.pj-switch.is-on span { left: 18px; }
+.pj-switch:focus-visible { outline: 2px solid var(--crm-accent); outline-offset: 2px; }
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .pj-grid { grid-template-columns: minmax(0, 1fr); }
+  .pj-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pj-stat:nth-child(3) { border-left: 0; }
+  .pj-stat:nth-child(n+3) { border-top: 1px solid var(--crm-border-soft); }
 }
-.rd-toggle-card--on {
-  border-color: oklch(0.60 0.18 245);
-  background: oklch(0.97 0.02 245);
-}
-.rd-switch {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-.rd-switch-track {
-  display: flex;
-  align-items: center;
-  width: 44px;
-  height: 24px;
-  border-radius: 999px;
-  background: var(--crm-border);
-  position: relative;
-  transition: background 0.2s;
-  padding: 3px;
-}
-.rd-switch-track--on {
-  background: oklch(0.52 0.18 245);
-}
-.rd-switch-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  position: absolute;
-  left: 3px;
-  transition: left 0.2s;
-}
-.rd-switch-track--on .rd-switch-thumb {
-  left: 23px;
-}
-.rd-active-note {
-  margin-top: 0.65rem;
-  font-size: 0.72rem;
-  color: oklch(0.40 0.18 245);
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+@media (max-width: 760px) {
+  .pj-head { flex-direction: column; }
+  .pj-head-actions { width: 100%; }
+  .pj-head-actions .pg-btn { flex: 1; justify-content: center; }
+  .pj-task { grid-template-columns: 18px minmax(0, 1fr) auto; grid-template-areas: "s n d" ". st p"; row-gap: 2px; }
+  .pj-task-status { grid-area: s; } .pj-task-name { grid-area: n; } .pj-task-due { grid-area: d; }
+  .pj-task-state { grid-area: st; } .pj-task-people { grid-area: p; justify-self: end; }
 }
 </style>
