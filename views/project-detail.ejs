@@ -952,8 +952,11 @@
         else alert(notSetUp().replace(/<[^>]+>/g, ''));
         return;
       }
+      if (cl.disabled) return;
+      if (actions) actions.querySelectorAll('.msgv-note').forEach(function (n) { n.remove(); });   // clear earlier errors
       cl.disabled = true;
-      var label = cl.innerHTML; cl.innerHTML = '<span class="logo-spin" aria-hidden="true"></span>Cleaning up…';
+      var label = cl.getAttribute('data-label') || cl.innerHTML; cl.setAttribute('data-label', label);
+      cl.innerHTML = '<span class="logo-spin" aria-hidden="true"></span>Cleaning up… this can take up to a minute';
       post('/comments/' + encodeURIComponent(id) + '/format')
         .then(function () { location.hash = 'msg-' + id; location.reload(); })
         .catch(function (err) {
