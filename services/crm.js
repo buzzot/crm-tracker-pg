@@ -1768,6 +1768,14 @@ async function listProjectsWithSubtasks(user) {
     tasks: await listTasks({ projectId: p.id })
   })));
 }
+async function companyLogos(ids) {
+  const list = [...new Set((ids || []).filter(Boolean))];
+  if (!list.length) return {};
+  const r = await query('SELECT id, logo_url FROM companies WHERE id = ANY($1::uuid[])', [list]);
+  const out = {}; r.rows.forEach(x => { out[x.id] = toMediaUrl(x.logo_url); });
+  return out;
+}
+
 // Projects list overview: products, company logo, open tasks, task stats, last conversation.
 async function listProjectsOverview(user) {
   const projects = await listProjects(user);
@@ -1954,6 +1962,7 @@ module.exports = {
   listProjectsWithSubtasks,
   listProjectsOverview,
   reopenTask,
+  companyLogos,
   // Tasks
   listTasks,
   getTask,

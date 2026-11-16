@@ -1,39 +1,291 @@
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h4 mb-0">Sales Pipeline by Company</h1>
-  <span class="text-muted small">Drag a card to a new stage, or use its dropdown.</span>
+<%
+  const CLOSED = ['Closed Won', 'Closed Lost'];
+  const OPEN_STAGES = stageChoices.filter(s => !CLOSED.includes(s));
+  const sKey = s => String(s || '').replace(/[^A-Za-z0-9]/g, '');
+  const money = n => '$' + Math.round(n || 0).toLocaleString('en-US');
+  const short = n => { n = Math.round(n || 0); return n >= 1e6 ? '$' + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e4 ? '$' + Math.round(n / 1e3) + 'k' : money(n); };
+  function initials(name) {
+    if (!name) return '?';
+    const w = name.trim().split(/\s+/);
+    return (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase();
+  }
+  function ago(d) {
+    if (d === null || d === undefined) return '';
+    if (d <= 0) return 'today'; if (d === 1) return 'yesterday';
+    if (d < 14) return d + 'd ago'; if (d < 60) return Math.round(d / 7) + 'w ago';
+    return Math.round(d / 30) + 'mo ago';
+  }
+  function card(d) { %>
+    <article class="pp-card<%= d.stale ? ' is-stale' : '' %>" draggable="true" tabindex="0"
+             data-id="<%= d.id %>" data-stage="<%= d.stage %>" data-amount="<%= d.amount || 0 %>"
+             data-owner="<%= d.ownerId || '' %>" data-mine="<%= d.mine ? 1 : 0 %>" data-stale="<%= d.stale ? 1 : 0 %>"
+             data-search="<%= [d.name, d.companyName, d.ownerName, (d.products || []).map(p => p.name).join(' ')].join(' ').toLowerCase() %>">
+      <div class="pp-card-top">
+        <a href="/deals/<%= d.id %>" class="pp-name" draggable="false"><%= d.name %></a>
+        <label class="pp-move" title="Move to stage">
+          <span class="visually-hidden">Move <%= d.name %> to stage</span>
+          <i class="bi bi-three-dots" aria-hidden="true"></i>
+          <select class="pp-move-select" data-id="<%= d.id %>">
+            <% stageChoices.forEach(s => { %><option value="<%= s %>" <%= s === d.stage ? 'selected' : '' %>><%= s %></option><% }) %>
+          </select>
+        </label>
+      </div>
+      <% if (d.companyName) { %>
+        <a href="/companies/<%= d.companyId %>" class="pp-co" draggable="false">
+          <% if (d.companyLogo) { %><img src="<%= d.companyLogo %>" alt="" loading="lazy" onerror="this.remove()"><% } else { %><span class="pp-co-ph"><%= initials(d.companyName) %></span><% } %>
+          <span><%= d.companyName %></span></a>
+      <% } else { %><span class="pp-co pp-muted"><span class="pp-co-ph">?</span>No company</span><% } %>
+      <div class="pp-card-foot">
+        <span class="pp-amt<%= d.amountSet && d.amount ? '' : ' is-none' %>"><%= d.amountSet && d.amount ? money(d.amount) : 'No amount' %></span>
+        <span class="pp-meta">
+          <% if (d.stale) { %><span class="pp-stale" title="No update for <%= d.idleDays %> days"><i class="bi bi-moon"></i><%= ago(d.idleDays) %></span><% } else { %><span title="Last updated"><%= ago(d.idleDays) %></span><% } %>
+          <% if (d.ownerName) { %><span class="pl-avatar" title="<%= d.ownerName %>"><%= initials(d.ownerName) %></span><% } %>
+        </span>
+      </div>
+    </article>
+  <% }
+%>
+
+<div class="pg pp">
+
+  <div class="pg-header">
+    <div class="pg-heading">
+      <h1 class="pg-title">Pipeline</h1>
+      <span class="pg-count"><%= stats.openCount %> open deals</span>
+    </div>
+    <div class="pg-actions">
+      <div class="pp-views" role="tablist" aria-label="View">
+        <button type="button" class="pp-view is-active" data-view="board" role="tab" aria-selected="true"><i class="bi bi-kanban"></i>Board</button>
+        <button type="button" class="pp-view" data-view="list" role="tab" aria-selected="false"><i class="bi bi-list-ul"></i>List</button>
+      </div>
+      <button type="button" class="pg-btn pg-btn-primary" id="ppNew"><i class="bi bi-plus-lg" aria-hidden="true"></i>New deal</button>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="pp-kpis">
+    <div class="pp-kpi"><span>Open pipeline</span><b><%= short(stats.openValue) %></b><small><%= stats.openCount %> deal<%= stats.openCount === 1 ? '' : 's' %></small></div>
+    <div class="pp-kpi" title="Each open deal's amount × its stage likelihood (Prospecting 10% … Negotiation 80%)"><span>Weighted forecast</span><b><%= short(stats.weighted) %></b><small>by stage likelihood</small></div>
+    <div class="pp-kpi"><span>Won</span><b class="is-won"><%= short(stats.wonValue) %></b><small><%= stats.wonCount %> deal<%= stats.wonCount === 1 ? '' : 's' %></small></div>
+    <div class="pp-kpi"><span>Win rate</span><b><%= stats.winRate === null ? '—' : stats.winRate + '%' %></b><small><%= stats.wonCount %> won · <%= stats.lostCount %> lost</small></div>
+  </div>
+
+  <div class="pl-filters">
+    <label class="pg-search pp-search">
+      <i class="bi bi-search" aria-hidden="true"></i>
+      <input type="search" id="ppSearch" placeholder="Search deals, companies, products" autocomplete="off" aria-label="Search deals">
+    </label>
+    <button type="button" class="pl-chip" id="ppMine" aria-pressed="false"><i class="bi bi-person"></i>My deals</button>
+    <button type="button" class="pl-chip" id="ppStale" aria-pressed="false"><i class="bi bi-moon"></i>Stalled <b><%= stats.staleCount %></b></button>
+    <% if (owners.length > 1) { %>
+      <label class="pl-select"><span>Owner</span>
+        <select id="ppOwner"><option value="">Everyone</option><% owners.forEach(o => { %><option value="<%= o.id %>"><%= o.name %></option><% }) %></select></label>
+    <% } %>
+    <span class="pl-spacer"></span>
+    <button type="button" class="pl-chip" id="ppClosed" aria-pressed="false"><i class="bi bi-archive"></i>Show closed</button>
+  </div>
+
+  <!-- Board -->
+  <div class="pp-board" id="ppBoard">
+    <% stageChoices.forEach(stage => { const list = deals.filter(d => d.stage === stage); const closed = CLOSED.includes(stage); %>
+      <section class="pp-col pp-col-<%= sKey(stage) %><%= closed ? ' is-closed' : '' %>" data-stage="<%= stage %>" <%= closed ? 'hidden' : '' %> aria-label="<%= stage %>">
+        <header class="pp-col-head">
+          <div class="pp-col-title"><span class="pp-dot"></span><span><%= stage %></span><b class="pp-col-n"><%= list.length %></b></div>
+          <div class="pp-col-sum"><span class="pp-col-total"><%= short(list.reduce((s, d) => s + (d.amount || 0), 0)) %></span><% if (!closed) { %><span class="pp-col-prob"><%= Math.round((stageProb[stage] || 0) * 100) %>%</span><% } %></div>
+        </header>
+        <div class="pp-col-body" data-stage="<%= stage %>">
+          <% list.forEach(d => card(d)) %>
+          <div class="pp-col-empty">Drop a deal here</div>
+        </div>
+      </section>
+    <% }) %>
+  </div>
+
+  <!-- Drop targets for closing deals (shown while dragging) -->
+  <div class="pp-closers" id="ppClosers" aria-hidden="true">
+    <div class="pp-closer is-won" data-stage="Closed Won"><i class="bi bi-trophy"></i>Mark as won</div>
+    <div class="pp-closer is-lost" data-stage="Closed Lost"><i class="bi bi-x-circle"></i>Mark as lost</div>
+  </div>
+
+  <!-- List -->
+  <div class="pl-table-wrap" id="ppList" hidden>
+    <table class="pp-table">
+      <thead><tr><th>Deal</th><th>Company</th><th>Stage</th><th class="pp-r">Amount</th><th>Owner</th><th>Updated</th></tr></thead>
+      <tbody>
+        <% stageChoices.forEach(stage => deals.filter(d => d.stage === stage).sort((a, b) => (b.amount || 0) - (a.amount || 0)).forEach(d => { %>
+          <tr class="pp-lrow" data-id="<%= d.id %>" data-stage="<%= d.stage %>" data-owner="<%= d.ownerId || '' %>" data-mine="<%= d.mine ? 1 : 0 %>" data-stale="<%= d.stale ? 1 : 0 %>"
+              data-search="<%= [d.name, d.companyName, d.ownerName, (d.products || []).map(p => p.name).join(' ')].join(' ').toLowerCase() %>">
+            <td><a href="/deals/<%= d.id %>" class="pp-name"><%= d.name %></a></td>
+            <td><% if (d.companyName) { %><a href="/companies/<%= d.companyId %>" class="pp-co-link"><%= d.companyName %></a><% } else { %><span class="pp-muted">—</span><% } %></td>
+            <td><span class="pp-stage pp-stage-<%= sKey(d.stage) %>"><%= d.stage %></span></td>
+            <td class="pp-r"><%= d.amountSet && d.amount ? money(d.amount) : '—' %></td>
+            <td><%= d.ownerName || '—' %></td>
+            <td class="<%= d.stale ? 'pp-stale' : 'pp-muted' %>"><%= ago(d.idleDays) %></td>
+          </tr>
+        <% })) %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pl-empty" id="ppEmpty" hidden>
+    <i class="bi bi-briefcase"></i>
+    <p>No deals match these filters.</p>
+  </div>
 </div>
 
-<div class="pipeline-board">
-  <% board.forEach(col => { %>
-    <div class="pipeline-col" data-stage="<%= col.stage %>">
-      <div class="pipeline-col-header stage-<%= col.stage.replace(/\s+/g,'') %>">
-        <span><%= col.stage %></span>
-        <span class="badge bg-light text-dark"><%= col.deals.length %></span>
-      </div>
-      <div class="pipeline-col-total">$<%= col.total.toLocaleString() %></div>
-      <div class="pipeline-col-body" data-stage="<%= col.stage %>">
-        <% col.deals.forEach(deal => { %>
-          <div class="deal-card" draggable="true" data-deal-id="<%= deal.id %>">
-            <div class="deal-card-title">
-              <a href="/deals/<%= deal.id %>"><%= deal.name %></a>
-            </div>
-            <div class="deal-card-subtext mb-1">
-              <%= deal.company ? deal.company.name : 'No company' %>
-            </div>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="fw-semibold">$<%= (deal.amount || 0).toLocaleString() %></span>
-              <% if (deal.probability) { %>
-                <span class="small text-muted"><%= Math.round(deal.probability * 100) %>%</span>
-              <% } %>
-            </div>
-            <select class="form-select form-select-sm mt-2 stage-select" data-deal-id="<%= deal.id %>">
-              <% stageChoices.forEach(s => { %>
-                <option value="<%= s %>" <%= s === deal.stage ? 'selected' : '' %>><%= s %></option>
-              <% }) %>
-            </select>
-          </div>
-        <% }) %>
-      </div>
+<!-- New deal: pick the company first -->
+<dialog class="pp-dialog" id="ppNewDialog" aria-labelledby="ppNewTitle">
+  <form method="dialog" class="pp-dialog-in" id="ppNewForm">
+    <h2 id="ppNewTitle">New deal</h2>
+    <p>Which company is this deal with?</p>
+    <input type="search" class="pnew-input" id="ppCoSearch" placeholder="Search companies" autocomplete="off">
+    <ul class="pp-co-list" id="ppCoList">
+      <% companies.forEach(c => { %><li><a href="/companies/<%= c.id %>/deals/new" data-name="<%= String(c.name || '').toLowerCase() %>"><%= c.name %></a></li><% }) %>
+    </ul>
+    <div class="pp-dialog-foot">
+      <a href="/companies/new" class="pp-muted-link">Company not listed? Add it first</a>
+      <button type="submit" class="pg-btn">Cancel</button>
     </div>
-  <% }) %>
-</div>
+  </form>
+</dialog>
+
+<div class="tk-toast" id="ppToast" role="status" aria-live="polite" hidden><span id="ppToastText"></span><button type="button" id="ppUndo">Undo</button></div>
+
+<script>
+(function () {
+  var STAGE_PROB = <%- JSON.stringify(stageProb) %>;
+  var board = document.getElementById('ppBoard'), list = document.getElementById('ppList'), empty = document.getElementById('ppEmpty');
+  var closers = document.getElementById('ppClosers');
+  var KEY = 'crm.pipeline.view';
+  var st = { view: 'board', q: '', mine: false, stale: false, owner: '', closed: false };
+  try { var s = JSON.parse(localStorage.getItem(KEY) || '{}'); st.view = s.view || 'board'; st.mine = !!s.mine; st.closed = !!s.closed; } catch (e) {}
+  var ownerSel = document.getElementById('ppOwner');
+
+  function short(n) { n = Math.round(n || 0); return n >= 1e6 ? '$' + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e4 ? '$' + Math.round(n / 1e3) + 'k' : '$' + n.toLocaleString('en-US'); }
+  function match(el) {
+    var q = st.q.trim().toLowerCase();
+    return (!st.mine || el.dataset.mine === '1') && (!st.stale || el.dataset.stale === '1')
+      && (!st.owner || el.dataset.owner === st.owner) && (!q || el.dataset.search.indexOf(q) !== -1);
+  }
+  function totals() {
+    board.querySelectorAll('.pp-col').forEach(function (col) {
+      var cards = Array.prototype.filter.call(col.querySelectorAll('.pp-card'), function (c) { return !c.hidden; });
+      col.querySelector('.pp-col-n').textContent = cards.length;
+      col.querySelector('.pp-col-total').textContent = short(cards.reduce(function (s, c) { return s + (+c.dataset.amount || 0); }, 0));
+      col.classList.toggle('is-empty', !cards.length);
+    });
+  }
+  function render() {
+    document.querySelectorAll('.pp-view').forEach(function (b) { var on = b.dataset.view === st.view; b.classList.toggle('is-active', on); b.setAttribute('aria-selected', on); });
+    document.getElementById('ppMine').setAttribute('aria-pressed', st.mine);
+    document.getElementById('ppStale').setAttribute('aria-pressed', st.stale);
+    document.getElementById('ppClosed').setAttribute('aria-pressed', st.closed);
+    board.hidden = st.view !== 'board'; list.hidden = st.view !== 'list';
+    board.classList.toggle('show-closed', st.closed);
+    board.querySelectorAll('.pp-col.is-closed').forEach(function (c) { c.hidden = !st.closed; });
+    var shown = 0;
+    board.querySelectorAll('.pp-card').forEach(function (c) { var ok = match(c); c.hidden = !ok; if (ok && (st.closed || ['Closed Won', 'Closed Lost'].indexOf(c.dataset.stage) === -1)) shown++; });
+    var lshown = 0;
+    list.querySelectorAll('.pp-lrow').forEach(function (r) { var ok = match(r) && (st.closed || ['Closed Won', 'Closed Lost'].indexOf(r.dataset.stage) === -1); r.hidden = !ok; if (ok) lshown++; });
+    totals();
+    var none = st.view === 'board' ? !shown : !lshown;
+    empty.hidden = !none || !(st.q || st.mine || st.stale || st.owner);
+    try { localStorage.setItem(KEY, JSON.stringify({ view: st.view, mine: st.mine, closed: st.closed })); } catch (e) {}
+  }
+
+  document.querySelectorAll('.pp-view').forEach(function (b) { b.addEventListener('click', function () { st.view = b.dataset.view; render(); }); });
+  document.getElementById('ppMine').addEventListener('click', function () { st.mine = !st.mine; render(); });
+  document.getElementById('ppStale').addEventListener('click', function () { st.stale = !st.stale; render(); });
+  document.getElementById('ppClosed').addEventListener('click', function () { st.closed = !st.closed; render(); });
+  if (ownerSel) ownerSel.addEventListener('change', function () { st.owner = ownerSel.value; render(); });
+  var tmr; document.getElementById('ppSearch').addEventListener('input', function (e) { clearTimeout(tmr); tmr = setTimeout(function () { st.q = e.target.value; render(); }, 120); });
+  list.addEventListener('click', function (e) { var tr = e.target.closest('.pp-lrow'); if (tr && !e.target.closest('a')) location.href = '/deals/' + tr.dataset.id; });
+
+  // ── Moving deals ──
+  var toast = document.getElementById('ppToast'), toastText = document.getElementById('ppToastText'), undoBtn = document.getElementById('ppUndo');
+  var toastTimer, lastMove = null;
+  function showToast(msg, undo) {
+    toastText.textContent = msg; lastMove = undo || null; undoBtn.hidden = !undo; toast.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.hidden = true; }, 5000);
+  }
+  function place(card, stage) {
+    var body = board.querySelector('.pp-col-body[data-stage="' + CSS.escape(stage) + '"]');
+    body.insertBefore(card, body.querySelector('.pp-col-empty'));
+    card.dataset.stage = stage;
+    card.querySelector('.pp-move-select').value = stage;
+    var lr = list.querySelector('.pp-lrow[data-id="' + card.dataset.id + '"]');
+    if (lr) { lr.dataset.stage = stage; var pill = lr.querySelector('.pp-stage'); pill.textContent = stage; pill.className = 'pp-stage pp-stage-' + stage.replace(/[^A-Za-z0-9]/g, ''); }
+    render();
+  }
+  function move(card, stage, quiet) {
+    var from = card.dataset.stage;
+    if (!stage || stage === from) return;
+    place(card, stage);
+    card.classList.add('is-saving');
+    fetch('/pipeline/api/deals/' + card.dataset.id + '/stage', {
+      method: 'PATCH', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ stage: stage }),
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error); }); })
+      .then(function () {
+        card.classList.remove('is-saving');
+        if (!quiet) showToast('Moved to ' + stage + (stage === 'Closed Won' ? ' 🎉' : ''), { card: card, stage: from });
+      })
+      .catch(function (e) { card.classList.remove('is-saving'); place(card, from); showToast((e && e.message) || 'Could not move the deal.'); });
+  }
+  undoBtn.addEventListener('click', function () { if (lastMove) { toast.hidden = true; move(lastMove.card, lastMove.stage, true); lastMove = null; } });
+
+  board.addEventListener('change', function (e) {
+    var sel = e.target.closest('.pp-move-select'); if (!sel) return;
+    move(sel.closest('.pp-card'), sel.value);
+  });
+
+  // Drag and drop
+  var dragging = null;
+  board.addEventListener('dragstart', function (e) {
+    var card = e.target.closest('.pp-card'); if (!card) return;
+    dragging = card; card.classList.add('is-dragging');
+    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.dataset.id);
+    if (!st.closed) closers.classList.add('is-on');
+  });
+  document.addEventListener('dragend', function () {
+    if (dragging) dragging.classList.remove('is-dragging');
+    dragging = null; closers.classList.remove('is-on');
+    document.querySelectorAll('.is-over').forEach(function (el) { el.classList.remove('is-over'); });
+  });
+  function dropTarget(e) { return e.target.closest('.pp-col-body, .pp-closer'); }
+  document.addEventListener('dragover', function (e) {
+    var t = dragging && dropTarget(e); if (!t) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.is-over').forEach(function (el) { if (el !== t) el.classList.remove('is-over'); });
+    t.classList.add('is-over');
+  });
+  document.addEventListener('drop', function (e) {
+    var t = dragging && dropTarget(e); if (!t) return;
+    e.preventDefault(); move(dragging, t.dataset.stage);
+  });
+
+  // Card click opens the deal (keyboard: Enter)
+  board.addEventListener('click', function (e) {
+    var card = e.target.closest('.pp-card');
+    if (card && !e.target.closest('a, select, label')) location.href = '/deals/' + card.dataset.id;
+  });
+  board.addEventListener('keydown', function (e) {
+    var card = e.target.closest('.pp-card');
+    if (card && e.target === card && e.key === 'Enter') location.href = '/deals/' + card.dataset.id;
+  });
+
+  // New deal → choose company
+  var dlg = document.getElementById('ppNewDialog'), coSearch = document.getElementById('ppCoSearch');
+  document.getElementById('ppNew').addEventListener('click', function () { dlg.showModal(); coSearch.value = ''; filterCo(); coSearch.focus(); });
+  function filterCo() {
+    var q = coSearch.value.trim().toLowerCase();
+    document.querySelectorAll('#ppCoList a').forEach(function (a) { a.parentElement.hidden = q && a.dataset.name.indexOf(q) === -1; });
+  }
+  coSearch.addEventListener('input', filterCo);
+  coSearch.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); var first = document.querySelector('#ppCoList li:not([hidden]) a'); if (first) location.href = first.href; }
+  });
+
+  render();
+})();
+</script>
