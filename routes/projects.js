@@ -77,7 +77,7 @@ router.get('/projects/:id', async (req, res, next) => {
       crm.listProjectActivities()
     ]);
     if (!project.name) return res.status(404).render('error', { title: 'Not found', message: 'Project not found.' });
-    res.render('project-detail', { title: project.name, project, allTasks });
+    res.render('project-detail', { title: project.name, project, allTasks, msgError: req.query.msgError ? String(req.query.msgError).slice(0, 200) : null });
   } catch (err) {
     next(err);
   }
@@ -222,6 +222,27 @@ router.post('/projects/:id/attachments', upload.array('attachments', 10), async 
     res.redirect(`/projects/${req.params.id}`);
   } catch (err) {
     next(err);
+  }
+});
+
+// Log an email / WeChat message by hand (pasted from the mail client or WeChat).
+router.post('/projects/:id/messages', upload.array('attachment', 5), async (req, res, next) => {
+  const back = `/projects/${req.params.id}`;
+  try {
+    const project = await crm.getProject(req.params.id);
+    if (!project) return res.status(404).render('error', { title: 'Not found', message: 'Project not found.' });
+    const user = req.session.user || {};
+    const { channel, direction, from, to, subject, body, sentAtIso } = req.body;
+    await crm.addManualMessage({
+      entityType: 'project', entityId: req.params.id,
+      channel, direction, from, to, subject, body, sentAt: sentAtIso,
+      loggedById: user.id || null, loggedByName: user.name || user.email || null,
+      files: req.files,
+    });
+    res.redirect(back + '#comments');
+  } catch (err) {
+    // Validation problems come back to the page as a short message
+    res.redirect(back + '?msgError=' + encodeURIComponent(err.message) + '#comments');
   }
 });
 

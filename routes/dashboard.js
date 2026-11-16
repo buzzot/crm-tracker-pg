@@ -242,7 +242,10 @@ router.get('/', async (req, res, next) => {
       if (!grp.threads.has(ent.key)) {
         grp.threads.set(ent.key, {
           label: ent.label, link: ent.link, kind: ent.kind,
-          type: c.type === 'email' ? 'email' : 'comment',
+          type: c.manual ? c.manual.channel : (c.type === 'email' ? 'email' : 'comment'),
+          label: c.manual
+            ? ({ email: 'Email', wechat: 'WeChat', other: 'Message' }[c.manual.channel] || 'Message') + (c.manual.direction === 'out' ? ' sent' : ' received')
+            : (c.type === 'email' ? 'Email received' : 'Internal comment'),
           author: c.author,
           text: (c.type === 'email' && c.emailSubject) ? c.emailSubject : (c.comment || ''),
           postedAt: c.postedAt, timeAgo: timeAgo(c.postedAt),

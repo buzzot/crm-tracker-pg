@@ -155,11 +155,59 @@
         </script>
       </div>
 
-      <div class="pnew-card">
+      <div class="pnew-card" id="comments">
         <h2 class="pnew-card-title">Comments (<%= (project.comments || []).length %>)</h2>
-        <p class="pnew-card-sub">Notes and updates shared about this project.</p>
+        <p class="pnew-card-sub">Notes, plus emails and WeChat messages logged to this project.</p>
 
-        <form action="/projects/<%= project.id %>/comments" method="POST" enctype="multipart/form-data">
+        <div class="mm-switch" role="tablist" aria-label="Add to this project">
+          <button type="button" class="mm-switch-btn is-active" role="tab" aria-selected="true" data-mm-mode="comment"><i class="bi bi-chat-left-text" aria-hidden="true"></i>Comment</button>
+          <button type="button" class="mm-switch-btn" role="tab" aria-selected="false" data-mm-mode="message"><i class="bi bi-envelope-paper" aria-hidden="true"></i>Log email or WeChat</button>
+        </div>
+
+        <% if (typeof msgError !== 'undefined' && msgError) { %>
+          <div class="mm-alert" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><%= msgError %></div>
+        <% } %>
+
+        <!-- Log a message by hand -->
+        <form action="/projects/<%= project.id %>/messages" method="POST" enctype="multipart/form-data" class="mm-form" id="mmForm" hidden>
+          <input type="hidden" name="sentAtIso" id="mmSentIso">
+          <div class="mm-row">
+            <div class="mm-seg" role="radiogroup" aria-label="Channel">
+              <label><input type="radio" name="channel" value="email" checked><span><i class="bi bi-envelope" aria-hidden="true"></i>Email</span></label>
+              <label><input type="radio" name="channel" value="wechat"><span><i class="bi bi-wechat" aria-hidden="true"></i>WeChat</span></label>
+              <label><input type="radio" name="channel" value="other"><span><i class="bi bi-chat-dots" aria-hidden="true"></i>Other</span></label>
+            </div>
+            <div class="mm-seg" role="radiogroup" aria-label="Direction">
+              <label><input type="radio" name="direction" value="in" checked><span>Received</span></label>
+              <label><input type="radio" name="direction" value="out"><span>Sent</span></label>
+            </div>
+          </div>
+          <div class="mm-grid">
+            <label class="mm-field"><span>From <b aria-hidden="true">*</b></span>
+              <input type="text" name="from" id="mmFrom" class="mm-input" maxlength="300" placeholder="Lin Lan <lin.lan@rheem.com>" autocomplete="off"></label>
+            <label class="mm-field"><span>To</span>
+              <input type="text" name="to" id="mmTo" class="mm-input" maxlength="300" placeholder="Optional" autocomplete="off"></label>
+            <label class="mm-field mm-field-date"><span>Date and time</span>
+              <input type="datetime-local" id="mmSent" class="mm-input"></label>
+          </div>
+          <label class="mm-field" id="mmSubjectWrap"><span>Subject</span>
+            <input type="text" name="subject" id="mmSubject" class="mm-input" maxlength="500" autocomplete="off"></label>
+          <label class="mm-field"><span>Message</span>
+            <textarea name="body" id="mmBody" class="mm-input mm-textarea" rows="6"
+              placeholder="Paste the email or WeChat text here. Pasted email headers (From, To, Subject, Date) fill the fields above. Paste a screenshot to attach it."></textarea></label>
+          <div class="mm-foot">
+            <label class="mm-attach">
+              <i class="bi bi-paperclip" aria-hidden="true"></i><span id="mmFileLabel">Attach files or screenshots</span>
+              <input type="file" name="attachment" id="mmFiles" multiple hidden>
+            </label>
+            <div class="mm-actions">
+              <button type="button" class="pg-btn" data-mm-mode="comment">Cancel</button>
+              <button type="submit" class="pg-btn pg-btn-primary"><i class="bi bi-check2" aria-hidden="true"></i>Save to project</button>
+            </div>
+          </div>
+        </form>
+
+        <form action="/projects/<%= project.id %>/comments" method="POST" enctype="multipart/form-data" id="mmCommentForm">
           <div class="note-compose-box">
             <div class="d-flex gap-2">
               <span class="note-avatar note-avatar-you"><%= youInitial %></span>
@@ -182,7 +230,38 @@
           <% } %>
           <% orderedComments.forEach((c, i) => { %>
             <% const cInitial = (c.author || '?').trim().charAt(0).toUpperCase(); %>
-            <% if (c.type === 'email') { %>
+            <% if (c.manual) { %>
+              <%
+                const ch = c.manual.channel, out = c.manual.direction === 'out';
+                const chLabel = ch === 'email' ? 'Email' : ch === 'wechat' ? 'WeChat' : 'Message';
+                const chIcon = ch === 'email' ? 'bi-envelope-fill' : ch === 'wechat' ? 'bi-wechat' : 'bi-chat-dots-fill';
+                const when = c.postedAt ? new Date(c.postedAt) : null;
+              %>
+              <div class="note-item mm-item mm-<%= ch %>">
+                <div class="note-item-head">
+                  <span class="note-avatar mm-avatar mm-avatar-<%= ch %>"><i class="bi <%= chIcon %>" aria-hidden="true"></i></span>
+                  <div class="note-email-meta">
+                    <span class="note-email-from"><%= c.author %><% if (c.manual.to) { %> <span class="mm-to">&rarr; <%= c.manual.to %></span><% } %></span>
+                    <span class="mm-tags">
+                      <span class="mm-tag mm-tag-<%= ch %>"><%= chLabel %> &middot; <%= out ? 'sent' : 'received' %></span>
+                      <% if (c.emailSubject) { %><span class="note-email-subj"><%= c.emailSubject %></span><% } %>
+                    </span>
+                  </div>
+                  <span class="text-muted small note-item-time" title="<%= when ? when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '' %>"><%= noteTimeAgo(c.postedAt) %></span>
+                </div>
+                <div class="note-bubble mm-bubble mm-bubble-<%= ch %>">
+                  <div class="note-text" style="white-space: pre-wrap;"><%= c.comment %></div>
+                  <% if (c.attachments && c.attachments.length) { %>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                      <% c.attachments.forEach(file => { %>
+                        <a href="<%= file.url %>" target="_blank" rel="noopener" class="note-link-chip"><i class="bi bi-paperclip"></i><%= file.filename %></a>
+                      <% }) %>
+                    </div>
+                  <% } %>
+                  <% if (c.manual.loggedBy) { %><div class="mm-logged">Logged by <%= c.manual.loggedBy %></div><% } %>
+                </div>
+              </div>
+            <% } else if (c.type === 'email') { %>
               <div class="note-item note-item-email">
                 <div class="note-item-head">
                   <span class="note-avatar note-avatar-email"><i class="bi bi-envelope-fill"></i></span>
@@ -232,6 +311,120 @@
               label.textContent = n ? (n + ' file' + (n === 1 ? '' : 's')) : 'Attach';
             });
           }
+        })();
+
+        // ── Log email / WeChat by hand ──────────────────────────────────────
+        (function () {
+          var form = document.getElementById('mmForm');
+          if (!form) return;
+          var commentForm = document.getElementById('mmCommentForm');
+          var body = document.getElementById('mmBody');
+          var from = document.getElementById('mmFrom');
+          var to = document.getElementById('mmTo');
+          var subj = document.getElementById('mmSubject');
+          var subjWrap = document.getElementById('mmSubjectWrap');
+          var sent = document.getElementById('mmSent');
+          var sentIso = document.getElementById('mmSentIso');
+          var files = document.getElementById('mmFiles');
+          var fileLabel = document.getElementById('mmFileLabel');
+          var ME = <%- JSON.stringify((typeof currentUser !== 'undefined' && currentUser && (currentUser.name || currentUser.email)) || '').replace(/</g, '\\u003c') %>;
+
+          function pad(n) { return (n < 10 ? '0' : '') + n; }
+          function toLocalInput(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+          function val(name) { var el = form.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : ''; }
+
+          function setMode(mode) {
+            var msg = mode === 'message';
+            form.hidden = !msg; commentForm.hidden = msg;
+            document.querySelectorAll('.mm-switch-btn').forEach(function (b) {
+              var on = b.getAttribute('data-mm-mode') === mode;
+              b.classList.toggle('is-active', on); b.setAttribute('aria-selected', on);
+            });
+            if (msg) { if (!sent.value) sent.value = toLocalInput(new Date()); sync(); setTimeout(function () { body.focus(); }, 0); }
+          }
+          document.querySelectorAll('[data-mm-mode]').forEach(function (b) {
+            b.addEventListener('click', function () { setMode(b.getAttribute('data-mm-mode')); });
+          });
+
+          function sync() {
+            var ch = val('channel'), out = val('direction') === 'out';
+            subjWrap.hidden = ch !== 'email';
+            from.placeholder = ch === 'wechat' ? (out ? ME || 'Your WeChat name' : 'Their WeChat name') : (out ? ME || 'Your name' : 'Lin Lan <lin.lan@rheem.com>');
+            to.placeholder = ch === 'wechat' ? 'Optional, e.g. group chat name' : 'Optional';
+            if (out && !from.value && ME) from.value = ME;
+            if (!out && from.value === ME) from.value = '';
+          }
+          form.addEventListener('change', function (e) { if (e.target.name === 'channel' || e.target.name === 'direction') sync(); });
+
+          // Parse a pasted email header block (English + common Chinese mail clients)
+          var HEADERS = {
+            from: /^(from|sender|发件人|寄件人)\s*[:：]\s*(.+)$/i,
+            to: /^(to|收件人)\s*[:：]\s*(.+)$/i,
+            subject: /^(subject|主题|主旨)\s*[:：]\s*(.+)$/i,
+            date: /^(date|sent|发送时间|日期|时间)\s*[:：]\s*(.+)$/i,
+            skip: /^(cc|bcc|抄送|密送|reply-to)\s*[:：]/i
+          };
+          function parseDate(t) {
+            var m = t.match(/(\d{4})\s*[年\-\/.]\s*(\d{1,2})\s*[月\-\/.]\s*(\d{1,2})\s*日?[^\d]*(\d{1,2})?[:：]?(\d{2})?/);
+            if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
+            var d = new Date(t.replace(/\(.*?\)/g, '').replace(/\s+at\s+/i, ' '));
+            return isNaN(d.getTime()) ? null : d;
+          }
+          function parseHeaders(text) {
+            var lines = text.replace(/\r/g, '').split('\n'), got = {}, i = 0, seen = 0;
+            for (; i < lines.length; i++) {
+              var line = lines[i].trim();
+              if (!line) { if (seen) { i++; break; } else continue; }
+              var hit = false;
+              for (var k in HEADERS) { var m = line.match(HEADERS[k]); if (m) { if (k !== 'skip') got[k] = m[2].trim(); seen++; hit = true; break; } }
+              if (!hit) break;
+            }
+            return seen >= 2 ? { fields: got, rest: lines.slice(i).join('\n').replace(/^\n+/, '') } : null;
+          }
+
+          body.addEventListener('paste', function (e) {
+            var cd = e.clipboardData; if (!cd) return;
+            var imgs = Array.prototype.filter.call(cd.items || [], function (it) { return it.kind === 'file' && it.type.indexOf('image/') === 0; })
+              .map(function (it) { return it.getAsFile(); }).filter(Boolean);
+            var text = cd.getData('text/plain');
+            if (imgs.length) {
+              var dt = new DataTransfer();
+              Array.prototype.forEach.call(files.files || [], function (f) { dt.items.add(f); });
+              imgs.forEach(function (f, i) {
+                var ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+                dt.items.add(new File([f], 'screenshot-' + Date.now() + (i ? '-' + i : '') + '.' + ext, { type: f.type }));
+              });
+              files.files = dt.files; updateFiles();
+              if (!text) { e.preventDefault(); return; }
+            }
+            var parsed = text && parseHeaders(text);
+            if (parsed) {
+              e.preventDefault();
+              var f = parsed.fields;
+              if (f.from && !from.value) from.value = f.from;
+              if (f.to && !to.value) to.value = f.to;
+              if (f.subject) { subj.value = f.subject; var em = form.querySelector('input[name="channel"][value="email"]'); em.checked = true; sync(); }
+              if (f.date) { var d = parseDate(f.date); if (d) sent.value = toLocalInput(d); }
+              body.setRangeText(parsed.rest, body.selectionStart, body.selectionEnd, 'end');
+            }
+          });
+
+          function updateFiles() {
+            var n = files.files ? files.files.length : 0;
+            fileLabel.textContent = n ? n + ' file' + (n === 1 ? '' : 's') + ' attached' : 'Attach files or screenshots';
+          }
+          files.addEventListener('change', updateFiles);
+
+          form.addEventListener('submit', function (e) {
+            var hasFiles = files.files && files.files.length;
+            if (!from.value.trim()) { e.preventDefault(); from.focus(); from.setCustomValidity('Enter who the message is from'); from.reportValidity(); return; }
+            if (!body.value.trim() && !hasFiles) { e.preventDefault(); body.focus(); body.setCustomValidity('Paste the message text or attach a screenshot'); body.reportValidity(); return; }
+            var d = sent.value ? new Date(sent.value) : new Date();   // datetime-local is the user's local time
+            sentIso.value = isNaN(d.getTime()) ? '' : d.toISOString();
+          });
+          [from, body].forEach(function (el) { el.addEventListener('input', function () { el.setCustomValidity(''); }); });
+
+          if (document.querySelector('.mm-alert') || location.hash === '#log-message') setMode('message');
         })();
       </script>
 

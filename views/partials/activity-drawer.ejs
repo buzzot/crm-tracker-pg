@@ -90,13 +90,17 @@
       <p class="ad-muted">No emails or comments yet.</p>
     <% } else { %>
       <ul class="ad-history">
-        <% history.forEach(c => { const isEmail = c.type === 'email'; %>
+        <% history.forEach(c => {
+             const isEmail = c.type === 'email' || (c.manual && c.manual.channel === 'email');
+             const kindLabel = c.manual
+               ? ({ email: 'email', wechat: 'WeChat', other: 'message' }[c.manual.channel] || 'message') + (c.manual.direction === 'out' ? ' sent' : ' received')
+               : (isEmail ? 'email received' : 'comment'); %>
           <li>
-            <span class="ad-h-icon <%= isEmail ? 'is-email' : '' %>" title="<%= isEmail ? 'Email received' : 'Comment' %>">
+            <span class="ad-h-icon <%= isEmail ? 'is-email' : '' %>" title="<%= kindLabel %>">
               <i class="bi <%= isEmail ? 'bi-envelope-arrow-down' : 'bi-chat-left-text' %>" aria-hidden="true"></i>
             </span>
             <div class="ad-h-body">
-              <div class="ad-h-meta"><strong><%= c.author %></strong> <span class="ad-muted"><%= isEmail ? 'email received' : 'comment' %> &middot; <%= ago(c.postedAt) %></span></div>
+              <div class="ad-h-meta"><strong><%= c.author %></strong> <span class="ad-muted"><%= kindLabel %> &middot; <%= ago(c.postedAt) %></span></div>
               <% if (isEmail && c.emailSubject) { %><div class="ad-h-subj"><%= c.emailSubject %></div><% } %>
               <div class="ad-h-text"><%= (c.comment || '').slice(0, 220) %><%= (c.comment || '').length > 220 ? '…' : '' %></div>
             </div>

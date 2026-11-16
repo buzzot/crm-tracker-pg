@@ -385,9 +385,9 @@
               </div>
               <% g.threads.forEach(t => { %>
                 <div class="sd-au-thread">
-                  <span class="sd-au-type sd-au-type-<%= t.type %>" title="<%= t.type === 'email' ? 'Email received' : 'Internal comment' %>">
-                    <i class="bi <%= t.type === 'email' ? 'bi-envelope-arrow-down' : 'bi-chat-left-text' %>"></i>
-                    <span class="visually-hidden"><%= t.type === 'email' ? 'Email received' : 'Internal comment' %></span>
+                  <span class="sd-au-type sd-au-type-<%= t.type === 'comment' ? 'comment' : 'email' %>" title="<%= t.label %>">
+                    <i class="bi <%= t.type === 'wechat' ? 'bi-wechat' : t.type === 'comment' ? 'bi-chat-left-text' : /sent$/.test(t.label) ? 'bi-envelope-arrow-up' : 'bi-envelope-arrow-down' %>"></i>
+                    <span class="visually-hidden"><%= t.label %></span>
                   </span>
                   <div class="sd-au-body">
                     <div class="sd-au-line"><strong><%= t.author %></strong> <span class="sd-au-text"><%= t.text %></span></div>

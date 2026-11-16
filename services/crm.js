@@ -1387,16 +1387,33 @@ async function listAllComments(limit = 10, userId = null) {
   return r.rows.map(mapComment);
 }
 
+// Manually logged emails / WeChat messages keep their extra details in `link`
+// as  MANUAL:{json}  (same trick inbound email uses for EMAILSUBJ:) — no schema change.
+const MANUAL_PREFIX = 'MANUAL:';
+function parseManualMeta(link) {
+  if (!link || !String(link).startsWith(MANUAL_PREFIX)) return null;
+  try { const m = JSON.parse(String(link).slice(MANUAL_PREFIX.length)); return m && typeof m === 'object' ? m : null; }
+  catch (_) { return null; }
+}
+
 function mapComment(row) {
   const isEmail = row.type === 'email';
+  const manual = parseManualMeta(row.link);
   return {
+    manual: manual ? {
+      channel: manual.ch || (isEmail ? 'email' : 'other'),
+      direction: manual.dir === 'out' ? 'out' : 'in',
+      to: manual.to || null,
+      loggedBy: manual.by || null,
+      loggedById: manual.byId || null,
+    } : null,
     id: row.id,
     comment: row.content,
     author: row.user_name || row.author_name || 'Unknown',
     authorId: row.author_id,
     type: row.type || 'comment',
     emailSubject: row.email_subject || null,
-    link: isEmail ? null : (row.link || null),
+    link: (isEmail || manual || String(row.link || '').startsWith(MANUAL_PREFIX)) ? null : (row.link || null),
     entityType: row.entity_type,
     entityId: row.entity_id,
     // Map to old field names so routes work unchanged
@@ -1408,6 +1425,33 @@ function mapComment(row) {
     postedAt: row.created_at,
     attachments: Array.isArray(row.attachments) ? row.attachments : []
   };
+}
+
+// Log an email / WeChat / other message by hand (copy-pasted from the mail client or WeChat).
+// Stored as a comment so it appears in the same timeline, at the time the message was sent.
+async function addManualMessage({ entityType, entityId, channel, direction, from, to, subject, body, sentAt, loggedById, loggedByName, files }) {
+  const ch = ['email', 'wechat', 'other'].includes(channel) ? channel : 'other';
+  const dir = direction === 'out' ? 'out' : 'in';
+  const text = String(body || '').trim();
+  if (!text && !(files && files.length)) throw new Error('Paste the message text or attach a screenshot.');
+  const sender = String(from || '').trim() || (dir === 'out' ? (loggedByName || '') : '');
+  if (!sender) throw new Error('Enter who the message is from.');
+
+  let when = sentAt ? new Date(sentAt) : new Date();
+  if (isNaN(when.getTime())) when = new Date();
+  if (when.getTime() > Date.now() + 5 * 60 * 1000) throw new Error('The message date is in the future.');
+
+  const meta = { v: 1, ch, dir, to: String(to || '').trim().slice(0, 300) || null, by: loggedByName || null, byId: loggedById || null };
+  const type = ch === 'email' ? 'email' : ch === 'wechat' ? 'wechat' : 'message';
+  const r = await query(
+    `INSERT INTO comments (entity_type, entity_id, content, author_id, author_name, type, email_subject, link, created_at)
+     VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$8) RETURNING id, created_at`,
+    [entityType, entityId, text || '(screenshot attached)', sender.slice(0, 300), type,
+     ch === 'email' ? (String(subject || '').trim().slice(0, 500) || null) : null,
+     MANUAL_PREFIX + JSON.stringify(meta), when.toISOString()]
+  );
+  if (files && files.length) await _uploadFiles('comment', r.rows[0].id, files, loggedById);
+  return r.rows[0];
 }
 
 // Shim functions matching old Airtable crm.js signatures used by routes
@@ -1735,6 +1779,7 @@ module.exports = {
   getActivity,
   createActivity,
   updateActivity,
+  addManualMessage,
   completeActivity,
   deleteActivity,
   getActivityDetail,
