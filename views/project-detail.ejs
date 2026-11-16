@@ -288,6 +288,7 @@
         <!-- Log a message by hand -->
         <form action="/projects/<%= project.id %>/messages" method="POST" enctype="multipart/form-data" class="mm-form" id="mmForm" hidden>
           <input type="hidden" name="sentAtIso" id="mmSentIso">
+          <input type="hidden" name="aiReviewed" value="0" data-ai-reviewed>
           <div class="mm-row">
             <div class="mm-seg" role="radiogroup" aria-label="Channel">
               <label><input type="radio" name="channel" value="email" checked><span><i class="bi bi-envelope" aria-hidden="true"></i>Email</span></label>
@@ -345,10 +346,11 @@
         </form>
 
         <form action="/projects/<%= project.id %>/comments" method="POST" enctype="multipart/form-data" id="mmCommentForm">
+          <input type="hidden" name="aiReviewed" value="0" data-ai-reviewed>
           <div class="note-compose-box">
             <div class="d-flex gap-2">
               <span class="note-avatar note-avatar-you"><%= youInitial %></span>
-              <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a comment..." required></textarea>
+              <textarea name="comment" class="note-textarea" rows="2" placeholder="Add a comment, or paste a screenshot"></textarea>
             </div>
             <div class="note-compose-footer">
 <div class="dz" data-dz>
@@ -479,6 +481,37 @@
         </dialog>
         <% } %>
       </section>
+
+      <dialog class="shot-dialog" id="shotDialog" aria-labelledby="shotTitle">
+        <div class="shot-head">
+          <div>
+            <h3 id="shotTitle"><i class="bi bi-stars" aria-hidden="true"></i>Check the text read from your screenshot</h3>
+            <p>Edit anything that's wrong, then submit. The text is saved with the message; the screenshot stays attached.</p>
+          </div>
+          <button type="button" class="pj-copy-btn" data-shot-cancel aria-label="Close"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+        <div class="shot-body">
+          <div class="shot-images" id="shotImages"></div>
+          <div class="shot-result">
+            <div class="shot-state" id="shotLoading"><span class="logo-spin" aria-hidden="true"></span><span id="shotLoadingText">Reading screenshot…</span></div>
+            <div class="shot-state shot-error" id="shotError" hidden><i class="bi bi-exclamation-circle" aria-hidden="true"></i><span id="shotErrorText"></span><button type="button" class="pj-link-btn" id="shotRetry">Try again</button></div>
+            <div id="shotReady" hidden>
+              <div class="shot-tldr" id="shotTldr"></div>
+              <label class="shot-label" for="shotText">Text to save with the message</label>
+              <textarea id="shotText" class="mm-input mm-textarea shot-text" rows="12"></textarea>
+              <label class="shot-check" id="shotOrigWrap" hidden><input type="checkbox" id="shotOrig"> Also save the original-language text</label>
+              <p class="shot-skip" id="shotSkip" hidden></p>
+            </div>
+          </div>
+        </div>
+        <div class="shot-foot">
+          <button type="button" class="pg-btn" data-shot-cancel>Back to editing</button>
+          <span class="shot-foot-right">
+            <button type="button" class="pg-btn" id="shotNoText">Submit without text</button>
+            <button type="button" class="pg-btn pg-btn-primary" id="shotSubmit" disabled><i class="bi bi-check2" aria-hidden="true"></i>Submit with this text</button>
+          </span>
+        </div>
+      </dialog>
 
       <script>
         (function () {
@@ -1041,6 +1074,110 @@
     });
     form.addEventListener('reset', function () { files = []; sync(); });
   });
+
+  // ── Screenshots: read with AI and confirm before submitting ────────────────
+  (function () {
+    var dlg = document.getElementById('shotDialog');
+    if (!dlg) return;
+    var aiOn = aiBtn && aiBtn.getAttribute('data-ai-on') === '1';
+    var IMG = /^image\/(png|jpe?g|gif|webp)$/i;
+    var els = {
+      images: document.getElementById('shotImages'), loading: document.getElementById('shotLoading'), loadingText: document.getElementById('shotLoadingText'),
+      error: document.getElementById('shotError'), errorText: document.getElementById('shotErrorText'), ready: document.getElementById('shotReady'),
+      tldr: document.getElementById('shotTldr'), text: document.getElementById('shotText'), origWrap: document.getElementById('shotOrigWrap'),
+      orig: document.getElementById('shotOrig'), skip: document.getElementById('shotSkip'), submit: document.getElementById('shotSubmit'),
+      noText: document.getElementById('shotNoText'), retry: document.getElementById('shotRetry')
+    };
+    var current = null;   // { form, files, result, key }
+    var urls = [];
+
+    function imageFiles(form) {
+      var input = form.querySelector('[data-dz-input]');
+      return input && input.files ? Array.prototype.filter.call(input.files, function (f) { return IMG.test(f.type || ''); }) : [];
+    }
+    function bodyField(form) { return form.querySelector('textarea[name="comment"], textarea[name="body"]'); }
+    function setState(state) {
+      els.loading.hidden = state !== 'loading'; els.error.hidden = state !== 'error'; els.ready.hidden = state !== 'ready';
+      els.submit.disabled = state !== 'ready';
+    }
+    function fileKey(files) { return files.map(function (f) { return f.name + ':' + f.size; }).join('|'); }
+
+    function read() {
+      setState('loading');
+      els.loadingText.textContent = 'Reading ' + current.files.length + ' screenshot' + (current.files.length === 1 ? '' : 's') + '… this can take up to a minute';
+      var fd = new FormData();
+      current.files.forEach(function (f) { fd.append('images', f, f.name); });
+      var form = current.form, ch = form.querySelector('input[name="channel"]:checked'), dir = form.querySelector('input[name="direction"]:checked');
+      fd.append('text', (bodyField(form) || {}).value || '');
+      fd.append('channel', ch ? ch.value : 'comment');
+      fd.append('direction', dir ? dir.value : 'in');
+      var fromEl = form.querySelector('input[name="from"]'); fd.append('from', fromEl ? fromEl.value : '');
+      fetch('/ai/read-images', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return r.ok && j.ok ? j : Promise.reject(j); }); })
+        .then(function (res) {
+          current.result = res; current.key = fileKey(current.files);
+          els.tldr.innerHTML = res.tldr ? '<span class="msgv-tldr-label"><i class="bi bi-stars" aria-hidden="true"></i>In short</span>' + esc(res.tldr) : '';
+          els.tldr.hidden = !res.tldr;
+          els.text.value = res.text || '';
+          els.origWrap.hidden = !res.hasForeignText; els.orig.checked = !!res.hasForeignText;
+          els.skip.hidden = !(res.imagesSkipped && res.imagesSkipped.length);
+          els.skip.textContent = res.imagesSkipped && res.imagesSkipped.length ? 'Not read: ' + res.imagesSkipped.join('; ') : '';
+          setState('ready');
+          setTimeout(function () { els.text.focus(); }, 0);
+        })
+        .catch(function (err) {
+          els.errorText.textContent = (err && err.error) || "Couldn't read the screenshots.";
+          setState('error');
+        });
+    }
+
+    function open(form, files) {
+      current = { form: form, files: files, result: (current && current.form === form && current.key === fileKey(files)) ? current.result : null };
+      urls.forEach(URL.revokeObjectURL); urls = [];
+      els.images.innerHTML = files.map(function (f) { var u = URL.createObjectURL(f); urls.push(u); return '<a href="' + u + '" target="_blank" rel="noopener" class="shot-img"><img src="' + u + '" alt="' + esc(f.name) + '"><span>' + esc(f.name) + '</span></a>'; }).join('');
+      dlg.showModal();
+      if (current.result) setState('ready'); else read();
+    }
+
+    function finish(withText) {
+      var form = current.form, field = bodyField(form);
+      if (withText && field) {
+        var add = els.text.value.trim();
+        if (els.orig.checked && current.result && current.result.screenshots && current.result.screenshots.length) {
+          add += '\n\n— Original text from screenshot —\n' + current.result.screenshots.map(function (x) { return x.transcript; }).join('\n\n');
+        }
+        var typed = field.value.trim();
+        field.value = (typed ? typed + '\n\n' : '') + add;
+      }
+      form.querySelector('[data-ai-reviewed]').value = '1';
+      form.setAttribute('data-reviewed', '1');
+      dlg.close();
+      if (form.requestSubmit) form.requestSubmit(); else form.submit();
+    }
+
+    els.submit.addEventListener('click', function () { finish(true); });
+    els.noText.addEventListener('click', function () { finish(false); });
+    els.retry.addEventListener('click', read);
+    dlg.addEventListener('click', function (e) { if (e.target === dlg || e.target.closest('[data-shot-cancel]')) dlg.close(); });
+
+    ['mmCommentForm', 'mmForm'].forEach(function (id) {
+      var form = document.getElementById(id);
+      if (!form) return;
+      form.addEventListener('submit', function (e) {
+        if (e.defaultPrevented) return;                       // other validation already stopped it
+        var field = bodyField(form), files = imageFiles(form);
+        var anyFiles = (form.querySelector('[data-dz-input]') || {}).files;
+        if (id === 'mmCommentForm' && field && !field.value.trim() && !(anyFiles && anyFiles.length)) {
+          e.preventDefault(); field.setCustomValidity('Write a comment or attach a file'); field.reportValidity();
+          field.addEventListener('input', function () { field.setCustomValidity(''); }, { once: true });
+          return;
+        }
+        if (!aiOn || !files.length || form.getAttribute('data-reviewed') === '1') return;
+        e.preventDefault();
+        open(form, files);
+      });
+    });
+  })();
 
   // ── Admin: edit a message ─────────────────────────────────────────────
   var dlg = document.getElementById('msgEditDialog');

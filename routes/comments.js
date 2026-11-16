@@ -4,7 +4,9 @@
 //   POST /comments/:id/delete   Admin only
 //   POST /comments/:id/format   AI clean reading view of one message (stored; JSON)
 //   POST /comments/:id/summary  same, kept for older pages
+//   POST /ai/read-images        Preview: read screenshots BEFORE saving (nothing is stored)
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const crm = require('../services/crm');
 const ai = require('../services/ai');
@@ -12,6 +14,7 @@ const { autoClean, cleanNow } = require('../services/autoclean');
 
 const ENTITY_PATH = { project: '/projects/', task: '/tasks/', activity: '/activities/', deal: '/deals/', contact: '/contacts/', product: '/products/' };
 const backTo = (c) => (c && ENTITY_PATH[c.entityType] ? ENTITY_PATH[c.entityType] + c.entityId + '#comments' : '/');
+const previewUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 10 } });
 const isAdmin = (req) => !!(req.session.user && req.session.user.role === 'Admin');
 
 router.post('/comments/:id/edit', async (req, res, next) => {
@@ -56,5 +59,17 @@ async function formatHandler(req, res) {
 }
 router.post('/comments/:id/format', formatHandler);
 router.post('/comments/:id/summary', formatHandler);
+
+router.post('/ai/read-images', previewUpload.array('images', 10), async (req, res) => {
+  try {
+    const { text, channel, direction, from } = req.body;
+    const result = await ai.readImages(req.files || [], { text, channel, direction, from });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    const status = err.code === 'AI_NOT_CONFIGURED' ? 503 : err.code === 'AI_NO_IMAGES' ? 400 : 502;
+    if (!err.code) console.error('[ai] read-images failed:', err.message);
+    res.status(status).json({ ok: false, code: err.code || null, error: err.code ? err.message : 'Could not read the screenshots.' });
+  }
+});
 
 module.exports = router;

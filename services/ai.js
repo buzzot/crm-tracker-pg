@@ -323,7 +323,65 @@ async function formatMessage(c) {
   return value;
 }
 
+// ── Preview before saving: read screenshots that haven't been uploaded yet ────
+// images: [{ filename, mimetype, buffer }] from multer. Returns the clean result plus
+// a plain formatted text version the user can review/edit and save as the message.
+async function readImages(files, { text = '', channel = 'comment', direction = 'in', from = '' } = {}) {
+  const usable = [], skipped = [];
+  for (const f of (files || []).slice(0, MAX_IMAGES)) {
+    const type = String(f.mimetype || '').toLowerCase();
+    if (!IMAGE_TYPES.has(type)) { skipped.push(`${f.originalname} (not an image)`); continue; }
+    if (f.size > MAX_IMAGE_BYTES) { skipped.push(`${f.originalname} (too large to read, over 3.7 MB)`); continue; }
+    usable.push({ filename: f.originalname, mediaType: type, data: f.buffer.toString('base64') });
+  }
+  if ((files || []).length > MAX_IMAGES) skipped.push(`${files.length - MAX_IMAGES} more image(s) not read (limit ${MAX_IMAGES})`);
+  if (!usable.length) { const e = new Error('No readable screenshots (PNG, JPG, GIF or WebP under 3.7 MB).'); e.code = 'AI_NO_IMAGES'; throw e; }
+
+  const kind = channel === 'comment' ? 'Internal comment' : ({ email: 'Email', wechat: 'WeChat', other: 'Message' }[channel] || 'Message') + (direction === 'out' ? ' sent' : ' received');
+  let prompt = `${kind}${from ? ' | from: ' + from : ''}\nTyped text: ${clip(text, 6000) || '(none — the screenshots are the message)'}\n\n${usable.length} screenshot(s) attached below, in order: ${usable.map((i) => i.filename).join(', ')}.`;
+  if (skipped.length) prompt += `\nNot readable: ${skipped.join('; ')}.`;
+  prompt += '\nFocus on the screenshot content. Do not repeat the typed text in the blocks; describe only what the screenshots contain.';
+  const content = [...usable.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })), { type: 'text', text: prompt }];
+
+  const json = await callClaudeRetry({ system: SYSTEM_FORMAT, user: content, maxTokens: Math.min(16000, 2500 + usable.length * 2000), tool: FORMAT_TOOL, timeoutMs: 120000 });
+  const value = {
+    tldr: String(json.tldr || '').trim().slice(0, 600),
+    asks: (Array.isArray(json.asks) ? json.asks : []).slice(0, 8).map((x) => String(x).trim()).filter(Boolean),
+    blocks: cleanBlocks(json.blocks),
+    screenshots: (Array.isArray(json.screenshots) ? json.screenshots : []).slice(0, MAX_IMAGES).map((x, i) => ({
+      filename: String((x && x.filename) || (usable[i] && usable[i].filename) || `image ${i + 1}`).slice(0, 200),
+      kind: String((x && x.kind) || 'other'),
+      transcript: String((x && x.transcript) || '').trim().slice(0, 8000),
+    })).filter((x) => x.transcript),
+    imagesRead: usable.length,
+    imagesSkipped: skipped,
+  };
+  value.text = blocksToText(value);
+  value.hasForeignText = value.screenshots.some((x) => /[　-鿿가-힯]/.test(x.transcript));
+  return value;
+}
+
+// Blocks → readable plain text (what gets saved as the message body)
+function blocksToText(v) {
+  const out = [];
+  for (const b of v.blocks || []) {
+    if (b.type === 'h') out.push(b.text.toUpperCase() === b.text ? b.text : b.text + ':');
+    else if (b.type === 'p') out.push(b.text);
+    else if (b.type === 'ul') out.push(b.items.map((x) => '• ' + x).join('\n'));
+    else if (b.type === 'table') {
+      const rows = [b.headers && b.headers.length ? b.headers : null, ...b.rows].filter(Boolean);
+      const widths = [];
+      rows.forEach((r) => r.forEach((cell, i) => { widths[i] = Math.min(28, Math.max(widths[i] || 0, String(cell).length)); }));
+      const line = (r) => r.map((cell, i) => String(cell).padEnd(widths[i])).join(' | ').trimEnd();
+      const t = rows.map(line);
+      if (b.headers && b.headers.length) t.splice(1, 0, widths.map((w) => '-'.repeat(w)).join('-|-'));
+      out.push(t.join('\n'));
+    }
+  }
+  return out.join('\n\n').trim();
+}
+
 // Back-compat: short TL;DR only
 async function summarizeMessage(c) { const f = await formatMessage(c); return { tldr: f.tldr, asks: f.asks }; }
 
-module.exports = { isConfigured, summarizeThread, summarizeMessage, formatMessage, imageAttachments, _parseJson: parseJson, _describeMessage: describeMessage };
+module.exports = { isConfigured, summarizeThread, summarizeMessage, formatMessage, imageAttachments, readImages, blocksToText, _parseJson: parseJson, _describeMessage: describeMessage };

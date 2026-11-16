@@ -279,7 +279,7 @@ router.post('/projects/:id/messages', upload.array('attachment', 10), async (req
       loggedById: user.id || null, loggedByName: user.name || user.email || null,
       files: req.files,
     });
-    autoClean(saved && saved.id);   // AI clean view for long messages, in the background
+    if (req.body.aiReviewed !== '1') autoClean(saved && saved.id);   // AI clean view in the background, unless the user already reviewed the AI text
     res.redirect(back + '#comments');
   } catch (err) {
     // Validation problems come back to the page as a short message
@@ -290,7 +290,9 @@ router.post('/projects/:id/messages', upload.array('attachment', 10), async (req
 // Post a note/comment on this project, attributed to the logged-in user.
 router.post('/projects/:id/comments', upload.array('attachment', 10), async (req, res, next) => {
   try {
-    const { comment, link } = req.body;
+    const { link } = req.body;
+    let comment = req.body.comment;
+    if ((!comment || !String(comment).trim()) && req.files && req.files.length) comment = '(screenshot attached)';
     const author = (req.session.user && req.session.user.name) || 'Someone';
     const authorId = req.session.user ? req.session.user.id : null;
     await crm.addProjectComment({ projectId: req.params.id, author, authorId, comment, link, files: req.files });
