@@ -4908,3 +4908,7 @@ a.co-row-name:hover { color: var(--crm-accent); }
 }
 .ce-st-quiet { background: var(--crm-muted); color: var(--crm-muted-fg); }
 .ce-th-quiet .ce-th-top b { color: var(--crm-muted-fg); font-weight: 500; }
+
+/* Security warning banner (default admin account) */
+.sec-banner { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; background: oklch(0.97 0.03 25); border-bottom: 1px solid oklch(0.88 0.06 25); color: oklch(0.42 0.16 25); font-size: 0.82rem; }
+.sec-banner a { color: inherit; font-weight: 600; text-decoration: underline; }

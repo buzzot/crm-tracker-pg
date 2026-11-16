@@ -160,6 +160,11 @@ async function getUserByEmail(email) {
   return r.rows[0] || null;
 }
 
+async function getUserByEmailAny(email) {
+  const r = await query('SELECT id, email FROM users WHERE lower(email)=lower($1)', [email]);
+  return r.rows[0] || null;
+}
+
 async function getUserGroupIds(userId) {
   const r = await query('SELECT group_id FROM group_members WHERE user_id=$1', [userId]);
   return r.rows.map(row => row.group_id);
@@ -1824,6 +1829,7 @@ module.exports = {
   isRdHead,
   getUserById,
   getUserByEmail,
+  getUserByEmailAny,
   getUserGroupIds,
   listTeamUsers,
   createUser,

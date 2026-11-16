@@ -5,6 +5,7 @@ const bcrypt   = require('bcrypt');
 const fs       = require('fs');
 const path     = require('path');
 const crm      = require('../services/crm');
+const security = require('../services/security');
 const db       = require('../config/db');
 const { sendInviteEmail } = require('../services/email');
 const { createOnboardingTasks } = require('../services/onboarding');
@@ -125,13 +126,36 @@ router.post('/users/:id/edit', async (req, res, next) => {
       req.session.flash = { type: 'error', message: 'Name and email are required.' };
       return res.redirect(`/admin/users/${req.params.id}/edit`);
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) {
+      req.session.flash = { type: 'error', message: 'Enter a valid email address.' };
+      return res.redirect(`/admin/users/${req.params.id}/edit`);
+    }
+    if (req.session.user && req.session.user.id === req.params.id && role && role !== 'Admin') {
+      req.session.flash = { type: 'error', message: "You can't remove your own Admin role." };
+      return res.redirect(`/admin/users/${req.params.id}/edit`);
+    }
+    const clash = await crm.getUserByEmailAny ? await crm.getUserByEmailAny(String(email).trim().toLowerCase()) : null;
+    if (clash && clash.id !== req.params.id) {
+      req.session.flash = { type: 'error', message: 'Another user already uses that email.' };
+      return res.redirect(`/admin/users/${req.params.id}/edit`);
+    }
     await crm.updateUser(req.params.id, {
-      name, email, role, title, phone,
+      name, email: String(email).trim().toLowerCase(), role, title, phone,
       isActive: isActive === '1',
     });
     if (password && password.trim()) {
+      const problems = security.passwordProblems(password.trim());
+      if (problems.length) {
+        req.session.flash = { type: 'error', message: 'Password is too weak. Add: ' + problems.join(', ') + '. Other changes were saved.' };
+        return res.redirect(`/admin/users/${req.params.id}/edit`);
+      }
       const hash = await bcrypt.hash(password.trim(), 10);
       await db.query('UPDATE users SET password_hash=$2 WHERE id=$1', [req.params.id, hash]);
+    }
+    if (req.session.user && req.session.user.id === req.params.id) {
+      req.session.user.email = String(email).trim().toLowerCase();
+      req.session.user.name = name;
+      if (password && password.trim()) req.session.user.mustChangePassword = false;
     }
     req.session.flash = { type: 'success', message: 'User updated.' };
     res.redirect('/admin');
