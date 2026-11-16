@@ -5324,3 +5324,57 @@ a.pp-co:hover { color: var(--crm-accent); }
 .pp-co-list a:hover, .pp-co-list a:focus { background: oklch(0.97 0.02 258); color: var(--crm-accent); outline: none; }
 .pp-dialog-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
 .pp-muted-link { font-size: 0.78rem; color: var(--crm-muted-fg); }
+
+/* ═══ Companies list (cl-*) ═══ */
+.cl-list [hidden] { display: none !important; }
+#print-header { display: none; }
+.cl-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.84rem; }
+.cl-c-status { width: 110px; } .cl-c-work { width: 92px; } .cl-c-pipe { width: 100px; } .cl-c-last { width: 130px; } .cl-c-next { width: 170px; } .cl-c-owner { width: 140px; }
+.cl-table thead th { background: oklch(0.985 0.003 258); text-align: left; font-size: 0.72rem; font-weight: 600; color: var(--crm-muted-fg); padding: 9px 12px; border-bottom: 1px solid var(--crm-border); }
+.cl-table thead th:first-child { padding-left: 18px; }
+.cl-row td { padding: 10px 12px; vertical-align: middle; border-top: 1px solid oklch(0.94 0.005 258); }
+.cl-row td:first-child { padding-left: 18px; position: relative; }
+.cl-table tbody tr:first-child td { border-top: 0; }
+.cl-row { cursor: pointer; transition: background .1s; }
+.cl-row:hover { background: oklch(0.985 0.006 258); }
+.cl-row.needs-follow td:first-child::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: oklch(0.78 0.13 75); }
+.cl-name-cell { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.cl-name-cell .company-avatar { width: 34px; height: 34px; flex-shrink: 0; }
+.cl-name-block { min-width: 0; }
+.cl-name { display: block; font-weight: 600; color: var(--crm-fg); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-name:hover { color: var(--crm-accent); }
+.cl-sub { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 0.76rem; color: var(--crm-muted-fg); white-space: nowrap; overflow: hidden; }
+.cl-web { display: inline-flex; align-items: center; gap: 4px; color: var(--crm-muted-fg); text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
+.cl-web i { font-size: 0.65rem; opacity: 0; transition: opacity .12s; }
+.cl-row:hover .cl-web i { opacity: .7; }
+.cl-web:hover { color: var(--crm-accent); text-decoration: underline; }
+.cl-num { font-weight: 600; font-variant-numeric: tabular-nums; }
+.pl-small-inline { font-size: 0.75rem; color: var(--crm-muted-fg); }
+.cl-last { white-space: nowrap; }
+.cl-last.is-stale { color: oklch(0.52 0.13 60); font-weight: 500; }
+.cl-next { font-weight: 500; white-space: nowrap; }
+.cl-next.is-late { color: oklch(0.52 0.18 25); }
+.cl-next.is-soon { color: oklch(0.52 0.13 60); }
+.cl-next-name { display: block; color: var(--crm-muted-fg); text-decoration: none; }
+.cl-next-name:hover { color: var(--crm-accent); }
+@media (max-width: 1200px) { .cl-c-owner { width: 0; } .cl-table th:nth-child(7), .cl-row td:nth-child(7) { display: none; } }
+@media (max-width: 980px) { .cl-c-next, .cl-c-pipe { width: 0; } .cl-table th:nth-child(4), .cl-row td:nth-child(4), .cl-table th:nth-child(6), .cl-row td:nth-child(6) { display: none; } }
+@media (max-width: 640px) { .cl-c-work, .cl-c-status { width: 0; } .cl-table th:nth-child(2), .cl-row td:nth-child(2), .cl-table th:nth-child(3), .cl-row td:nth-child(3) { display: none; } }
+
+@media print {
+  nav, header.tn, .tn, .pg-header, .pg-toolbar, .pl-filters, .pl-empty { display: none !important; }
+  #print-header { display: block !important; margin-bottom: 10pt; }
+  .ph-brand { font-size: 8pt; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: .06em; }
+  .ph-title { font-size: 16pt; font-weight: 700; color: #1a1a2e; margin: 2pt 0 3pt; }
+  .ph-meta { font-size: 8pt; color: #888; }
+  .ph-rule { border: none; border-top: 2pt solid #1a1a2e; margin: 6pt 0 0; }
+  .cl-list .pl-table-wrap { border: 0; box-shadow: none; border-radius: 0; }
+  .cl-table { font-size: 7.5pt; }
+  .cl-table th, .cl-table td { display: table-cell !important; padding: 3pt 6pt !important; }
+  .cl-table thead th { background: #1a1a2e !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .cl-table col { width: auto !important; }
+  .cl-row:nth-child(even) { background: #eef1f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .cl-row td:first-child::before { display: none; }
+  .cl-name-cell .company-avatar, .cl-web i { display: none !important; }
+  .cl-row { break-inside: avoid; }
+}

@@ -13,8 +13,24 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 router.get('/companies', async (req, res, next) => {
   try {
     const user = req.session.user;
-    const companies = await crm.listCompanies(user);
-    res.render('companies', { title: 'Companies', companies });
+    const list = await crm.listCompanies(user);
+    const stats = await crm.companiesOverview(list.map((c) => c.id));
+    const today = new Date().toISOString().slice(0, 10);
+    const ENGAGED = ['Client', 'Active', 'Prospect', 'Partner'];
+    const companies = list.map((c) => {
+      const s = stats[c.id] || {};
+      const idleDays = s.lastAt ? Math.floor((Date.now() - new Date(s.lastAt).getTime()) / 86400000) : null;
+      const nextDays = s.next ? Math.round((new Date(s.next.date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000) : null;
+      // Follow-up needed: a company we work with (status or open work) that hasn't been touched for 30+ days
+      const working = ENGAGED.includes(c.status) || s.openProjects > 0 || s.openDeals > 0;
+      return {
+        ...c, openProjects: s.openProjects || 0, projects: s.projects || 0, openDeals: s.openDeals || 0, dealValue: s.dealValue || 0,
+        contacts: s.contacts || 0, lastAt: s.lastAt || null, lastVia: s.lastVia || null, idleDays, next: s.next || null, nextDays,
+        followUp: working && (idleDays === null || idleDays >= 30), mine: c.ownerId === user.id,
+      };
+    });
+    const industries = [...new Set(companies.map((c) => c.industry).filter(Boolean))].sort();
+    res.render('companies', { title: 'Companies', companies, industries });
   } catch (err) { next(err); }
 });
 

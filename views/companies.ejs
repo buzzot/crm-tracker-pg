@@ -5,289 +5,215 @@
     if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
     return (words[0][0] + words[1][0]).toUpperCase();
   }
-  const AVATAR_COLORS = ['avatar-blue', 'avatar-purple', 'avatar-gold', 'avatar-teal', 'avatar-pink'];
-  function avatarColor(i) { return AVATAR_COLORS[i % AVATAR_COLORS.length]; }
-
-  // Tabs come from the statuses actually in use (the edit form offers Active, Inactive,
-  // Prospect, Partner, Client; older records may still say Planned or Lead).
   const STATUS_ORDER = ['Client', 'Prospect', 'Partner', 'Active', 'Inactive', 'Planned', 'Lead'];
-  const statusCounts = {};
-  let noStatusCount = 0;
-  companies.forEach(c => {
-    if (!c.status) { noStatusCount++; return; }
-    statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
-  });
+  const statusCounts = {}; let noStatus = 0;
+  companies.forEach(c => { if (!c.status) noStatus++; else statusCounts[c.status] = (statusCounts[c.status] || 0) + 1; });
   const statusTabs = Object.keys(statusCounts).sort((a, b) => {
     const ia = STATUS_ORDER.indexOf(a), ib = STATUS_ORDER.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
   });
-  const statusKey = s => String(s || '').replace(/[^A-Za-z0-9]/g, '');
+  const sKey = s => String(s || '').replace(/[^A-Za-z0-9]/g, '');
+  const domain = u => String(u || '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '');
+  const href = u => /^https?:\/\//i.test(u) ? u : 'https://' + u;
+  const short = n => { n = Math.round(n || 0); return n >= 1e6 ? '$' + (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? '$' + Math.round(n / 1e3) + 'k' : '$' + n.toLocaleString('en-US'); };
+  function ago(d) {
+    if (d === null || d === undefined) return null;
+    if (d <= 0) return 'Today'; if (d === 1) return 'Yesterday';
+    if (d < 14) return d + 'd ago'; if (d < 60) return Math.round(d / 7) + 'w ago';
+    if (d < 365) return Math.round(d / 30) + 'mo ago'; return Math.round(d / 365) + 'y ago';
+  }
+  function nextLabel(n, days) {
+    if (days < 0) return { cls: 'is-late', t: (-days) + 'd overdue' };
+    if (days === 0) return { cls: 'is-soon', t: 'Today' };
+    if (days === 1) return { cls: 'is-soon', t: 'Tomorrow' };
+    const d = new Date(n.date + 'T00:00:00');
+    return { cls: '', t: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) };
+  }
+  const followCount = companies.filter(c => c.followUp).length;
+  const workCount = companies.filter(c => c.openProjects || c.openDeals).length;
+  const mineCount = companies.filter(c => c.mine).length;
+  const AV = ['avatar-blue', 'avatar-purple', 'avatar-gold', 'avatar-teal', 'avatar-pink'];
 %>
 
-<div class="pg">
+<div class="pg cl-list">
 
-<!-- Print-only header (hidden on screen) -->
 <div id="print-header">
   <div class="ph-brand">Samyou CRM</div>
   <div class="ph-title">Company Directory</div>
-  <div class="ph-meta" id="phMeta">Generated: <span id="phDate"></span> &nbsp;|&nbsp; <span id="phCount"><%= companies.length %></span> companies</div>
+  <div class="ph-meta">Generated: <span id="phDate"></span> &nbsp;|&nbsp; <span id="phCount"><%= companies.length %></span> companies</div>
   <hr class="ph-rule">
 </div>
 
-<div class="pg-header companies-page-header">
+<div class="pg-header">
   <div class="pg-heading">
     <h1 class="pg-title">Companies</h1>
-    <span class="pg-count" aria-label="<%= companies.length %> companies"><%= companies.length %></span>
+    <span class="pg-count"><%= companies.length %></span>
   </div>
   <div class="pg-actions">
-    <button type="button" onclick="window.print()" class="pg-btn btn-print-list" title="Print the companies currently shown">
-      <i class="bi bi-printer" aria-hidden="true"></i>Print
-    </button>
+    <button type="button" onclick="window.print()" class="pg-btn" title="Print the companies currently shown"><i class="bi bi-printer" aria-hidden="true"></i>Print</button>
     <a href="/companies/new" class="pg-btn pg-btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i>Add company</a>
   </div>
 </div>
 
-<div class="pg-toolbar companies-toolbar">
-  <div class="pg-tabs" id="statusFilterTabs" role="tablist" aria-label="Filter by status">
+<div class="pg-toolbar">
+  <div class="pg-tabs" id="coTabs" role="tablist" aria-label="Filter by status">
     <button type="button" class="pg-tab is-active" role="tab" aria-selected="true" data-status="all">All <span class="pg-tab-n"><%= companies.length %></span></button>
     <% statusTabs.forEach(s => { %>
       <button type="button" class="pg-tab" role="tab" aria-selected="false" data-status="<%= s %>"><%= s %> <span class="pg-tab-n"><%= statusCounts[s] %></span></button>
     <% }) %>
-    <% if (noStatusCount) { %>
-      <button type="button" class="pg-tab" role="tab" aria-selected="false" data-status="">No status <span class="pg-tab-n"><%= noStatusCount %></span></button>
-    <% } %>
+    <% if (noStatus) { %><button type="button" class="pg-tab" role="tab" aria-selected="false" data-status="">No status <span class="pg-tab-n"><%= noStatus %></span></button><% } %>
   </div>
   <label class="pg-search">
     <i class="bi bi-search" aria-hidden="true"></i>
-    <input type="search" id="companySearch" placeholder="Search companies" autocomplete="off" aria-label="Search companies">
+    <input type="search" id="companySearch" placeholder="Search name, industry, website, owner" autocomplete="off" aria-label="Search companies">
   </label>
 </div>
 
-<div class="companies-table-card">
-  <table class="companies-table" id="companiesTable">
+<div class="pl-filters">
+  <button type="button" class="pl-chip" id="coFollow" aria-pressed="false" title="Companies we work with that haven't been contacted for 30+ days"><i class="bi bi-bell"></i>Needs follow-up <b><%= followCount %></b></button>
+  <button type="button" class="pl-chip" id="coWork" aria-pressed="false"><i class="bi bi-briefcase"></i>Open projects or deals <b><%= workCount %></b></button>
+  <button type="button" class="pl-chip" id="coMine" aria-pressed="false"><i class="bi bi-person"></i>My companies <b><%= mineCount %></b></button>
+  <% if (industries.length) { %>
+    <label class="pl-select"><span>Industry</span>
+      <select id="coIndustry"><option value="">All</option><% industries.forEach(i => { %><option value="<%= i %>"><%= i %></option><% }) %></select></label>
+  <% } %>
+  <span class="pl-spacer"></span>
+  <label class="pl-select"><span>Sort</span>
+    <select id="coSort">
+      <option value="name">Name A–Z</option>
+      <option value="recent">Recently contacted</option>
+      <option value="stale">Longest without contact</option>
+      <option value="pipeline">Pipeline value</option>
+      <option value="projects">Open projects</option>
+    </select></label>
+</div>
+
+<div class="pl-table-wrap">
+  <table class="cl-table" id="companiesTable">
+    <colgroup><col><col class="cl-c-status"><col class="cl-c-work"><col class="cl-c-pipe"><col class="cl-c-last"><col class="cl-c-next"><col class="cl-c-owner"></colgroup>
     <thead>
-      <tr>
-        <th>Company</th>
-        <th>Industry</th>
-        <th>Status</th>
-        <th>Website</th>
-      </tr>
+      <tr><th>Company</th><th>Status</th><th>Projects</th><th>Pipeline</th><th>Last contact</th><th>Next step</th><th>Owner</th></tr>
     </thead>
     <tbody>
-      <% companies.forEach((c, i) => { %>
-        <tr class="company-row"
-          data-status="<%= c.status || '' %>"
-          data-search="<%= [c.name, c.industry, c.status, c.web].filter(Boolean).join(' ').toLowerCase() %>"
-          onclick="window.location='/companies/<%= c.id %>'">
-          <td data-label="Company">
-            <div class="company-name-cell">
+      <% companies.forEach((c, i) => { const nl = c.next ? nextLabel(c.next, c.nextDays) : null; %>
+        <tr class="cl-row<%= c.followUp ? ' needs-follow' : '' %>" data-id="<%= c.id %>"
+            data-status="<%= c.status || '' %>" data-industry="<%= c.industry || '' %>"
+            data-follow="<%= c.followUp ? 1 : 0 %>" data-work="<%= c.openProjects || c.openDeals ? 1 : 0 %>" data-mine="<%= c.mine ? 1 : 0 %>"
+            data-name="<%= String(c.name || '').toLowerCase() %>" data-last="<%= c.lastAt || '' %>" data-pipe="<%= c.dealValue %>" data-proj="<%= c.openProjects %>"
+            data-search="<%= [c.name, c.industry, c.status, c.web, c.ownerName].filter(Boolean).join(' ').toLowerCase() %>">
+          <td>
+            <div class="cl-name-cell">
               <% if (c.logo) { %>
-                <span class="company-avatar has-logo" data-initials="<%= initials(c.name) %>" data-color="<%= avatarColor(i) %>">
-                  <img src="<%= c.logo %>" alt="" loading="lazy" decoding="async"
-                       onerror="var s=this.parentNode;s.className='company-avatar '+s.dataset.color;s.textContent=s.dataset.initials;">
+                <span class="company-avatar has-logo" data-initials="<%= initials(c.name) %>" data-color="<%= AV[i % AV.length] %>">
+                  <img src="<%= c.logo %>" alt="" loading="lazy" decoding="async" onerror="var s=this.parentNode;s.className='company-avatar '+s.dataset.color;s.textContent=s.dataset.initials;">
                 </span>
-              <% } else { %>
-                <span class="company-avatar <%= avatarColor(i) %>"><%= initials(c.name) %></span>
-              <% } %>
-              <div class="company-name-block">
-                <div class="company-name"><%= c.name %></div>
-                <div class="company-website-sub"><%= c.web || 'No website on file' %></div>
+              <% } else { %><span class="company-avatar <%= AV[i % AV.length] %>"><%= initials(c.name) %></span><% } %>
+              <div class="cl-name-block">
+                <a href="/companies/<%= c.id %>" class="cl-name"><%= c.name %></a>
+                <div class="cl-sub">
+                  <% if (c.industry) { %><span><%= c.industry %></span><% } %>
+                  <% if (c.industry && c.web) { %><span class="pl-sep">·</span><% } %>
+                  <% if (c.web) { %><a href="<%= href(c.web) %>" target="_blank" rel="noopener" class="cl-web"><%= domain(c.web) %><i class="bi bi-box-arrow-up-right"></i></a><% } %>
+                  <% if (!c.industry && !c.web) { %><span class="pl-muted">No industry or website</span><% } %>
+                </div>
               </div>
             </div>
           </td>
-          <td data-label="Industry">
-            <% if (c.industry) { %><span class="industry-tag"><%= c.industry %></span><% } else { %><span class="muted-cell">—</span><% } %>
+          <td>
+            <% if (c.status) { %><span class="co-status co-status-<%= sKey(c.status) %>"><span class="co-status-dot" aria-hidden="true"></span><%= c.status %></span>
+            <% } else { %><span class="pl-muted">—</span><% } %>
           </td>
-          <td data-label="Status">
-            <% if (c.status) { %>
-              <span class="co-status co-status-<%= statusKey(c.status) %>"><span class="co-status-dot" aria-hidden="true"></span><%= c.status %></span>
-            <% } else { %><span class="muted-cell">—</span><% } %>
+          <td>
+            <% if (c.openProjects) { %><span class="cl-num"><%= c.openProjects %></span> <span class="pl-small-inline">open</span>
+            <% } else if (c.projects) { %><span class="pl-muted"><%= c.projects %> closed</span>
+            <% } else { %><span class="pl-muted">—</span><% } %>
           </td>
-          <td data-label="Website">
-            <% if (c.web) { %>
-              <a href="<%= c.web %>" target="_blank" rel="noopener" class="table-link" onclick="event.stopPropagation()"><%= c.web %> <i class="bi bi-box-arrow-up-right"></i></a>
-            <% } else { %><span class="muted-cell">—</span><% } %>
+          <td>
+            <% if (c.openDeals) { %><span class="cl-num"><%= c.dealValue ? short(c.dealValue) : '—' %></span><div class="pl-small"><%= c.openDeals %> deal<%= c.openDeals === 1 ? '' : 's' %></div>
+            <% } else { %><span class="pl-muted">—</span><% } %>
+          </td>
+          <td>
+            <% if (c.lastAt) { %>
+              <div class="cl-last<%= c.followUp ? ' is-stale' : '' %>"><%= ago(c.idleDays) %></div>
+              <div class="pl-small"><%= c.lastVia %></div>
+            <% } else { %><span class="<%= c.followUp ? 'cl-last is-stale' : 'pl-muted' %>">Never</span><% } %>
+          </td>
+          <td>
+            <% if (c.next) { %>
+              <div class="cl-next <%= nl.cls %>"><%= nl.t %></div>
+              <a class="pl-small cl-next-name" href="/<%= c.next.kind === 'task' ? 'tasks' : 'activities' %>/<%= c.next.id %>" title="<%= c.next.name %>"><%= c.next.name %></a>
+            <% } else { %><span class="pl-muted">—</span><% } %>
+          </td>
+          <td>
+            <% if (c.ownerName) { %><span class="pl-owner"><span class="pl-avatar"><%= initials(c.ownerName) %></span><span><%= c.ownerName %></span></span>
+            <% } else { %><span class="pl-muted">—</span><% } %>
           </td>
         </tr>
       <% }) %>
     </tbody>
   </table>
-  <% if (!companies.length) { %>
-    <div class="companies-empty-state">No companies yet.</div>
-  <% } %>
+  <div class="pl-empty" id="coEmpty" <%= companies.length ? 'hidden' : '' %>>
+    <i class="bi bi-building"></i>
+    <p><%= companies.length ? 'No companies match these filters.' : 'No companies yet.' %></p>
+    <% if (companies.length) { %><button type="button" class="pg-btn" id="coReset">Clear filters</button><% } else { %><a href="/companies/new" class="pg-btn pg-btn-primary">Add your first company</a><% } %>
+  </div>
 </div>
 
 </div><!-- /.pg -->
 
 <script>
-  (function () {
-    const searchInput = document.getElementById('companySearch');
-    const tabs = document.querySelectorAll('#statusFilterTabs .pg-tab');
-    const rows = document.querySelectorAll('#companiesTable tbody tr');
-    let activeStatus = 'all';
+(function () {
+  var tbody = document.querySelector('#companiesTable tbody');
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr.cl-row'));
+  var tabs = document.querySelectorAll('#coTabs .pg-tab');
+  var search = document.getElementById('companySearch'), indSel = document.getElementById('coIndustry'), sortSel = document.getElementById('coSort');
+  var empty = document.getElementById('coEmpty');
+  var KEY = 'crm.companies.view';
+  var st = { status: 'all', q: '', follow: false, work: false, mine: false, industry: '', sort: 'name' };
+  try { var s = JSON.parse(localStorage.getItem(KEY) || '{}'); st.sort = s.sort || 'name'; } catch (e) {}
 
-    function applyFilters() {
-      const q = searchInput.value.toLowerCase();
-      rows.forEach((row) => {
-        const matchesStatus = activeStatus === 'all' || row.dataset.status === activeStatus;
-        const matchesSearch = !q || row.dataset.search.includes(q);
-        row.style.display = (matchesStatus && matchesSearch) ? '' : 'none';
-      });
-    }
+  var SORTS = {
+    name: function (a, b) { return a.dataset.name.localeCompare(b.dataset.name); },
+    recent: function (a, b) { return (b.dataset.last || '').localeCompare(a.dataset.last || ''); },
+    stale: function (a, b) { return (a.dataset.last || '0').localeCompare(b.dataset.last || '0'); },
+    pipeline: function (a, b) { return (+b.dataset.pipe) - (+a.dataset.pipe) || SORTS.name(a, b); },
+    projects: function (a, b) { return (+b.dataset.proj) - (+a.dataset.proj) || SORTS.name(a, b); },
+  };
 
-    tabs.forEach((tab) => {
-      tab.addEventListener('click', () => {
-        tabs.forEach((t) => { t.classList.remove('is-active'); t.setAttribute('aria-selected', 'false'); });
-        tab.classList.add('is-active'); tab.setAttribute('aria-selected', 'true');
-        activeStatus = tab.dataset.status;
-        applyFilters();
-      });
+  function render() {
+    tabs.forEach(function (t) { var on = t.dataset.status === st.status; t.classList.toggle('is-active', on); t.setAttribute('aria-selected', on); });
+    ['follow', 'work', 'mine'].forEach(function (k) { document.getElementById('co' + k[0].toUpperCase() + k.slice(1)).setAttribute('aria-pressed', st[k]); });
+    sortSel.value = st.sort; if (indSel) indSel.value = st.industry;
+    var q = st.q.trim().toLowerCase(), shown = 0;
+    rows.slice().sort(SORTS[st.sort] || SORTS.name).forEach(function (r) {
+      var ok = (st.status === 'all' || r.dataset.status === st.status)
+        && (!st.follow || r.dataset.follow === '1') && (!st.work || r.dataset.work === '1') && (!st.mine || r.dataset.mine === '1')
+        && (!st.industry || r.dataset.industry === st.industry) && (!q || r.dataset.search.indexOf(q) !== -1);
+      r.hidden = !ok; if (ok) shown++;
+      tbody.appendChild(r);
     });
+    if (rows.length) empty.hidden = shown > 0;
+    document.querySelector('#companiesTable thead').hidden = !shown;
+    try { localStorage.setItem(KEY, JSON.stringify({ sort: st.sort })); } catch (e) {}
+  }
 
-    searchInput.addEventListener('input', applyFilters);
-  })();
+  tabs.forEach(function (t) { t.addEventListener('click', function () { st.status = t.dataset.status; render(); }); });
+  ['follow', 'work', 'mine'].forEach(function (k) { document.getElementById('co' + k[0].toUpperCase() + k.slice(1)).addEventListener('click', function () { st[k] = !st[k]; render(); }); });
+  if (indSel) indSel.addEventListener('change', function () { st.industry = indSel.value; render(); });
+  sortSel.addEventListener('change', function () { st.sort = sortSel.value; render(); });
+  var tmr; search.addEventListener('input', function () { clearTimeout(tmr); tmr = setTimeout(function () { st.q = search.value; render(); }, 120); });
+  var reset = document.getElementById('coReset');
+  if (reset) reset.addEventListener('click', function () { st = { status: 'all', q: '', follow: false, work: false, mine: false, industry: '', sort: st.sort }; search.value = ''; render(); });
 
-  // Fill print header with current date + visible row count
-  document.getElementById('phDate').textContent =
-    new Date().toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
-
-  window.addEventListener('beforeprint', function () {
-    const visible = [...document.querySelectorAll('#companiesTable tbody tr')]
-      .filter(r => r.style.display !== 'none').length;
-    document.getElementById('phCount').textContent = visible;
+  tbody.addEventListener('click', function (e) {
+    var tr = e.target.closest('tr.cl-row'); if (!tr || e.target.closest('a')) return;
+    var url = '/companies/' + tr.dataset.id;
+    if (e.metaKey || e.ctrlKey) window.open(url, '_blank'); else location.href = url;
   });
+
+  document.getElementById('phDate').textContent = new Date().toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  window.addEventListener('beforeprint', function () { document.getElementById('phCount').textContent = rows.filter(function (r) { return !r.hidden; }).length; });
+
+  render();
+})();
 </script>
-
-<style>
-/* ── Print-only header (hidden on screen) ── */
-#print-header { display: none; }
-
-/* ── Print styles ── */
-@media print {
-  /* Hide everything that shouldn't print */
-  nav, .navbar, .sidebar, header,
-  .companies-page-header .btn-add-company,
-  .btn-print-list,
-  .companies-toolbar,
-  .companies-page-header { display: none !important; }
-
-  /* Show print header */
-  #print-header {
-    display: block !important;
-    margin-bottom: 10pt;
-    font-family: 'Segoe UI', Arial, sans-serif;
-  }
-  .ph-brand {
-    font-size: 8pt;
-    font-weight: 600;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-  }
-  .ph-title {
-    font-size: 16pt;
-    font-weight: 700;
-    color: #1a1a2e;
-    margin: 2pt 0 3pt;
-  }
-  .ph-meta { font-size: 8pt; color: #888; }
-  .ph-rule {
-    border: none;
-    border-top: 2pt solid #1a1a2e;
-    margin: 6pt 0 0;
-  }
-
-  /* Page setup */
-  body { font-size: 8pt; background: #fff !important; color: #1a1a2e !important; }
-
-  /* Clean card */
-  .companies-table-card {
-    box-shadow: none !important;
-    border: none !important;
-    border-radius: 0 !important;
-  }
-
-  /* Force table back to proper table layout (overrides mobile stacked CSS) */
-  .companies-table,
-  .companies-table thead,
-  .companies-table tbody,
-  .companies-table tfoot  { display: table !important; width: 100% !important; }
-  .companies-table thead  { display: table-header-group !important; }
-  .companies-table tbody  { display: table-row-group !important; }
-  .companies-table tr     { display: table-row !important; }
-  .companies-table th,
-  .companies-table td     { display: table-cell !important; }
-  /* Hide data-label pseudo-headers injected by mobile CSS */
-  .companies-table td::before { display: none !important; content: none !important; }
-
-  /* Compact fixed-layout table — one tight line per company */
-  .companies-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 7.5pt;
-    table-layout: fixed;
-  }
-
-  /* Column widths */
-  .companies-table thead th:nth-child(1) { width: 34%; }  /* Company */
-  .companies-table thead th:nth-child(2) { width: 22%; }  /* Industry */
-  .companies-table thead th:nth-child(3) { width: 12%; }  /* Status */
-  .companies-table thead th:nth-child(4) { width: 32%; }  /* Website */
-
-  .companies-table thead th {
-    background: #1a1a2e !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    padding: 3.5pt 7pt !important;
-    font-size: 6.5pt;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    font-weight: 700;
-    border: none !important;
-  }
-
-  /* Alternating rows — strong enough to guide the eye */
-  .companies-table tbody tr:nth-child(odd)  { background: #fff !important; }
-  .companies-table tbody tr:nth-child(even) {
-    background: #e8ecf4 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  .companies-table tbody tr:hover { background: inherit !important; }
-  .companies-table tbody tr { border-bottom: none !important; cursor: default; page-break-inside: avoid; }
-
-  /* Single tight line per cell */
-  .companies-table td {
-    padding: 2.5pt 7pt !important;
-    vertical-align: middle;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.3;
-  }
-
-  /* Company column: hide avatar, show name only */
-  .company-avatar    { display: none !important; }
-  .company-name-cell { display: block !important; }
-  .company-name-block{ display: block !important; }
-  .company-name      { font-weight: 700; font-size: 7.5pt; color: #1a1a2e; }
-  .company-website-sub { display: none !important; }
-
-  /* Industry */
-  .industry-tag { font-size: 7.5pt; background: none !important; padding: 0 !important; border: none !important; color: #333; }
-  .muted-cell   { color: #bbb; }
-
-  /* Status badge — text only, no dot, no box */
-  .badge        { font-size: 7pt !important; padding: 0 !important; border: none !important;
-                  background: none !important; font-weight: 700; }
-  .badge.company-status-Client  { color: #15803d !important; }
-  .badge.company-status-Lead    { color: #b45309 !important; }
-  .badge.company-status-Planned { color: #1d4ed8 !important; }
-  .status-dot   { display: none !important; }
-
-  /* Website — plain text, no icon */
-  .table-link { font-size: 7pt; color: #555 !important; text-decoration: none !important; }
-  .table-link .bi-box-arrow-up-right { display: none !important; }
-}
-</style>

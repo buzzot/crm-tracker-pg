@@ -1768,6 +1768,58 @@ async function listProjectsWithSubtasks(user) {
     tasks: await listTasks({ projectId: p.id })
   })));
 }
+// Companies list: relationship signals per company (open projects, open deals, contacts, last touch, next step).
+async function companiesOverview(ids) {
+  if (!ids || !ids.length) return {};
+  const safeRows = async (sql) => { try { return (await query(sql, [ids])).rows; } catch (_) { return []; } };
+  const [proj, deals, contacts, acts, msgs, mails, nextTask, nextAct] = await Promise.all([
+    safeRows(`SELECT company_id, COUNT(*) FILTER (WHERE COALESCE(status,'Active') IN ('Active','On Hold'))::int AS open, COUNT(*)::int AS total
+              FROM projects WHERE company_id = ANY($1::uuid[]) GROUP BY company_id`),
+    safeRows(`SELECT company_id, COUNT(*)::int AS open, COALESCE(SUM(amount),0)::float AS value
+              FROM deals WHERE company_id = ANY($1::uuid[]) AND COALESCE(stage,'') NOT LIKE 'Closed%' GROUP BY company_id`),
+    safeRows(`SELECT company_id, COUNT(*)::int AS n FROM contacts WHERE company_id = ANY($1::uuid[]) GROUP BY company_id`),
+    safeRows(`SELECT DISTINCT ON (company_id) company_id, GREATEST(created_at, COALESCE(status_date::timestamptz, created_at)) AS at, type
+              FROM activities WHERE company_id = ANY($1::uuid[])
+              ORDER BY company_id, GREATEST(created_at, COALESCE(status_date::timestamptz, created_at)) DESC`),
+    safeRows(`SELECT DISTINCT ON (p.company_id) p.company_id, cm.created_at AS at, cm.type, cm.link
+              FROM comments cm JOIN projects p ON cm.entity_type = 'project' AND p.id = cm.entity_id
+              WHERE p.company_id = ANY($1::uuid[]) ORDER BY p.company_id, cm.created_at DESC`),
+    safeRows(`SELECT DISTINCT ON (company_id) company_id, COALESCE(sent_at, created_at) AS at, direction
+              FROM email_messages WHERE company_id = ANY($1::uuid[]) AND status IN ('sent','received')
+              ORDER BY company_id, COALESCE(sent_at, created_at) DESC`),
+    safeRows(`SELECT DISTINCT ON (p.company_id) p.company_id, t.id, t.name, t.deadline
+              FROM tasks t JOIN projects p ON p.id = t.project_id
+              WHERE p.company_id = ANY($1::uuid[]) AND t.status <> 'Completed' AND t.deadline IS NOT NULL
+                AND (t.is_archived IS NOT TRUE) AND (t.is_onboarding IS NOT TRUE)
+              ORDER BY p.company_id, t.deadline ASC`),
+    safeRows(`SELECT DISTINCT ON (company_id) company_id, id, name, due_date AS deadline
+              FROM activities WHERE company_id = ANY($1::uuid[]) AND due_date IS NOT NULL
+                AND NOT (COALESCE(result,'') ~* '^(completed|done)')
+              ORDER BY company_id, due_date ASC`),
+  ]);
+  const out = {};
+  const get = (id) => (out[id] = out[id] || { openProjects: 0, projects: 0, openDeals: 0, dealValue: 0, contacts: 0, lastAt: null, lastVia: null, next: null });
+  proj.forEach((r) => { const o = get(r.company_id); o.openProjects = r.open; o.projects = r.total; });
+  deals.forEach((r) => { const o = get(r.company_id); o.openDeals = r.open; o.dealValue = r.value; });
+  contacts.forEach((r) => { get(r.company_id).contacts = r.n; });
+  const touch = (id, at, via) => { if (!at) return; const o = get(id); if (!o.lastAt || new Date(at) > new Date(o.lastAt)) { o.lastAt = new Date(at).toISOString(); o.lastVia = via; } };
+  acts.forEach((r) => touch(r.company_id, r.at, r.type || 'Activity'));
+  msgs.forEach((r) => {
+    let ch = r.type || 'comment';
+    if (String(r.link || '').startsWith('MANUAL:')) { try { ch = JSON.parse(r.link.slice(7)).ch || ch; } catch (_) { /* ignore */ } }
+    touch(r.company_id, r.at, ch === 'wechat' ? 'WeChat' : ch === 'email' ? 'Email' : 'Project note');
+  });
+  mails.forEach((r) => touch(r.company_id, r.at, r.direction === 'in' ? 'Email received' : 'Email sent'));
+  const ymd = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+  const setNext = (r, kind) => {
+    const o = get(r.company_id); const d = ymd(r.deadline);
+    if (!o.next || d < o.next.date) o.next = { kind, id: r.id, name: r.name, date: d };
+  };
+  nextTask.forEach((r) => setNext(r, 'task'));
+  nextAct.forEach((r) => setNext(r, 'activity'));
+  return out;
+}
+
 async function companyLogos(ids) {
   const list = [...new Set((ids || []).filter(Boolean))];
   if (!list.length) return {};
@@ -1963,6 +2015,7 @@ module.exports = {
   listProjectsOverview,
   reopenTask,
   companyLogos,
+  companiesOverview,
   // Tasks
   listTasks,
   getTask,
