@@ -5636,3 +5636,24 @@ a.pp-co:hover { color: var(--crm-accent); }
   .npj-sec, .npj-foot { padding-left: 16px; padding-right: 16px; }
   .npj-foot-hint { display: none; }
 }
+
+/* ═══ New task form (ntk-*, builds on npj-*) ═══ */
+.ntk-ok { background: oklch(0.97 0.03 160); color: oklch(0.38 0.1 160); border: 1px solid oklch(0.9 0.05 160); }
+.ntk-ok a { color: inherit; font-weight: 600; }
+.ntk-co { font-size: 0.75rem; color: var(--crm-muted-fg); white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
+.ntk-people { display: flex; flex-wrap: wrap; gap: 6px; }
+.ntk-person { margin: 0; cursor: pointer; }
+.ntk-person input { position: absolute; opacity: 0; pointer-events: none; }
+.ntk-person span { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px 0 4px; border-radius: 999px; border: 1px solid var(--crm-border); background: #fff; font-size: 0.8rem; color: oklch(0.35 0.02 265); transition: all .12s; }
+.ntk-person span b { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--crm-muted); color: var(--crm-muted-fg); font-size: 0.66rem; font-weight: 700; }
+.ntk-person:hover span { border-color: oklch(0.8 0.05 258); }
+.ntk-person input:checked + span { background: oklch(0.96 0.03 258); border-color: oklch(0.7 0.12 258); color: oklch(0.38 0.14 258); font-weight: 600; }
+.ntk-person input:checked + span b { background: var(--crm-accent); color: #fff; }
+.ntk-person input:focus-visible + span { outline: 2px solid var(--crm-accent); outline-offset: 1px; }
+.ntk-quick { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.ntk-quick button { height: 24px; padding: 0 8px; border: 1px solid var(--crm-border); border-radius: 999px; background: #fff; font-size: 0.72rem; color: var(--crm-muted-fg); cursor: pointer; }
+.ntk-quick button:hover { border-color: var(--crm-accent); color: var(--crm-accent); }
+.ntk-quick button.is-on { background: var(--crm-accent); border-color: var(--crm-accent); color: #fff; }
+.ntk-another { margin: 0 auto 0 0; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: oklch(0.38 0.02 265); cursor: pointer; }
+.ntk-another input { accent-color: var(--crm-accent); }
+.npj-field > label .npj-opt { margin-left: 4px; font-weight: 400; }

@@ -1151,12 +1151,12 @@ async function getTaskDetail(id) {
   };
 }
 
-async function createTask({ name, projectId, type, date, deadline, status, details, description, ownerId, auditorId, isOnboarding }) {
+async function createTask({ name, projectId, type, date, startDate, deadline, status, details, description, ownerId, auditorId, isOnboarding }) {
   const desc = description || details || null;
   const r = await query(
-    `INSERT INTO tasks (name, project_id, type, date, start_date, deadline, status, details, owner_id, auditor_id, is_onboarding)
-     VALUES ($1,$2,$3,$4,CURRENT_DATE,$5,$6,$7,$8,$9,$10) RETURNING id`,
-    [name, projectId || null, type || null, date || null, deadline || null, status || 'To Do', desc, ownerId || null, auditorId || null, isOnboarding ? true : false]
+    `INSERT INTO tasks (name, project_id, type, date, start_date, deadline, status, details, owner_id, auditor_id, is_onboarding, completed_at)
+     VALUES ($1,$2,$3,$4,COALESCE($11::date, CURRENT_DATE),$5,$6,$7,$8,$9,$10, CASE WHEN $6 = 'Completed' THEN NOW() END) RETURNING id`,
+    [name, projectId || null, type || null, date || null, deadline || null, status || 'To Do', desc, ownerId || null, auditorId || null, isOnboarding ? true : false, startDate || null]
   );
   return getTask(r.rows[0].id);
 }

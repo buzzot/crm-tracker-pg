@@ -58,45 +58,46 @@ router.get('/tasks', async (req, res, next) => {
 
 // ─── Create task ──────────────────────────────────────────────────────────────
 
+async function renderNewTask(req, res, { values = {}, error = null, status = 200 } = {}) {
+  const user = req.session.user;
+  const [projects, teamUsers] = await Promise.all([crm.listProjects(user), crm.listTeamUsers()]);
+  const presetProject = values.projectId || req.query.project || '';
+  res.status(status).render('task-new', {
+    title: 'New task',
+    projects: projects.filter((p) => !['Completed', 'Cancelled'].includes(p.status) || p.id === presetProject)
+      .map((p) => ({ id: p.id, name: p.name, company: p.companyName || null })),
+    teamUsers: teamUsers.filter((u) => u.isActive !== false).map((u) => ({ id: u.id, name: u.name, title: u.title, role: u.role })),
+    statusChoices: crm.schema.tables.tasks.statusChoices,
+    presetProject, values, error, created: req.query.created || null,
+  });
+}
+
 router.get('/tasks/new', async (req, res, next) => {
-  try {
-    const user     = req.session.user;
-    const projects = await crm.listProjects(user);
-    const teamUsers = await crm.listTeamUsers();
-    res.render('task-new', {
-      title: 'New Task',
-      projects,
-      teamUsers,
-      prefillProjectId: req.query.project || null,
-      statusChoices: crm.schema.tables.tasks.statusChoices,
-    });
-  } catch (err) { next(err); }
+  try { await renderNewTask(req, res); } catch (err) { next(err); }
 });
 
-router.post('/tasks/new', async (req, res, next) => {
+router.post('/tasks/new', upload.array('attachments', 10), async (req, res, next) => {
+  const b = req.body || {};
   try {
     const user = req.session.user;
-    const { name, description, projectId, deadline, status, auditorId, assigneeIds } = req.body;
-    if (!name) return res.redirect('/tasks/new?error=name+required');
-
+    const name = String(b.name || '').trim();
+    if (!name) throw new Error('Give the task a name.');
+    if (b.startDate && b.deadline && b.startDate > b.deadline) throw new Error('The due date is before the start date.');
     const task = await crm.createTask({
-      name,
-      description,
-      projectId:  projectId  || null,
-      deadline:   deadline   || null,
-      status:     status     || 'To Do',
-      auditorId:  auditorId  || null,
-      ownerId:    user ? user.id : null,
+      name, description: b.description, projectId: b.projectId || null,
+      startDate: b.startDate || null, deadline: b.deadline || null, status: b.status || 'To Do',
+      auditorId: b.auditorId || null, ownerId: user ? user.id : null,
     });
-
-    // Set assignees
-    const ids = [].concat(assigneeIds || []).filter(Boolean);
-    if (ids.length) {
-      await crm.setTaskAssignees({ taskId: task.id, userIds: ids });
+    const ids = [].concat(b.assigneeIds || []).filter(Boolean);
+    if (ids.length) await crm.setTaskAssignees({ taskId: task.id, userIds: ids });
+    if (req.files && req.files.length) await crm.addTaskAttachments(task.id, req.files, user ? user.id : null);
+    if (b.another === '1') {
+      return res.redirect('/tasks/new?created=' + encodeURIComponent(task.id) + (b.projectId ? '&project=' + encodeURIComponent(b.projectId) : ''));
     }
-
-    res.redirect(`/tasks/${task.id}`);
-  } catch (err) { next(err); }
+    res.redirect(b.projectId && b.returnTo === 'project' ? `/projects/${b.projectId}` : `/tasks/${task.id}`);
+  } catch (err) {
+    try { await renderNewTask(req, res, { values: b, error: err.message, status: 400 }); } catch (e2) { next(e2); }
+  }
 });
 
 // ─── Task detail ──────────────────────────────────────────────────────────────

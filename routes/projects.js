@@ -364,21 +364,8 @@ router.post('/projects/:id/tasks/link', async (req, res, next) => {
   }
 });
 
-router.get('/projects/:id/tasks/new', async (req, res, next) => {
-  try {
-    const project = await crm.getProjectDetail(req.params.id);
-    if (!project.name) return res.status(404).render('error', { title: 'Not found', message: 'Project not found.' });
-    res.render('project-task-new', {
-      title: 'New Task',
-      project,
-      typeChoices: crm.schema.tables.tasks.typeChoices,
-      statusChoices: crm.schema.tables.tasks.statusChoices,
-      error: null,
-      values: {}
-    });
-  } catch (err) {
-    next(err);
-  }
+router.get('/projects/:id/tasks/new', (req, res) => {
+  res.redirect('/tasks/new?project=' + encodeURIComponent(req.params.id) + '&from=project');
 });
 
 router.post('/projects/:id/tasks', async (req, res, next) => {
