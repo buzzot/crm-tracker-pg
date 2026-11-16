@@ -9,102 +9,103 @@
   const reviewers = teamUsers.filter(u => u.role === 'Admin' || u.role === 'Manager');
 %>
 
-<div class="pg npj">
+<div class="pg pj fm">
   <nav class="pj-crumbs" aria-label="Breadcrumb">
     <a href="/tasks">Tasks</a>
     <% if (preset) { %><i class="bi bi-chevron-right" aria-hidden="true"></i><a href="/projects/<%= preset.id %>"><%= preset.name %></a><% } %>
   </nav>
-  <h1 class="npj-title">New task</h1>
-  <p class="npj-sub">Name it, give it an owner and a due date. Everything else is optional.</p>
 
-  <% if (created) { %><div class="td-banner ntk-ok"><i class="bi bi-check-circle-fill"></i><span>Task created. <a href="/tasks/<%= created %>">Open it</a>, or add the next one below.</span></div><% } %>
-  <% if (error) { %><div class="td-banner td-banner-red"><i class="bi bi-exclamation-circle"></i><span><%= error %></span></div><% } %>
-
-  <form action="/tasks/new" method="POST" enctype="multipart/form-data" id="ntkForm" class="npj-card" novalidate>
+  <form action="/tasks/new" method="POST" enctype="multipart/form-data" id="ntkForm" novalidate>
     <input type="hidden" name="returnTo" value="<%= preset ? 'project' : '' %>">
 
-    <section class="npj-sec">
-      <label class="npj-name-label" for="ntkName">Task</label>
-      <input type="text" name="name" id="ntkName" class="npj-name" value="<%= v.name || '' %>" placeholder="What needs to get done?" required autofocus autocomplete="off" maxlength="300">
-      <p class="npj-err" id="ntkNameErr" hidden>Give the task a name.</p>
-    </section>
+    <header class="pj-head">
+      <div class="pj-head-main">
+        <h1 class="pj-title">New task</h1>
+        <div class="pj-meta"><span class="pj-meta-item pj-muted">Name it, assign it and set a due date. Everything else is optional.</span></div>
+      </div>
+      <div class="pj-head-actions">
+        <label class="ntk-another"><input type="checkbox" name="another" value="1" <%= created ? 'checked' : '' %>> Create another</label>
+        <a href="<%= backHref %>" class="pg-btn">Cancel</a>
+        <button type="submit" class="pg-btn pg-btn-primary" id="ntkSubmit"><i class="bi bi-check2" aria-hidden="true"></i>Create task</button>
+      </div>
+    </header>
 
-    <section class="npj-sec npj-grid">
-      <div class="npj-field npj-span2">
-        <label for="ntkProjInput">Project</label>
-        <div class="npj-combo">
-          <i class="bi bi-kanban" aria-hidden="true"></i>
-          <input type="text" id="ntkProjInput" placeholder="Search projects… (optional)" autocomplete="off" value="<%= preset ? preset.name : '' %>" role="combobox" aria-expanded="false" aria-controls="ntkProjList">
-          <span class="ntk-co" id="ntkProjCo"><%= preset && preset.company ? preset.company : '' %></span>
-          <button type="button" class="npj-clear" id="ntkProjClear" aria-label="Clear project" <%= preset ? '' : 'hidden' %>><i class="bi bi-x"></i></button>
-          <input type="hidden" name="projectId" id="ntkProjId" value="<%= preset ? preset.id : '' %>">
-          <ul class="npj-pop" id="ntkProjList" role="listbox" hidden></ul>
-        </div>
+    <% if (created) { %><div class="td-banner ntk-ok"><i class="bi bi-check-circle-fill"></i><span>Task created. <a href="/tasks/<%= created %>">Open it</a>, or add the next one.</span></div><% } %>
+    <% if (error) { %><div class="td-banner td-banner-red"><i class="bi bi-exclamation-circle"></i><span><%= error %></span></div><% } %>
+
+    <div class="pj-grid">
+      <div class="pj-main">
+        <section class="pj-card" aria-labelledby="fmWhat">
+          <div class="pj-card-head"><h2 class="pj-card-title" id="fmWhat">Task</h2></div>
+          <label class="fm-field"><span>Name <b>*</b></span>
+            <input type="text" name="name" id="ntkName" class="fm-input fm-input-lg" value="<%= v.name || '' %>" placeholder="What needs to get done?" required autofocus autocomplete="off" maxlength="300"></label>
+          <p class="npj-err" id="ntkNameErr" hidden>Give the task a name.</p>
+          <label class="fm-field"><span>Details <i>optional</i></span>
+            <textarea name="description" class="fm-input" rows="6" maxlength="4000" placeholder="Context and what &quot;done&quot; looks like, e.g. Quote for 500 pcs BDQ100, delivery to Dallas, valid 30 days."><%= v.description || '' %></textarea></label>
+        </section>
+
+        <section class="pj-card" aria-labelledby="fmFiles">
+          <div class="pj-card-head"><div><h2 class="pj-card-title" id="fmFiles">Files</h2><p class="pj-card-sub">Optional. Drawings, specs, screenshots.</p></div></div>
+          <label class="td-drop npj-drop" id="ntkDrop" for="ntkFiles"><i class="bi bi-cloud-arrow-up"></i><span><b>Drop files</b>, paste a screenshot, or <span class="td-browse">browse</span></span></label>
+          <input type="file" name="attachments" id="ntkFiles" multiple hidden>
+          <ul class="npj-files" id="ntkFileList"></ul>
+        </section>
       </div>
 
-      <div class="npj-field npj-span2">
-        <span class="npj-label">Assigned to</span>
-        <div class="ntk-people" id="ntkPeople">
-          <% teamUsers.forEach(u => { %>
-            <label class="ntk-person" title="<%= u.title || '' %>">
-              <input type="checkbox" name="assigneeIds" value="<%= u.id %>" <%= assignees.includes(u.id) ? 'checked' : '' %>>
-              <span><b><%= String(u.name || '?').charAt(0).toUpperCase() %></b><%= u.name %><%= u.id === me.id ? ' (me)' : '' %></span>
-            </label>
-          <% }) %>
-        </div>
-      </div>
+      <aside class="pj-side">
+        <section class="pj-card pj-side-card" aria-labelledby="fmProj">
+          <h2 class="pj-side-title" id="fmProj">Project</h2>
+          <div class="npj-combo">
+            <i class="bi bi-kanban" aria-hidden="true"></i>
+            <input type="text" id="ntkProjInput" placeholder="Search projects…" autocomplete="off" value="<%= preset ? preset.name : '' %>" role="combobox" aria-expanded="false" aria-controls="ntkProjList">
+            <button type="button" class="npj-clear" id="ntkProjClear" aria-label="Clear project" <%= preset ? '' : 'hidden' %>><i class="bi bi-x"></i></button>
+            <input type="hidden" name="projectId" id="ntkProjId" value="<%= preset ? preset.id : '' %>">
+            <ul class="npj-pop" id="ntkProjList" role="listbox" hidden></ul>
+          </div>
+          <p class="pj-hint" id="ntkProjCo"><%= preset && preset.company ? preset.company : 'Optional' %></p>
+        </section>
 
-      <div class="npj-field">
-        <label for="ntkDue">Due</label>
-        <input type="date" name="deadline" id="ntkDue" value="<%= v.deadline || '' %>">
-        <div class="ntk-quick" id="ntkQuick">
-          <button type="button" data-days="0">Today</button>
-          <button type="button" data-days="1">Tomorrow</button>
-          <button type="button" data-friday>Friday</button>
-          <button type="button" data-days="7">In 1 week</button>
-          <button type="button" data-days="14">In 2 weeks</button>
-        </div>
-        <p class="npj-err" id="ntkDateErr" hidden>Due date is before the start date.</p>
-      </div>
-      <div class="npj-field">
-        <label for="ntkStart">Start</label>
-        <input type="date" name="startDate" id="ntkStart" value="<%= v.startDate || new Date().toISOString().slice(0, 10) %>">
-      </div>
+        <section class="pj-card pj-side-card" aria-labelledby="fmSched">
+          <h2 class="pj-side-title" id="fmSched">Schedule</h2>
+          <span class="fm-label">Status</span>
+          <div class="npj-seg fm-seg" role="radiogroup" aria-label="Status">
+            <% statusChoices.filter(s => s !== 'Completed').forEach(s => { %>
+              <label class="npj-seg-opt"><input type="radio" name="status" value="<%= s %>" <%= s === status ? 'checked' : '' %>><span><%= s %></span></label>
+            <% }) %>
+          </div>
+          <div class="fm-two">
+            <label class="fm-field"><span>Start</span><input type="date" name="startDate" id="ntkStart" class="fm-input" value="<%= v.startDate || new Date().toISOString().slice(0, 10) %>"></label>
+            <label class="fm-field"><span>Due</span><input type="date" name="deadline" id="ntkDue" class="fm-input" value="<%= v.deadline || '' %>"></label>
+          </div>
+          <div class="ntk-quick" id="ntkQuick">
+            <button type="button" data-days="0">Today</button>
+            <button type="button" data-days="1">Tomorrow</button>
+            <button type="button" data-friday>Friday</button>
+            <button type="button" data-days="7">1 week</button>
+            <button type="button" data-days="14">2 weeks</button>
+          </div>
+          <p class="npj-err" id="ntkDateErr" hidden>Due date is before the start date.</p>
+        </section>
 
-      <div class="npj-field">
-        <span class="npj-label">Status</span>
-        <div class="npj-seg" role="radiogroup" aria-label="Status">
-          <% statusChoices.filter(s => s !== 'Completed').forEach(s => { %>
-            <label class="npj-seg-opt"><input type="radio" name="status" value="<%= s %>" <%= s === status ? 'checked' : '' %>><span><%= s %></span></label>
-          <% }) %>
-        </div>
-      </div>
-      <div class="npj-field">
-        <label for="ntkReviewer">Reviewer <span class="npj-opt">checks the result</span></label>
-        <select name="auditorId" id="ntkReviewer">
-          <option value="">No reviewer</option>
-          <% reviewers.forEach(u => { %><option value="<%= u.id %>" <%= v.auditorId === u.id ? 'selected' : '' %>><%= u.name %></option><% }) %>
-        </select>
-      </div>
-    </section>
-
-    <section class="npj-sec">
-      <div class="npj-sec-head"><h2>Details</h2><span class="npj-opt">optional</span></div>
-      <textarea name="description" rows="4" maxlength="4000" placeholder="Context and what &quot;done&quot; looks like, e.g. Quote for 500 pcs BDQ100, delivery to Dallas, valid 30 days."><%= v.description || '' %></textarea>
-    </section>
-
-    <section class="npj-sec">
-      <div class="npj-sec-head"><h2>Files</h2><span class="npj-opt">optional</span></div>
-      <label class="td-drop npj-drop" id="ntkDrop" for="ntkFiles"><i class="bi bi-cloud-arrow-up"></i><span><b>Drop files</b>, paste a screenshot, or <span class="td-browse">browse</span></span></label>
-      <input type="file" name="attachments" id="ntkFiles" multiple hidden>
-      <ul class="npj-files" id="ntkFileList"></ul>
-    </section>
-
-    <footer class="npj-foot">
-      <label class="ntk-another"><input type="checkbox" name="another" value="1" <%= created ? 'checked' : '' %>> Create another</label>
-      <a href="<%= backHref %>" class="pg-btn">Cancel</a>
-      <button type="submit" class="pg-btn pg-btn-primary" id="ntkSubmit"><i class="bi bi-check2"></i>Create task</button>
-    </footer>
+        <section class="pj-card pj-side-card" aria-labelledby="fmPeople">
+          <h2 class="pj-side-title" id="fmPeople">People</h2>
+          <span class="fm-label">Assigned to</span>
+          <div class="ntk-people" id="ntkPeople">
+            <% teamUsers.forEach(u => { %>
+              <label class="ntk-person" title="<%= u.title || '' %>">
+                <input type="checkbox" name="assigneeIds" value="<%= u.id %>" <%= assignees.includes(u.id) ? 'checked' : '' %>>
+                <span><b><%= String(u.name || '?').charAt(0).toUpperCase() %></b><%= u.name %><%= u.id === me.id ? ' (me)' : '' %></span>
+              </label>
+            <% }) %>
+          </div>
+          <label class="fm-field fm-gap"><span>Reviewer <i>checks the result</i></span>
+            <select name="auditorId" id="ntkReviewer" class="fm-input">
+              <option value="">No reviewer</option>
+              <% reviewers.forEach(u => { %><option value="<%= u.id %>" <%= v.auditorId === u.id ? 'selected' : '' %>><%= u.name %></option><% }) %>
+            </select></label>
+        </section>
+      </aside>
+    </div>
   </form>
 </div>
 
@@ -118,14 +119,14 @@
   // Project combobox
   var input = $('ntkProjInput'), hid = $('ntkProjId'), pop = $('ntkProjList'), clear = $('ntkProjClear'), co = $('ntkProjCo');
   var items = [], active = -1;
-  function setProject(p) { hid.value = p ? p.id : ''; input.value = p ? p.name : ''; co.textContent = p && p.company ? p.company : ''; clear.hidden = !p; }
+  function setProject(p) { hid.value = p ? p.id : ''; input.value = p ? p.name : ''; co.textContent = p && p.company ? p.company : 'Optional'; clear.hidden = !p; }
   function draw() {
     var q = input.value.trim().toLowerCase();
     items = PROJECTS.filter(function (p) { return !q || (p.name + ' ' + (p.company || '')).toLowerCase().indexOf(q) !== -1; }).slice(0, 40);
     pop.innerHTML = items.length ? items.map(function (p, i) { return '<li role="option" data-i="' + i + '"><i class="bi bi-kanban"></i>' + esc(p.name) + (p.company ? '<small>' + esc(p.company) + '</small>' : '') + '</li>'; }).join('') : '<li class="npj-none">No matching open projects</li>';
     pop.hidden = false; active = -1;
   }
-  input.addEventListener('focus', draw); input.addEventListener('input', function () { hid.value = ''; co.textContent = ''; draw(); });
+  input.addEventListener('focus', draw); input.addEventListener('input', function () { hid.value = ''; co.textContent = 'Optional'; draw(); });
   input.addEventListener('keydown', function (e) {
     var lis = pop.querySelectorAll('li[data-i]');
     if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(lis.length - 1, active + 1); }

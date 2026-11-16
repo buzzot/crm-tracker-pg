@@ -11,118 +11,106 @@
   const STATUS_HINT = { 'Active': 'Work is happening now', 'On Hold': 'Paused, waiting on something', 'Completed': 'Already finished', 'Cancelled': 'Not going ahead' };
 %>
 
-<div class="pg npj">
+<div class="pg pj fm">
   <nav class="pj-crumbs" aria-label="Breadcrumb">
     <a href="/projects">Projects</a>
     <% if (preset) { %><i class="bi bi-chevron-right" aria-hidden="true"></i><a href="/companies/<%= preset.id %>"><%= preset.name %></a><% } %>
   </nav>
-  <h1 class="npj-title">New project</h1>
-  <p class="npj-sub">Only the name is required. Add the rest now or later from the project page.</p>
 
-  <% if (error) { %><div class="td-banner td-banner-red"><i class="bi bi-exclamation-circle"></i><span><%= error %></span></div><% } %>
+  <form action="/projects" method="POST" enctype="multipart/form-data" id="npjForm" novalidate>
+    <header class="pj-head">
+      <div class="pj-head-main">
+        <h1 class="pj-title">New project</h1>
+        <div class="pj-meta"><span class="pj-meta-item pj-muted">Only the name is required. Add the rest now or later from the project page.</span></div>
+      </div>
+      <div class="pj-head-actions">
+        <a href="<%= backHref %>" class="pg-btn">Cancel</a>
+        <button type="submit" class="pg-btn pg-btn-primary" id="npjSubmit"><i class="bi bi-check2" aria-hidden="true"></i>Create project</button>
+      </div>
+    </header>
 
-  <form action="/projects" method="POST" enctype="multipart/form-data" id="npjForm" class="npj-card" novalidate>
+    <% if (error) { %><div class="td-banner td-banner-red"><i class="bi bi-exclamation-circle"></i><span><%= error %></span></div><% } %>
 
-    <!-- 1. What -->
-    <section class="npj-sec">
-      <label class="npj-name-label" for="npjName">Project name</label>
-      <input type="text" name="name" id="npjName" class="npj-name" value="<%= v.name || '' %>" placeholder="e.g. Rheem heat pump, phase 2" required autofocus autocomplete="off" maxlength="200">
-      <p class="npj-err" id="npjNameErr" hidden>Give the project a name.</p>
-    </section>
-
-    <!-- 2. Who and where -->
-    <section class="npj-sec npj-grid">
-      <div class="npj-field npj-span2">
-        <label for="npjCompanyInput">Company</label>
-        <div class="npj-combo" id="npjCompany">
-          <i class="bi bi-building" aria-hidden="true"></i>
-          <input type="text" id="npjCompanyInput" placeholder="Search companies…" autocomplete="off" value="<%= preset ? preset.name : '' %>" role="combobox" aria-expanded="false" aria-controls="npjCompanyList">
-          <button type="button" class="npj-clear" id="npjCompanyClear" aria-label="Clear company" <%= preset ? '' : 'hidden' %>><i class="bi bi-x"></i></button>
-          <input type="hidden" name="companyId" id="npjCompanyId" value="<%= preset ? preset.id : '' %>">
-          <ul class="npj-pop" id="npjCompanyList" role="listbox" hidden></ul>
-        </div>
-        <div class="npj-dupes" id="npjDupes" hidden></div>
-      </div>
-      <div class="npj-field">
-        <label for="npjOwner">Owner</label>
-        <select name="ownerId" id="npjOwner">
-          <% teamUsers.forEach(u => { %><option value="<%= u.id %>" <%= u.id === ownerId ? 'selected' : '' %>><%= u.name %><%= u.id === me.id ? ' (me)' : '' %></option><% }) %>
-        </select>
-      </div>
-      <div class="npj-field">
-        <label for="npjCategory">Type</label>
-        <select name="category" id="npjCategory">
-          <option value="">Not set</option>
-          <% (categoryChoices || []).forEach(c => { %><option value="<%= c %>" <%= v.category === c ? 'selected' : '' %>><%= c %></option><% }) %>
-        </select>
-      </div>
-      <div class="npj-field npj-span2">
-        <span class="npj-label">Status</span>
-        <div class="npj-seg" role="radiogroup" aria-label="Status">
-          <% statusChoices.forEach(s => { %>
-            <label class="npj-seg-opt" title="<%= STATUS_HINT[s] || '' %>"><input type="radio" name="status" value="<%= s %>" <%= s === status ? 'checked' : '' %>><span><%= s %></span></label>
-          <% }) %>
-        </div>
-      </div>
-      <div class="npj-field">
-        <label for="npjStart">Start</label>
-        <input type="date" name="startDate" id="npjStart" value="<%= v.startDate || '' %>">
-      </div>
-      <div class="npj-field">
-        <label for="npjEnd">Target finish</label>
-        <input type="date" name="endDate" id="npjEnd" value="<%= v.endDate || '' %>">
-        <p class="npj-err" id="npjDateErr" hidden>Finish is before start.</p>
-      </div>
-    </section>
-
-    <!-- 3. Products -->
-    <section class="npj-sec">
-      <div class="npj-sec-head"><h2>Products</h2><span class="npj-opt">optional</span></div>
-      <div class="npj-chips" id="npjPicked"></div>
-      <div class="npj-combo npj-combo-sm" id="npjProd">
-        <i class="bi bi-search" aria-hidden="true"></i>
-        <input type="text" id="npjProdInput" placeholder="Add products: type a name or category" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="npjProdList">
-        <ul class="npj-pop" id="npjProdList" role="listbox" hidden></ul>
-      </div>
-      <div id="npjProdHidden"></div>
-    </section>
-
-    <!-- 4. Description -->
-    <section class="npj-sec">
-      <div class="npj-sec-head"><h2>Brief</h2><span class="npj-opt">optional</span></div>
-      <textarea name="description" id="npjDesc" rows="4" maxlength="2000" placeholder="Goal, scope and what the customer needs. The team and the AI email assistant use this."><%= v.description || '' %></textarea>
-    </section>
-
-    <!-- 5. First tasks -->
-    <section class="npj-sec">
-      <div class="npj-sec-head"><h2>First tasks</h2><span class="npj-opt">optional · makes the project trackable from day one</span></div>
-      <div class="npj-tasks" id="npjTasks">
-        <% taskRows.forEach(t => { %>
-          <div class="npj-task">
-            <i class="bi bi-circle" aria-hidden="true"></i>
-            <input type="text" name="taskName" value="<%= t.name %>" placeholder="e.g. Send quotation" aria-label="Task name">
-            <select name="taskOwner" aria-label="Assignee"><option value="">Assignee</option><% teamUsers.forEach(u => { %><option value="<%= u.id %>" <%= t.owner === u.id ? 'selected' : '' %>><%= u.name %></option><% }) %></select>
-            <input type="date" name="taskDue" value="<%= t.due %>" aria-label="Due date">
-            <button type="button" class="npj-x" data-remove-task aria-label="Remove task"><i class="bi bi-x"></i></button>
+    <div class="pj-grid">
+      <div class="pj-main">
+        <section class="pj-card" aria-labelledby="fmWhat">
+          <div class="pj-card-head"><h2 class="pj-card-title" id="fmWhat">Project</h2></div>
+          <label class="fm-field"><span>Name <b>*</b></span>
+            <input type="text" name="name" id="npjName" class="fm-input fm-input-lg" value="<%= v.name || '' %>" placeholder="e.g. Rheem heat pump, phase 2" required autofocus autocomplete="off" maxlength="200"></label>
+          <p class="npj-err" id="npjNameErr" hidden>Give the project a name.</p>
+          <label class="fm-field"><span>Brief <i>optional</i></span>
+            <textarea name="description" id="npjDesc" class="fm-input" rows="5" maxlength="2000" placeholder="Goal, scope and what the customer needs. The team and the AI email assistant use this."><%= v.description || '' %></textarea></label>
+          <span class="fm-label">Products <i>optional</i></span>
+          <div class="npj-chips" id="npjPicked"></div>
+          <div class="npj-combo npj-combo-sm" id="npjProd">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="text" id="npjProdInput" placeholder="Add products: type a name or category" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="npjProdList">
+            <ul class="npj-pop" id="npjProdList" role="listbox" hidden></ul>
           </div>
-        <% }) %>
+          <div id="npjProdHidden"></div>
+        </section>
+
+        <section class="pj-card" aria-labelledby="fmTasks">
+          <div class="pj-card-head"><div><h2 class="pj-card-title" id="fmTasks">First tasks</h2><p class="pj-card-sub">Optional. Makes the project trackable from day one.</p></div></div>
+          <div class="npj-tasks" id="npjTasks">
+            <% taskRows.forEach(t => { %>
+              <div class="npj-task">
+                <i class="bi bi-circle" aria-hidden="true"></i>
+                <input type="text" name="taskName" class="fm-input" value="<%= t.name %>" placeholder="e.g. Send quotation" aria-label="Task name">
+                <select name="taskOwner" class="fm-input" aria-label="Assignee"><option value="">Assignee</option><% teamUsers.forEach(u => { %><option value="<%= u.id %>" <%= t.owner === u.id ? 'selected' : '' %>><%= u.name %></option><% }) %></select>
+                <input type="date" name="taskDue" class="fm-input" value="<%= t.due %>" aria-label="Due date">
+                <button type="button" class="npj-x" data-remove-task aria-label="Remove task"><i class="bi bi-x"></i></button>
+              </div>
+            <% }) %>
+          </div>
+          <button type="button" class="pj-link-btn" id="npjAddTask"><i class="bi bi-plus-lg"></i>Add task</button>
+        </section>
+
+        <section class="pj-card" aria-labelledby="fmFiles">
+          <div class="pj-card-head"><div><h2 class="pj-card-title" id="fmFiles">Files</h2><p class="pj-card-sub">Optional. Drawings, specs, RFQs.</p></div></div>
+          <label class="td-drop npj-drop" id="npjDrop" for="npjFiles"><i class="bi bi-cloud-arrow-up"></i><span><b>Drop files</b> or <span class="td-browse">browse</span></span></label>
+          <input type="file" name="attachments" id="npjFiles" multiple hidden>
+          <ul class="npj-files" id="npjFileList"></ul>
+        </section>
       </div>
-      <button type="button" class="pj-link-btn" id="npjAddTask"><i class="bi bi-plus-lg"></i>Add task</button>
-    </section>
 
-    <!-- 6. Files -->
-    <section class="npj-sec">
-      <div class="npj-sec-head"><h2>Files</h2><span class="npj-opt">optional · drawings, specs, RFQs</span></div>
-      <label class="td-drop npj-drop" id="npjDrop" for="npjFiles"><i class="bi bi-cloud-arrow-up"></i><span><b>Drop files</b> or <span class="td-browse">browse</span></span></label>
-      <input type="file" name="attachments" id="npjFiles" multiple hidden>
-      <ul class="npj-files" id="npjFileList"></ul>
-    </section>
+      <aside class="pj-side">
+        <section class="pj-card pj-side-card" aria-labelledby="fmCo">
+          <h2 class="pj-side-title" id="fmCo">Company</h2>
+          <div class="npj-combo" id="npjCompany">
+            <i class="bi bi-building" aria-hidden="true"></i>
+            <input type="text" id="npjCompanyInput" placeholder="Search companies…" autocomplete="off" value="<%= preset ? preset.name : '' %>" role="combobox" aria-expanded="false" aria-controls="npjCompanyList">
+            <button type="button" class="npj-clear" id="npjCompanyClear" aria-label="Clear company" <%= preset ? '' : 'hidden' %>><i class="bi bi-x"></i></button>
+            <input type="hidden" name="companyId" id="npjCompanyId" value="<%= preset ? preset.id : '' %>">
+            <ul class="npj-pop" id="npjCompanyList" role="listbox" hidden></ul>
+          </div>
+          <div class="npj-dupes" id="npjDupes" hidden></div>
+        </section>
 
-    <footer class="npj-foot">
-      <span class="npj-foot-hint"><kbd>⌘</kbd><kbd>Enter</kbd> to create</span>
-      <a href="<%= backHref %>" class="pg-btn">Cancel</a>
-      <button type="submit" class="pg-btn pg-btn-primary" id="npjSubmit"><i class="bi bi-check2"></i>Create project</button>
-    </footer>
+        <section class="pj-card pj-side-card" aria-labelledby="fmSetup">
+          <h2 class="pj-side-title" id="fmSetup">Setup</h2>
+          <span class="fm-label">Status</span>
+          <div class="npj-seg fm-seg" role="radiogroup" aria-label="Status">
+            <% statusChoices.forEach(s => { %>
+              <label class="npj-seg-opt" title="<%= STATUS_HINT[s] || '' %>"><input type="radio" name="status" value="<%= s %>" <%= s === status ? 'checked' : '' %>><span><%= s %></span></label>
+            <% }) %>
+          </div>
+          <label class="fm-field fm-gap"><span>Owner</span>
+            <select name="ownerId" id="npjOwner" class="fm-input"><% teamUsers.forEach(u => { %><option value="<%= u.id %>" <%= u.id === ownerId ? 'selected' : '' %>><%= u.name %><%= u.id === me.id ? ' (me)' : '' %></option><% }) %></select></label>
+          <label class="fm-field"><span>Type</span>
+            <select name="category" id="npjCategory" class="fm-input"><option value="">Not set</option><% (categoryChoices || []).forEach(c => { %><option value="<%= c %>" <%= v.category === c ? 'selected' : '' %>><%= c %></option><% }) %></select></label>
+        </section>
+
+        <section class="pj-card pj-side-card" aria-labelledby="fmTime">
+          <h2 class="pj-side-title" id="fmTime">Timeline</h2>
+          <div class="fm-two">
+            <label class="fm-field"><span>Start</span><input type="date" name="startDate" id="npjStart" class="fm-input" value="<%= v.startDate || '' %>"></label>
+            <label class="fm-field"><span>Target finish</span><input type="date" name="endDate" id="npjEnd" class="fm-input" value="<%= v.endDate || '' %>"></label>
+          </div>
+          <p class="npj-err" id="npjDateErr" hidden>Finish is before start.</p>
+        </section>
+      </aside>
+    </div>
   </form>
 </div>
 

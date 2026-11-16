@@ -5657,3 +5657,36 @@ a.pp-co:hover { color: var(--crm-accent); }
 .ntk-another { margin: 0 auto 0 0; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: oklch(0.38 0.02 265); cursor: pointer; }
 .ntk-another input { accent-color: var(--crm-accent); }
 .npj-field > label .npj-opt { margin-left: 4px; font-weight: 400; }
+
+/* ═══ Create forms in the detail-page layout (fm-*) ═══ */
+.fm [hidden] { display: none !important; }
+.fm form { margin: 0; }
+.fm .pj-head-actions { align-items: center; }
+.fm-field { display: block; margin: 0 0 12px; }
+.fm-field > span, .fm-label { display: block; margin-bottom: 5px; font-size: 0.76rem; font-weight: 600; color: oklch(0.38 0.02 265); }
+.fm-field > span b { color: var(--crm-danger); }
+.fm-field > span i, .fm-label i { font-style: normal; font-weight: 400; color: var(--crm-muted-fg); margin-left: 4px; }
+.fm-input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--crm-border); border-radius: 8px; background: #fff; font-size: 0.86rem; color: var(--crm-fg); font-family: inherit; }
+textarea.fm-input { height: auto; min-height: 96px; padding: 9px 11px; line-height: 1.5; resize: vertical; }
+.fm-input:focus { outline: none; border-color: var(--crm-accent); box-shadow: 0 0 0 3px oklch(0.93 0.04 258); }
+.fm-input-lg { height: 42px; font-size: 1rem; font-weight: 600; }
+.fm-input-lg::placeholder { font-weight: 400; }
+.fm-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.fm-two .fm-field { margin-bottom: 6px; }
+.fm-gap { margin-top: 12px; }
+.fm-seg { display: flex; width: 100%; }
+.fm-seg .npj-seg-opt { flex: 1; }
+.fm-seg .npj-seg-opt span { width: 100%; justify-content: center; padding: 0 6px; font-size: 0.78rem; }
+.fm .npj-combo { height: 36px; }
+.fm .npj-combo-sm { margin-top: 0; }
+.fm .npj-chips:not(:empty) { margin-bottom: 8px; }
+.fm .ntk-people { gap: 5px; }
+.fm .ntk-person span { height: 28px; font-size: 0.78rem; }
+.fm .npj-err { margin: -6px 0 10px; }
+.fm .npj-task { grid-template-columns: 16px minmax(0, 1fr) 150px 140px 28px; }
+.fm .npj-task .fm-input { height: 34px; }
+.fm .td-banner { margin: 0 0 14px; }
+@media (max-width: 640px) {
+  .fm .pj-head-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+  .fm .npj-task { grid-template-columns: 16px minmax(0, 1fr) 28px; }
+}
